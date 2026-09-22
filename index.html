@@ -5484,5 +5484,50 @@ sb.auth.onAuthStateChange(function(ev){
 })();
 </script>
 
+<!-- SLEEPY_EMAIL_VERIFY_PKCE -->
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyEmailVerifyPkce) return;
+  window.__sleepyEmailVerifyPkce = true;
+  function log(){ try{console.log.apply(console,["[VerifyPKCE]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  // Check URL parameters on load
+  function checkUrlForToken(){
+    var params = new URLSearchParams(window.location.search);
+    var token_hash = params.get('token_hash');
+    var type = params.get('type');
+    if (token_hash && type) {
+      log("Token found, attempting verification...");
+      // Clean the URL immediately so it doesn't sit in the address bar
+      window.history.replaceState({}, document.title, window.location.pathname);
+      // Verify the OTP
+      sb.auth.verifyOtp({ type: type, token_hash: token_hash }).then(function(resp){
+        if (resp.error) {
+          log("Verification error:", resp.error.message);
+          window.toast("Verification failed", resp.error.message, "err");
+        } else {
+          log("Verification successful");
+          window.toast("Email verified", "Welcome to Sleepy-Chat! You're all set.", "ok");
+          // Optional: reload to boot the app with the now-verified session
+          setTimeout(function(){ window.location.reload(); }, 1500);
+        }
+      }).catch(function(err){
+        log("Verification exception:", err.message || err);
+        window.toast("Verification failed", err.message || String(err), "err");
+      });
+    }
+  }
+
+  // Run once when the script loads
+  checkUrlForToken();
+
+  // Also run on hash changes (for other flows)
+  window.addEventListener('hashchange', function(){ setTimeout(checkUrlForToken, 100); });
+
+  log("PKCE verification handler ready");
+})();
+</script>
+
 </body>
 </html>
