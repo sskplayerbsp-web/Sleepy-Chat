@@ -5529,5 +5529,100 @@ sb.auth.onAuthStateChange(function(ev){
 })();
 </script>
 
+<!-- SLEEPY_AVATAR_FIX_V1 -->
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyAvatarFix) return;
+  window.__sleepyAvatarFix = true;
+  function log(){ try{console.log.apply(console,["[Avatar]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  // ---- 1. Add cache-buster to stored URLs so CDN doesn't serve stale 403 ----
+  function bust(url){
+    if (!url) return url;
+    if (typeof url !== 'string') return url;
+    if (url.indexOf('supabase.co/storage') < 0) return url;
+    var sep = url.indexOf('?') >= 0 ? '&' : '?';
+    return url + sep + 'v=' + Date.now();
+  }
+
+  // ---- 2. Global img error handler for avatars/banners ----
+  // If an image fails to load (403/404), replace with initials fallback.
+  document.addEventListener('error', function(e){
+    var img = e.target;
+    if (!img || img.tagName !== 'IMG') return;
+    var parent = img.parentElement;
+    if (!parent) return;
+    if (!parent.classList.contains('avatar') && !parent.classList.contains('banner') && !parent.classList.contains('profile-banner') && !parent.classList.contains('ov-avatar')) return;
+    log("image failed to load:", img.src);
+    if (parent.classList.contains('avatar')){
+      // Replace with initials
+      var initial = (parent.dataset.initials || '?').toUpperCase().slice(0,2);
+      parent.innerHTML = '<span>' + initial + '</span>';
+    } else {
+      // Banner fallback: leave the gradient
+      parent.style.backgroundImage = '';
+    }
+  }, true);
+
+  // ---- 3. Stash initials on avatars so the error handler knows what to fall back to
+  var origAvatarHTML = window.avatarHTML;
+  window.avatarHTML = function(uid, size){
+    var html = origAvatarHTML(uid, size);
+    var p = window.PROFILES && window.PROFILES[uid];
+    var name = p ? (p.display_name || p.username || '?') : '?';
+    var initials = name.trim().slice(0,2).toUpperCase();
+    // Add data-initials to the .avatar div
+    html = html.replace('class="avatar', 'data-initials="' + initials.replace(/"/g,'&quot;') + '" class="avatar');
+    return html;
+  };
+
+  // ---- 4. After a successful upload, append a cache-buster before saving ----
+  // Wrap uploadFile so any URL that comes back gets ?v=timestamp
+  var origUploadFile = window.uploadFile;
+  if (typeof origUploadFile === 'function'){
+    window.uploadFile = async function(file, bucket){
+      var result = await origUploadFile(file, bucket);
+      if (result && result.url) result.url = bust(result.url);
+      return result;
+    };
+  }
+
+  // ---- 5. Diagnostic helper ----
+  window.checkAvatar = async function(uid){
+    uid = uid || window.ME.id;
+    var p = window.PROFILES[uid];
+    if (!p){ console.log("No profile for", uid); return; }
+    console.log("avatar_url:", p.avatar_url);
+    console.log("banner_url:", p.banner_url);
+    if (p.avatar_url){
+      try {
+        var r = await fetch(p.avatar_url, { method: 'HEAD' });
+        console.log("avatar HEAD status:", r.status, r.statusText);
+      } catch(e){ console.log("avatar fetch error:", e.message); }
+    }
+    if (p.banner_url){
+      try {
+        var r2 = await fetch(p.banner_url, { method: 'HEAD' });
+        console.log("banner HEAD status:", r2.status, r2.statusText);
+      } catch(e){ console.log("banner fetch error:", e.message); }
+    }
+  };
+
+  // ---- 6. Re-render after boot so existing broken images get retried ----
+  var tries = 0;
+  var t = setInterval(function(){
+    tries++;
+    if (window.ME && window.renderAll){
+      clearInterval(t);
+      try { window.renderAll(); } catch(e){}
+    }
+    if (tries > 80) clearInterval(t);
+  }, 200);
+
+  log("avatar display fix ready");
+})();
+</script>
+
 </body>
 </html>
