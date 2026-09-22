@@ -5272,5 +5272,91 @@ sb.auth.onAuthStateChange(function(ev){
 })();
 </script>
 
+<!-- SLEEPY_EMAIL_VERIFY_V1 -->
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyEmailVerify) return;
+  window.__sleepyEmailVerify = true;
+  function log(){ try{console.log.apply(console,["[Verify]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  // ------------------------------------------------------------------
+  // 1. Handle the redirect from the confirmation link
+  // ------------------------------------------------------------------
+  // Supabase auth client picks up the session from the URL hash.
+  // We just need to show a friendly toast.
+  if (window.location.hash && window.location.hash.includes('access_token')) {
+    // Clean the URL so the token isn't sitting in the address bar
+    setTimeout(function(){
+      window.history.replaceState(null, '', window.location.pathname);
+    }, 800);
+    setTimeout(function(){
+      window.toast("Email verified", "Welcome to Sleepy-Chat! You're all set.", "ok");
+    }, 600);
+  }
+
+  // ------------------------------------------------------------------
+  // 2. Show an "unverified" banner if the user hasn't confirmed yet
+  // ------------------------------------------------------------------
+  async function checkVerification(){
+    if (!window.ME || !window.ME.id) return;
+    try {
+      var { data, error } = await sb.rpc('is_email_confirmed', { uid: window.ME.id });
+      if (error) { log("check error", error.message); return; }
+      if (data === false) showBanner();
+      else removeBanner();
+    } catch(e){ log("verify check failed", e.message || e); }
+  }
+
+  function showBanner(){
+    if (document.getElementById('verify-banner')) return;
+    var banner = document.createElement('div');
+    banner.id = 'verify-banner';
+    banner.style.cssText =
+      'position:fixed;top:0;left:0;right:0;z-index:900;' +
+      'background:linear-gradient(90deg,#ffab00,#ff2d6f);' +
+      'color:#0a0a0f;font-weight:600;font-size:13px;' +
+      'display:flex;align-items:center;justify-content:center;gap:12px;' +
+      'padding:8px 16px;box-shadow:0 4px 18px rgba(255,171,0,.35)';
+    banner.innerHTML =
+      '<span>Your email is not verified yet. Check your inbox.</span>' +
+      '<button id="resend-verify" style="background:rgba(0,0,0,.85);color:#fff;border:none;' +
+      'padding:5px 12px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer">Resend email</button>';
+    document.body.appendChild(banner);
+
+    document.getElementById('resend-verify').onclick = async function(){
+      try {
+        var { error } = await sb.auth.resend({ type: 'signup', email: window.SESSION.user.email });
+        if (error) throw error;
+        window.toast("Sent", "Verification email resent to " + window.SESSION.user.email, "ok");
+      } catch(e){ window.toast("Error", e.message || String(e), "err"); }
+    };
+  }
+
+  function removeBanner(){
+    var b = document.getElementById('verify-banner');
+    if (b) b.remove();
+  }
+
+  // Poll every 20 seconds while unverified
+  setInterval(function(){
+    if (window.ME) checkVerification();
+  }, 20000);
+
+  // Run once the app is ready
+  var tries = 0;
+  var t = setInterval(function(){
+    tries++;
+    if (window.ME && window.ME.id) {
+      clearInterval(t);
+      checkVerification();
+    }
+    if (tries > 120) clearInterval(t);
+  }, 250);
+
+  log("verification flow ready");
+})();
+</script>
+
 </body>
 </html>
