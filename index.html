@@ -5358,5 +5358,131 @@ sb.auth.onAuthStateChange(function(ev){
 })();
 </script>
 
+<!-- SLEEPY_DELETE_ACCOUNT_V1 -->
+<style>
+.danger-zone{padding:16px;border-radius:12px;border:1px solid rgba(255,45,111,.35);background:rgba(255,45,111,.06)}
+.danger-zone h4{color:#ff8aa8;font-size:13px;font-weight:700;margin-bottom:6px;letter-spacing:.05em;text-transform:uppercase}
+.danger-zone p{font-size:12.5px;color:var(--text2);margin-bottom:12px;line-height:1.5}
+.delete-confirm-row{display:flex;flex-direction:column;gap:6px;margin:14px 0}
+.delete-confirm-row label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3)}
+.delete-confirm-row input{padding:11px 13px;border-radius:8px;background:var(--void);border:1px solid var(--border);color:var(--text);font-family:'JetBrains Mono',monospace;font-size:14px;text-align:center;letter-spacing:.3em}
+.delete-confirm-row input:focus{border-color:var(--rose);box-shadow:0 0 0 3px rgba(255,45,111,.15)}
+.delete-confirm-row input.ok{border-color:var(--green);box-shadow:0 0 0 3px rgba(0,230,118,.15)}
+.delete-warn{font-size:12px;color:#ff8aa8;line-height:1.6;padding:10px 12px;background:rgba(255,45,111,.08);border-radius:8px;border-left:3px solid var(--rose);margin-bottom:8px}
+.delete-warn ul{margin:6px 0 0 18px;padding:0}
+.delete-warn li{margin-bottom:3px}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyDeleteAccount) return;
+  window.__sleepyDeleteAccount = true;
+  function log(){ try{console.log.apply(console,["[Delete]"].concat([].slice.call(arguments)));}catch(e){} }
+  function esc(s){ return window.esc(s); }
+
+  window.openDeleteAccountModal = function(){
+    if (!window.ME) return;
+    var body =
+      '<div class="delete-warn">' +
+        '<b>This cannot be undone.</b> When you delete your account:' +
+        '<ul>' +
+          '<li>Your email <b>' + esc(window.SESSION.user.email || '') + '</b> will be freed up. You can sign up again with it.</li>' +
+          '<li>Your profile, avatar, banner, and decorations are deleted.</li>' +
+          '<li>You are removed from every server and every DM.</li>' +
+          '<li>Your 1-to-1 DMs are deleted for both sides.</li>' +
+          '<li>Group DMs you created are transferred to another member.</li>' +
+          '<li>Servers you own are deleted.</li>' +
+          '<li>Channel messages you sent remain but show as "Unknown user".</li>' +
+        '</ul>' +
+      '</div>' +
+      '<div class="delete-confirm-row">' +
+        '<label>Type DELETE to confirm</label>' +
+        '<input id="del-confirm" autocomplete="off" spellcheck="false" placeholder="DELETE" maxlength="10">' +
+      '</div>';
+
+    window.openModal("Delete Account", body, {
+      footer:
+        '<button class="btn" id="del-no">Cancel</button>' +
+        '<button class="btn danger" id="del-yes" disabled>Delete My Account</button>',
+      onMount: function(){
+        var inp = document.getElementById('del-confirm');
+        var yes = document.getElementById('del-yes');
+        inp.focus();
+        inp.addEventListener('input', function(){
+          var v = inp.value.trim();
+          if (v === 'DELETE'){
+            inp.classList.add('ok');
+            yes.disabled = false;
+          } else {
+            inp.classList.remove('ok');
+            yes.disabled = true;
+          }
+        });
+        inp.addEventListener('keydown', function(e){
+          if (e.key === 'Enter' && !yes.disabled) yes.click();
+        });
+        document.getElementById('del-no').onclick = window.closeModal;
+        yes.onclick = async function(){
+          yes.disabled = true;
+          yes.textContent = 'Deleting...';
+          try {
+            var { error } = await sb.rpc('delete_my_account');
+            if (error) throw error;
+            // Wipe local session
+            try { await sb.auth.signOut(); } catch(e){}
+            try {
+              Object.keys(localStorage).forEach(function(k){
+                if (k.indexOf('sb-') === 0 || k.indexOf('supabase') >= 0) localStorage.removeItem(k);
+              });
+              Object.keys(sessionStorage).forEach(function(k){
+                if (k.indexOf('sb-') === 0 || k.indexOf('supabase') >= 0) sessionStorage.removeItem(k);
+              });
+            } catch(e){}
+            window.closeModal();
+            // Hard reload to auth screen
+            window.location.reload();
+          } catch(e){
+            log("delete failed", e.message || e);
+            yes.disabled = false;
+            yes.textContent = 'Delete My Account';
+            window.toast("Delete failed", e.message || String(e), "err");
+          }
+        };
+      }
+    });
+  };
+
+  // ---------------------------------------------------------------
+  // Inject a Danger Zone section into the Settings modal
+  // ---------------------------------------------------------------
+  var origOpenSettings = window.openSettings;
+  window.openSettings = function(){
+    origOpenSettings();
+    setTimeout(function(){
+      var body = document.getElementById('modal-body');
+      if (!body) return;
+      // Only inject once
+      if (body.querySelector('.danger-zone')) return;
+      // Only inject if we're on the "My Account" tab (the default)
+      var dz = document.createElement('div');
+      dz.className = 'danger-zone';
+      dz.style.marginTop = '22px';
+      dz.innerHTML =
+        '<h4>Danger Zone</h4>' +
+        '<p>Deleting your account removes your profile, frees your email, ' +
+        'and disconnects you from all servers and conversations. This cannot be undone.</p>' +
+        '<button class="btn danger" id="open-delete-account">Delete My Account</button>';
+      body.appendChild(dz);
+      document.getElementById('open-delete-account').onclick = function(){
+        window.closeModal();
+        setTimeout(function(){ window.openDeleteAccountModal(); }, 80);
+      };
+    }, 60);
+  };
+
+  log("delete account ready");
+})();
+</script>
+
 </body>
 </html>
