@@ -1,0 +1,20 @@
+{
+  "name": "Sleepy-Chat",
+  "short_name": "Sleepy-Chat",
+  "description": "Communities, friends, real-time messaging.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0a0f",
+  "theme_color": "#0a0a0f",
+  "categories": ["social", "communication"],
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
