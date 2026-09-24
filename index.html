@@ -5624,5 +5624,291 @@ sb.auth.onAuthStateChange(function(ev){
 })();
 </script>
 
+<!-- SLEEPY_PWA_V1 -->
+<meta name="theme-color" content="#0a0a0f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sleepy-Chat">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="./manifest.json">
+<link rel="apple-touch-icon" href="./icon.svg">
+
+<style>
+/* Safe-area support: keeps bottom nav clear of Android gesture bar / iOS home bar */
+@supports (padding: max(0px)) {
+  .rail{ padding-bottom: env(safe-area-inset-bottom, 0); }
+  @media (max-width: 760px) {
+    .rail{ height: calc(60px + env(safe-area-inset-bottom, 0)); padding-bottom: env(safe-area-inset-bottom, 0); }
+    .panel{ bottom: calc(60px + env(safe-area-inset-bottom, 0)); }
+    .app{ padding-bottom: calc(60px + env(safe-area-inset-bottom, 0)); }
+    .composer-wrap{ padding-bottom: max(10px, env(safe-area-inset-bottom, 0)); }
+  }
+}
+/* Disable pull-to-refresh inside the app so it doesn't fight with chat scroll */
+html, body { overscroll-behavior: none; }
+.chat-body { overscroll-behavior-y: contain; }
+/* Remove tap highlight on Android */
+* { -webkit-tap-highlight-color: transparent; }
+/* Bigger tap targets on mobile */
+@media (hover: none) and (pointer: coarse) {
+  .row { min-height: 44px; }
+  .member { min-height: 42px; }
+  .btn.sm { padding: 9px 13px; font-size: 12.5px; }
+  .hbtn { width: 40px !important; height: 40px !important; }
+  .cbtn { width: 40px; height: 40px; }
+  .msg .toolbar { display: none; } /* hover toolbars don't work on touch */
+  /* Long-press feedback */
+  .member.long-pressed, .msg.long-pressed { background: rgba(0,255,224,.08) !important; }
+}
+/* Skeleton while app boots */
+#pwa-splash {
+  position: fixed; inset: 0; z-index: 9999;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  background: radial-gradient(600px 400px at 50% 30%, rgba(0,255,224,.08), transparent 65%), #0a0a0f;
+  transition: opacity .4s ease;
+}
+#pwa-splash.gone { opacity: 0; pointer-events: none; }
+#pwa-splash .moon { width: 88px; height: 88px; animation: floaty 4s ease-in-out infinite; }
+#pwa-splash .word { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 22px; letter-spacing: .08em; color: #e8e8f0; }
+#pwa-splash .word span { color: #00ffe0; text-shadow: 0 0 18px rgba(0,255,224,.55); }
+#pwa-splash .sub { font-size: 11px; color: #5a5a72; letter-spacing: .14em; text-transform: uppercase; }
+@keyframes floaty { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+
+/* Install prompt */
+#pwa-install {
+  position: fixed; left: 12px; right: 12px; bottom: 78px; z-index: 500;
+  background: linear-gradient(135deg, rgba(0,255,224,.08), rgba(180,74,255,.08)), #12121a;
+  border: 1px solid rgba(0,255,224,.35); border-radius: 14px;
+  padding: 12px 14px; display: flex; align-items: center; gap: 12px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.6);
+  animation: pwaSlide .35s cubic-bezier(.22,.61,.36,1) both;
+}
+@keyframes pwaSlide { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: none; } }
+#pwa-install .ico { width: 40px; height: 40px; border-radius: 10px; flex: none; }
+#pwa-install .txt { flex: 1; min-width: 0; }
+#pwa-install .txt b { font-family: 'Space Grotesk', sans-serif; font-size: 14px; display: block; margin-bottom: 2px; }
+#pwa-install .txt small { font-size: 11.5px; color: var(--text3); }
+#pwa-install .go {
+  padding: 8px 14px; border-radius: 8px; background: linear-gradient(135deg, #00ffe0, #00c9b4);
+  color: #04120f; font-weight: 700; font-size: 12.5px; border: none;
+}
+#pwa-install .close { padding: 6px; background: transparent; color: var(--text3); font-size: 18px; line-height: 1; }
+
+/* Long-press ring overlay (mobile only, appears briefly at touch point) */
+.lp-ring {
+  position: fixed; z-index: 4000; width: 44px; height: 44px; border-radius: 50%;
+  border: 2px solid var(--cyan); pointer-events: none;
+  transform: translate(-50%, -50%) scale(.4); opacity: 0;
+  animation: lpRing .45s ease-out forwards;
+}
+@keyframes lpRing {
+  0%   { transform: translate(-50%, -50%) scale(.4); opacity: .9; }
+  100% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
+}
+</style>
+
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyPwa) return;
+  window.__sleepyPwa = true;
+  function log(){ try { console.log.apply(console, ["[PWA]"].concat([].slice.call(arguments))); } catch(e){} }
+
+  // ---- 1. Register service worker (requires https:// or localhost) ----
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('./sw.js', { scope: './' })
+        .then(function(reg){ log("SW registered", reg.scope); })
+        .catch(function(err){ log("SW failed:", err.message); });
+    });
+  } else if (location.protocol === 'file:') {
+    log("Service worker skipped (file://)");
+  }
+
+  // ---- 2. Install prompt capture ----
+  var deferred = null;
+  window.addEventListener('beforeinstallprompt', function(e){
+    e.preventDefault();
+    deferred = e;
+    showInstallBanner();
+  });
+
+  function showInstallBanner(){
+    if (document.getElementById('pwa-install')) return;
+    if (localStorage.getItem('sleepy.install.dismissed') === '1') return;
+    var el = document.createElement('div');
+    el.id = 'pwa-install';
+    el.innerHTML =
+      '<img class="ico" src="./icon.svg" alt="">' +
+      '<div class="txt"><b>Install Sleepy-Chat</b><small>Add to home screen for the full app experience.</small></div>' +
+      '<button class="go" id="pwa-install-go">Install</button>' +
+      '<button class="close" id="pwa-install-x" aria-label="Dismiss">\u00d7</button>';
+    document.body.appendChild(el);
+    document.getElementById('pwa-install-go').onclick = async function(){
+      if (!deferred) return;
+      deferred.prompt();
+      var res = await deferred.userChoice;
+      deferred = null;
+      el.remove();
+      if (res.outcome === 'accepted') log("user installed");
+      else localStorage.setItem('sleepy.install.dismissed', '1');
+    };
+    document.getElementById('pwa-install-x').onclick = function(){
+      localStorage.setItem('sleepy.install.dismissed', '1');
+      el.remove();
+    };
+  }
+
+  // ---- 3. Long-press gesture to replace right-click ----
+  // Right-click has no equivalent on touchscreens. This makes long-press fire
+  // the same contextmenu event so the existing menus work on Android.
+  function installLongPress(){
+    var activeTimer = null;
+    var startX = 0, startY = 0;
+    var target = null;
+    var moveTolerance = 12;
+
+    function fireContextMenu(el, x, y){
+      // Visual feedback ring
+      var ring = document.createElement('div');
+      ring.className = 'lp-ring';
+      ring.style.left = x + 'px';
+      ring.style.top = y + 'px';
+      document.body.appendChild(ring);
+      setTimeout(function(){ ring.remove(); }, 500);
+
+      // Haptic
+      if (navigator.vibrate) try { navigator.vibrate(12); } catch(e){}
+
+      el.classList.add('long-pressed');
+      setTimeout(function(){ el.classList.remove('long-pressed'); }, 260);
+
+      var ev = new MouseEvent('contextmenu', {
+        bubbles: true, cancelable: true, view: window,
+        clientX: x, clientY: y, button: 2
+      });
+      el.dispatchEvent(ev);
+    }
+
+    document.addEventListener('touchstart', function(e){
+      if (e.touches.length !== 1) return;
+      var t = e.touches[0];
+      startX = t.clientX; startY = t.clientY;
+      var el = e.target.closest('[data-member], [data-msg], [data-server]');
+      if (!el) return;
+      target = el;
+      clearTimeout(activeTimer);
+      activeTimer = setTimeout(function(){
+        if (!target) return;
+        fireContextMenu(target, startX, startY);
+        target = null;
+      }, 480);
+    }, { passive: true });
+
+    document.addEventListener('touchmove', function(e){
+      if (!activeTimer) return;
+      var t = e.touches[0];
+      var dx = Math.abs(t.clientX - startX);
+      var dy = Math.abs(t.clientY - startY);
+      if (dx > moveTolerance || dy > moveTolerance) {
+        clearTimeout(activeTimer); activeTimer = null; target = null;
+      }
+    }, { passive: true });
+
+    document.addEventListener('touchend', function(){
+      clearTimeout(activeTimer); activeTimer = null; target = null;
+    }, { passive: true });
+    document.addEventListener('touchcancel', function(){
+      clearTimeout(activeTimer); activeTimer = null; target = null;
+    }, { passive: true });
+  }
+  installLongPress();
+
+  // ---- 4. Keep composer above keyboard ----
+  // When the composer gets focus on mobile, scroll it into view once the
+  // keyboard animation settles.
+  document.addEventListener('focusin', function(e){
+    if (e.target && e.target.id === 'composer-input'){
+      setTimeout(function(){
+        try { e.target.scrollIntoView({ block: 'end', behavior: 'smooth' }); } catch(err){}
+      }, 260);
+    }
+  });
+
+  // ---- 5. Mobile keyboard hint ----
+  document.addEventListener('focusin', function(e){
+    if (e.target && e.target.tagName === 'TEXTAREA'){
+      e.target.setAttribute('enterkeyhint', 'send');
+      e.target.setAttribute('autocorrect', 'on');
+      e.target.setAttribute('autocapitalize', 'sentences');
+      e.target.setAttribute('spellcheck', 'true');
+    }
+  });
+
+  // ---- 6. Splash screen removal ----
+  function removeSplash(){
+    var s = document.getElementById('pwa-splash');
+    if (!s) return;
+    s.classList.add('gone');
+    setTimeout(function(){ s.remove(); }, 450);
+  }
+  // Remove as soon as the app shows the auth or main screen
+  var obs = new MutationObserver(function(){
+    var app = document.getElementById('app');
+    var auth = document.getElementById('auth-screen');
+    if ((app && !app.classList.contains('hidden')) || (auth && !auth.classList.contains('hidden'))){
+      removeSplash();
+      obs.disconnect();
+    }
+  });
+  obs.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['class'] });
+  // Safety net: always remove after 6s
+  setTimeout(removeSplash, 6000);
+
+  // ---- 7. Android hardware back button ----
+  // Push a history entry so the first back press closes overlays instead of
+  // leaving the app. On the second press it exits normally.
+  history.pushState({ sleepy: true }, '');
+  window.addEventListener('popstate', function(){
+    // Close whatever's open, in priority order
+    var modal = document.getElementById('modal-root');
+    if (modal && modal.innerHTML){
+      window.closeModal && window.closeModal();
+    } else if (typeof window.closeMenu === 'function') {
+      window.closeMenu();
+    } else if (window.UI && (window.UI.panelOpen || window.UI.membersOpen)){
+      window.UI.panelOpen = false;
+      window.UI.membersOpen = false;
+      if (window.syncMobile) window.syncMobile();
+    }
+    // Re-push so next back also gets intercepted
+    history.pushState({ sleepy: true }, '');
+  });
+
+  // ---- 8. Prevent iOS-style rubber band on inputs ----
+  document.addEventListener('touchmove', function(e){
+    if (e.target.closest('textarea, input')) e.stopPropagation();
+  }, { passive: true });
+
+  log("PWA layer ready");
+})();
+</script>
+
+<!-- PWA splash markup -->
+<div id="pwa-splash">
+  <svg class="moon" viewBox="0 0 24 24" fill="none">
+    <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" stroke="url(#mg)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <defs>
+      <linearGradient id="mg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#00ffe0"/>
+        <stop offset="1" stop-color="#b44aff"/>
+      </linearGradient>
+    </defs>
+  </svg>
+  <div class="word">SLEEPY<span>CHAT</span></div>
+  <div class="sub">Loading</div>
+</div>
+
 </body>
 </html>
