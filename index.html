@@ -8786,5 +8786,245 @@ html, body { overscroll-behavior: none; }
 })();
 </script>
 
+<!-- SLEEPY_ONE_CLICK_INSTALL_V1 -->
+<style>
+#oc-install-btn{
+  position:fixed;bottom:80px;right:20px;z-index:800;
+  background:linear-gradient(135deg,#00ffe0,#00c9b4);
+  color:#04120f;font-weight:700;font-size:13px;
+  padding:12px 20px;border-radius:12px;border:none;cursor:pointer;
+  box-shadow:0 8px 32px rgba(0,255,224,.45);
+  display:flex;align-items:center;gap:10px;
+  font-family:'Inter',sans-serif;letter-spacing:.02em;
+  animation:ocPulse 2.5s ease-in-out infinite;
+  transition:transform .15s;
+}
+#oc-install-btn:hover{transform:translateY(-2px) scale(1.03)}
+#oc-install-btn:active{transform:translateY(0)}
+#oc-install-btn svg{width:18px;height:18px}
+@keyframes ocPulse{
+  0%,100%{box-shadow:0 8px 32px rgba(0,255,224,.45)}
+  50%{box-shadow:0 8px 42px rgba(0,255,224,.75)}
+}
+/* Settings install card */
+.oc-install-card{
+  margin-top:22px;padding:18px;border-radius:12px;
+  background:linear-gradient(135deg,rgba(0,255,224,.08),rgba(180,74,255,.08));
+  border:1px solid rgba(0,255,224,.35);
+}
+.oc-install-card h4{
+  font-family:'Space Grotesk',sans-serif;font-size:15px;
+  margin-bottom:6px;color:var(--text);
+}
+.oc-install-card p{
+  font-size:12.5px;color:var(--text2);line-height:1.55;margin-bottom:12px;
+}
+.oc-install-card button{
+  padding:10px 18px;border-radius:9px;font-weight:700;font-size:13px;
+  background:linear-gradient(135deg,#00ffe0,#00c9b4);color:#04120f;
+  border:none;cursor:pointer;transition:transform .15s;
+}
+.oc-install-card button:hover{transform:translateY(-1px)}
+.oc-manual-steps{
+  padding:11px 13px;background:rgba(0,0,0,.35);border-radius:8px;
+  font-size:12.5px;color:var(--text2);line-height:1.7;margin:10px 0;
+}
+.oc-manual-steps b{color:var(--cyan)}
+.oc-manual-steps ol{margin:6px 0 0 18px;padding:0}
+.oc-manual-steps li{margin-bottom:4px}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyOneClick) return;
+  window.__sleepyOneClick = true;
+  function log(){ try{console.log.apply(console,["[Install]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  var deferredPrompt = null;
+  var installed = false;
+
+  function isStandalone(){
+    return window.matchMedia('(display-mode: standalone)').matches ||
+           window.navigator.standalone === true ||
+           document.referrer.indexOf('android-app://') === 0;
+  }
+  function isIOS(){
+    return /iPhone|iPad|iPod/i.test(navigator.userAgent) && !window.MSStream;
+  }
+  function isAndroid(){
+    return /Android/i.test(navigator.userAgent);
+  }
+  function isMobile(){
+    return isIOS() || isAndroid() || /Mobile|Tablet/i.test(navigator.userAgent);
+  }
+
+  // ---------- Capture native install event ----------
+  window.addEventListener('beforeinstallprompt', function(e){
+    e.preventDefault();
+    deferredPrompt = e;
+    log("native install prompt captured");
+    // Make sure the button is visible now that we know install is possible
+    ensureButton();
+  });
+
+  window.addEventListener('appinstalled', function(){
+    installed = true;
+    log("app installed");
+    removeButton();
+    try { localStorage.setItem('sleepychat.installed', '1'); } catch(e){}
+  });
+
+  // ---------- The one-click action ----------
+  async function doInstall(){
+    if (installed) return;
+    // If Chrome gave us the native prompt, use it
+    if (deferredPrompt){
+      try {
+        deferredPrompt.prompt();
+        var choice = await deferredPrompt.userChoice;
+        log("user choice:", choice.outcome);
+        deferredPrompt = null;
+        if (choice.outcome === 'accepted'){
+          // Chrome handles the install and shows the app icon automatically
+          window.toast("Installing...", "Sleepy-Chat will be added to your device.", "ok");
+        }
+      } catch(e){
+        log("prompt failed:", e.message);
+        showManualInstructions();
+      }
+      return;
+    }
+    // No native prompt available — show manual instructions
+    showManualInstructions();
+  }
+
+  function showManualInstructions(){
+    var kind = isIOS() ? 'ios' : isAndroid() ? 'android' : 'desktop';
+    var stepsHTML = '';
+    if (kind === 'ios'){
+      stepsHTML = '<ol>' +
+        '<li>Tap the <b>Share</b> icon (square with an arrow) at the bottom of Safari</li>' +
+        '<li>Scroll and tap <b>Add to Home Screen</b></li>' +
+        '<li>Tap <b>Add</b> in the top-right</li>' +
+      '</ol>';
+    } else if (kind === 'android'){
+      stepsHTML = '<ol>' +
+        '<li>Tap the <b>three dots</b> (⋮) in Chrome\'s top-right corner</li>' +
+        '<li>Tap <b>Install app</b> or <b>Add to Home screen</b></li>' +
+        '<li>Tap <b>Install</b> on the confirmation</li>' +
+      '</ol>';
+    } else {
+      stepsHTML = '<ol>' +
+        '<li>Click the <b>three dots</b> (⋮) in Chrome\'s top-right corner</li>' +
+        '<li>Click <b>Save and share</b></li>' +
+        '<li>Click <b>Install page as app...</b></li>' +
+        '<li>Click <b>Install</b> on the dialog</li>' +
+      '</ol>';
+    }
+
+    window.openModal("Install Sleepy-Chat",
+      '<div class="oc-manual-steps">' +
+        'Follow these steps in your browser:' +
+        stepsHTML +
+      '</div>' +
+      '<div style="font-size:11.5px;color:var(--text3);margin-top:12px;line-height:1.5">' +
+        'Once installed, Sleepy-Chat opens in its own window — no browser tabs, no URL bar. ' +
+        'It gets its own icon on your ' +
+        (kind === 'desktop' ? 'desktop and start menu' : 'home screen') + '.' +
+      '</div>'
+    );
+  }
+
+  // ---------- Floating button ----------
+  function ensureButton(){
+    if (installed) return;
+    if (isStandalone()) return;
+    try { if (localStorage.getItem('sleepychat.installed') === '1') return; } catch(e){}
+    if (document.getElementById('oc-install-btn')) return;
+
+    var btn = document.createElement('button');
+    btn.id = 'oc-install-btn';
+    btn.innerHTML =
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' +
+        '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>' +
+        '<polyline points="7 10 12 15 17 10"/>' +
+        '<line x1="12" y1="15" x2="12" y2="3"/>' +
+      '</svg>' +
+      '<span>Install App</span>';
+    btn.onclick = doInstall;
+    document.body.appendChild(btn);
+    log("install button added");
+  }
+
+  function removeButton(){
+    var b = document.getElementById('oc-install-btn');
+    if (b) b.remove();
+  }
+
+  // Show the button after the app has loaded
+  // Strategy: don't show immediately — it's cleaner if it appears once we know install is possible.
+  // But on iOS Safari there's no beforeinstallprompt, so show it after a short delay anyway.
+  var tries = 0;
+  var timer = setInterval(function(){
+    tries++;
+    // If we're in the app already, no button needed
+    if (window.ME && window.ME.id){
+      clearInterval(timer);
+      if (!isStandalone()){
+        // Show button. On Chrome it may already exist from beforeinstallprompt.
+        // On iOS/Firefox it will be added now.
+        setTimeout(function(){
+          if (!deferredPrompt && !document.getElementById('oc-install-btn')){
+            // No native prompt has fired — still show the button so user can
+            // see the manual steps when they click
+            ensureButton();
+          }
+        }, 2000);
+      }
+    }
+    if (tries > 60) clearInterval(timer);
+  }, 500);
+
+  // ---------- Add card into Settings modal ----------
+  var origOpenSettings = window.openSettings;
+  if (typeof origOpenSettings === 'function'){
+    window.openSettings = function(){
+      var r = origOpenSettings.apply(this, arguments);
+      setTimeout(function(){
+        var body = document.getElementById('modal-body');
+        if (!body) return;
+        if (body.querySelector('.oc-install-card')) return;
+        if (isStandalone()){
+          var done = document.createElement('div');
+          done.className = 'oc-install-card';
+          done.innerHTML =
+            '<h4>Sleepy-Chat is installed</h4>' +
+            '<p>You are using the installed version of Sleepy-Chat. It runs in its own window — no browser tabs needed.</p>';
+          body.appendChild(done);
+          return;
+        }
+        var card = document.createElement('div');
+        card.className = 'oc-install-card';
+        card.innerHTML =
+          '<h4>Install Sleepy-Chat</h4>' +
+          '<p>Add Sleepy-Chat to your ' +
+          (isMobile() ? 'home screen' : 'desktop') +
+          ' for the full app experience — no browser tabs, no URL bar, instant access.</p>' +
+          '<button id="oc-settings-install">Install App</button>';
+        body.appendChild(card);
+        var b = document.getElementById('oc-settings-install');
+        if (b) b.onclick = doInstall;
+      }, 120);
+      return r;
+    };
+  }
+
+  // ---------- Also expose globally so we can trigger it from anywhere ----------
+  window.installSleepyChat = doInstall;
+
+  log("one-click install ready");
+})();
+</script>
+
 </body>
 </html>
