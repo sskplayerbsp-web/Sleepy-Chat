@@ -9343,5 +9343,246 @@ html, body { overscroll-behavior: none; }
 })();
 </script>
 
+<!-- SLEEPY_DM_DEDUPE_V1 -->
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyDmDedupe) return;
+  window.__sleepyDmDedupe = true;
+  function log(){ try{console.log.apply(console,["[Dedupe]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  // ============================================================
+  // 1. LOCK MAP — one in-flight DM creation per other-user id
+  // ============================================================
+  window.__dmLocks = window.__dmLocks || {};
+
+  // Replace openDMWith with a lock-aware version
+  window.openDMWith = async function(otherUserId){
+    if (!otherUserId) return;
+    if (otherUserId === window.ME.id) return;
+
+    // Same click again? Reuse the first in-flight operation.
+    if (window.__dmLocks[otherUserId]){
+      log("reusing in-flight DM for", otherUserId.slice(0,6));
+      try {
+        var conv = await window.__dmLocks[otherUserId];
+        if (conv){
+          window.UI.view = "dms";
+          window.UI.conversationId = conv.id;
+          window.UI.channelId = null;
+          window.UI.communityId = null;
+          window.renderAll();
+        }
+      } catch(e){ log("lock wait failed:", e.message); }
+      return;
+    }
+
+    // Fast path: is this conversation already loaded locally?
+    var localConv = (window.CONVERSATIONS || []).filter(function(c){
+      return !c.is_group && c.memberIds.length === 2 &&
+        c.memberIds.indexOf(window.ME.id) >= 0 &&
+        c.memberIds.indexOf(otherUserId) >= 0;
+    })[0];
+
+    if (localConv){
+      log("existing DM found locally:", localConv.id.slice(0,6));
+      window.UI.view = "dms";
+      window.UI.conversationId = localConv.id;
+      window.UI.channelId = null;
+      window.UI.communityId = null;
+      window.renderAll();
+      return;
+    }
+
+    // Slow path: hit the DB, guarded by a lock
+    var lockPromise = (async function(){
+      try {
+        var conv = await window.getOrCreateDM(otherUserId);
+        return conv;
+      } catch(e){
+        log("getOrCreateDM failed:", e.message);
+        throw e;
+      }
+    })();
+    window.__dmLocks[otherUserId] = lockPromise;
+
+    try {
+      var conv = await lockPromise;
+      await window.loadConversations();
+      window.UI.view = "dms";
+      window.UI.conversationId = conv.id;
+      window.UI.channelId = null;
+      window.UI.communityId = null;
+      window.renderAll();
+    } finally {
+      delete window.__dmLocks[otherUserId];
+    }
+  };
+
+  // ============================================================
+  // 2. Also patch getOrCreateDM itself in case it's called directly
+  // ============================================================
+  var origGetOrCreate = window.getOrCreateDM;
+  if (typeof origGetOrCreate === "function"){
+    window.getOrCreateDM = async function(otherUserId){
+      // If a lock exists, chain onto it
+      if (window.__dmLocks[otherUserId]) return window.__dmLocks[otherUserId];
+      // Otherwise wrap our own
+      var p = origGetOrCreate.call(this, otherUserId);
+      window.__dmLocks[otherUserId] = p;
+      try {
+        return await p;
+      } finally {
+        delete window.__dmLocks[otherUserId];
+      }
+    };
+  }
+
+  // ============================================================
+  // 3. BOT DM — ensure only one SleepyBot conversation
+  // ============================================================
+  var BOT_USERNAME = "sleepybot";
+  var botLock = false;
+
+  async function ensureSingleBotDM(){
+    if (botLock) return;
+    botLock = true;
+    try {
+      // Find the bot's profile
+      var botResp = await sb.from("profiles").select("id").eq("username", BOT_USERNAME).maybeSingle();
+      if (!botResp.data) { botLock = false; return; }
+      var botId = botResp.data.id;
+      if (botId === window.ME.id) { botLock = false; return; }
+
+      // Find all my conversations with the bot
+      var myResp = await sb.from("conversation_members").select("conversation_id").eq("user_id", window.ME.id);
+      var myIds = (myResp.data || []).map(function(r){ return r.conversation_id; });
+      if (!myIds.length) { botLock = false; return; }
+
+      var theirResp = await sb.from("conversation_members")
+        .select("conversation_id")
+        .eq("user_id", botId)
+        .in("conversation_id", myIds);
+      var sharedIds = (theirResp.data || []).map(function(r){ return r.conversation_id; });
+
+      // Filter to 1:1 (no other members)
+      var botConvs = [];
+      for (var i = 0; i < sharedIds.length; i++){
+        var cid = sharedIds[i];
+        var cResp = await sb.from("conversation_members").select("user_id").eq("conversation_id", cid);
+        if ((cResp.data || []).length === 2) botConvs.push(cid);
+      }
+
+      if (botConvs.length <= 1) { botLock = false; return; }
+      log("found", botConvs.length, "bot DMs — merging");
+
+      // Keep the one with the most recent activity
+      var keep = botConvs[0];
+      var keepTs = 0;
+      for (var j = 0; j < botConvs.length; j++){
+        var mResp = await sb.from("messages").select("created_at").eq("conversation_id", botConvs[j]).order("created_at", { ascending: false }).limit(1);
+        var ts = (mResp.data && mResp.data[0]) ? new Date(mResp.data[0].created_at).getTime() : 0;
+        if (ts > keepTs){ keepTs = ts; keep = botConvs[j]; }
+      }
+
+      // Delete the others
+      for (var k = 0; k < botConvs.length; k++){
+        if (botConvs[k] !== keep){
+          try { await sb.from("conversations").delete().eq("id", botConvs[k]); } catch(e){}
+        }
+      }
+      log("bot DMs merged into", keep.slice(0,6));
+    } catch(e){
+      log("bot dedupe failed:", e.message);
+    } finally {
+      botLock = false;
+    }
+  }
+
+  // ============================================================
+  // 4. GLOBAL CLEANUP — remove duplicate 1:1 conversations
+  // ============================================================
+  async function dedupeAllDMs(){
+    if (!window.ME || !window.CONVERSATIONS) return 0;
+    // Group all my 1:1 conversations by sorted member-pair key
+    var groups = {};
+    (window.CONVERSATIONS || []).forEach(function(c){
+      if (c.is_group) return;
+      if (!c.memberIds || c.memberIds.length !== 2) return;
+      var key = c.memberIds.slice().sort().join("|");
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(c);
+    });
+
+    var toDelete = [];
+    for (var key in groups){
+      var list = groups[key];
+      if (list.length <= 1) continue;
+      // Keep the one with messages, else the oldest
+      list.sort(function(a, b){
+        var am = a.lastMessage ? 1 : 0;
+        var bm = b.lastMessage ? 1 : 0;
+        if (am !== bm) return bm - am;      // with-messages first
+        return new Date(a.created_at) - new Date(b.created_at);
+      });
+      for (var i = 1; i < list.length; i++) toDelete.push(list[i]);
+    }
+
+    if (!toDelete.length) return 0;
+    log("deduping", toDelete.length, "duplicate DM(s)");
+
+    // Delete the duplicates from the server
+    for (var j = 0; j < toDelete.length; j++){
+      try {
+        await sb.from("conversations").delete().eq("id", toDelete[j].id);
+      } catch(e){ log("delete failed:", e.message); }
+    }
+
+    // Reload conversation list so the UI updates
+    try { await window.loadConversations(); } catch(e){}
+    try { window.renderPanel(); window.renderRail(); } catch(e){}
+
+    return toDelete.length;
+  }
+
+  // ============================================================
+  // 5. RUN CLEANUP once after boot
+  // ============================================================
+  var tries = 0;
+  var cleanupTimer = setInterval(async function(){
+    tries++;
+    if (!window.ME || !window.CONVERSATIONS) return;
+    if (!window.loadConversations) return;
+    clearInterval(cleanupTimer);
+
+    // Wait a beat so the app fully initialises
+    setTimeout(async function(){
+      try {
+        await window.loadConversations();
+        await ensureSingleBotDM();
+        var removed = await dedupeAllDMs();
+        if (removed > 0){
+          try { window.toast("Cleaned up", "Removed " + removed + " duplicate conversation" + (removed === 1 ? "" : "s") + ".", "ok"); } catch(e){}
+        }
+      } catch(e){ log("cleanup error:", e.message); }
+    }, 2500);
+  }, 300);
+
+  // ============================================================
+  // 6. Also hook into the "Message" button clicks in the friends list
+  // ============================================================
+  document.addEventListener("click", function(e){
+    var btn = e.target.closest("[data-fr-dm]");
+    if (!btn) return;
+    // Disable the button visually for 1s so rapid clicks don't stack
+    if (btn.disabled) return;
+    btn.disabled = true;
+    setTimeout(function(){ btn.disabled = false; }, 1000);
+  }, true);
+
+  log("DM dedupe ready");
+})();
+</script>
+
 </body>
 </html>
