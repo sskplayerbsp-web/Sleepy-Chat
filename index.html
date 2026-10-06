@@ -9183,5 +9183,165 @@ html, body { overscroll-behavior: none; }
 })();
 </script>
 
+<!-- SLEEPY_INSTANT_INSTALL_V1 -->
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyInstantInstall) return;
+  window.__sleepyInstantInstall = true;
+  function log(){ try{console.log.apply(console,["[Install]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  // Chrome fires beforeinstallprompt when it decides install is allowed.
+  // We capture it and hold it. The button consumes it.
+  if (!window.__bipPrompt) window.__bipPrompt = null;
+  var waitingForPrompt = false;
+
+  window.addEventListener('beforeinstallprompt', function(e){
+    e.preventDefault();
+    window.__bipPrompt = e;
+    log("install prompt captured");
+    // If the user already clicked and we're waiting, auto-fire NOW
+    if (waitingForPrompt){
+      log("auto-firing prompt for waiting user");
+      waitingForPrompt = false;
+      firePrompt(true);
+    }
+    // Update the button look
+    var b = document.getElementById('oc-install-btn');
+    if (b){
+      b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Install Now</span>';
+    }
+  });
+
+  async function firePrompt(fromWait){
+    if (!window.__bipPrompt){
+      if (!fromWait) {
+        // First attempt: try waiting 5 seconds for the event
+        return waitThenFire();
+      }
+      return showManual();
+    }
+    var p = window.__bipPrompt;
+    window.__bipPrompt = null;
+    try {
+      p.prompt();
+      var choice = await p.userChoice;
+      log("user choice:", choice.outcome);
+      if (choice.outcome === 'accepted'){
+        var b = document.getElementById('oc-install-btn');
+        if (b) b.innerHTML = '<span>Installed ✓</span>';
+        setTimeout(function(){
+          var bb = document.getElementById('oc-install-btn');
+          if (bb) bb.remove();
+        }, 2000);
+      }
+      return;
+    } catch(e){
+      log("prompt failed:", e.message);
+      return showManual();
+    }
+  }
+
+  async function waitThenFire(){
+    // Show spinner
+    var b = document.getElementById('oc-install-btn');
+    var originalHTML = b ? b.innerHTML : '';
+    if (b){
+      b.innerHTML = '<span>Preparing…</span>';
+      b.disabled = true;
+    }
+    waitingForPrompt = true;
+
+    // Wait up to 5 seconds for the event to fire (it usually fires within 1s
+    // once Chrome has decided the site is installable)
+    var ok = await new Promise(function(resolve){
+      var deadline = Date.now() + 5000;
+      var check = setInterval(function(){
+        if (window.__bipPrompt){ clearInterval(check); resolve(true); }
+        else if (Date.now() > deadline){ clearInterval(check); resolve(false); }
+      }, 150);
+    });
+
+    waitingForPrompt = false;
+    if (b){
+      b.disabled = false;
+      if (!ok) b.innerHTML = originalHTML;
+    }
+    if (ok) return firePrompt(true);
+    return showManual();
+  }
+
+  function showManual(){
+    var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) && !window.MSStream;
+    var isAndroid = /Android/i.test(navigator.userAgent);
+    var steps;
+    if (isIOS){
+      steps = '<ol>' +
+        '<li>Tap the <b>Share</b> icon at the bottom of Safari</li>' +
+        '<li>Scroll and tap <b>Add to Home Screen</b></li>' +
+        '<li>Tap <b>Add</b></li>' +
+      '</ol>';
+    } else if (isAndroid){
+      steps = '<ol>' +
+        '<li>Tap the <b>⋮</b> menu (top-right of Chrome)</li>' +
+        '<li>Tap <b>Install app</b> or <b>Add to Home screen</b></li>' +
+        '<li>Tap <b>Install</b></li>' +
+      '</ol>';
+    } else {
+      steps = '<ol>' +
+        '<li>Click the <b>⋮</b> menu (top-right of Chrome)</li>' +
+        '<li>Click <b>Save and share</b></li>' +
+        '<li>Click <b>Install page as app...</b></li>' +
+        '<li>Click <b>Install</b></li>' +
+      '</ol>' +
+      '<div style="font-size:11.5px;color:var(--text3);margin-top:10px;line-height:1.5">' +
+        'Chrome will offer one-click install after you\'ve browsed the site a bit. ' +
+        'This is a Chrome security rule — no website can skip it. The menu path always works instantly.' +
+      '</div>';
+    }
+    window.openModal("Install Sleepy-Chat",
+      '<div style="padding:12px 14px;background:rgba(0,0,0,.35);border-radius:8px;font-size:13px;color:var(--text2);line-height:1.75">' +
+        steps +
+      '</div>' +
+      '<div style="margin-top:14px;display:flex;justify-content:flex-end">' +
+        '<button class="btn" id="oc-manual-close">Got it</button>' +
+      '</div>'
+    );
+    var c = document.getElementById('oc-manual-close');
+    if (c) c.onclick = window.closeModal;
+  }
+
+  // Replace the button's click handler
+  function wireButton(){
+    var b = document.getElementById('oc-install-btn');
+    if (!b || b.__instantWired) return;
+    b.__instantWired = true;
+    var clone = b.cloneNode(true);
+    b.parentNode.replaceChild(clone, b);
+    clone.onclick = function(){ firePrompt(false); };
+  }
+  setInterval(wireButton, 400);
+  wireButton();
+
+  // Also hook the settings-modal install card
+  var origOpen = window.openSettings;
+  if (typeof origOpen === 'function'){
+    window.openSettings = function(){
+      var r = origOpen.apply(this, arguments);
+      setTimeout(function(){
+        var ib = document.getElementById('oc-settings-install');
+        if (ib && !ib.__instantWired){
+          ib.__instantWired = true;
+          ib.onclick = function(){ firePrompt(false); };
+        }
+      }, 150);
+      return r;
+    };
+  }
+
+  log("instant install ready");
+})();
+</script>
+
 </body>
 </html>
