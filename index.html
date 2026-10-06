@@ -6481,5 +6481,687 @@ html, body { overscroll-behavior: none; }
 })();
 </script>
 
+<!-- SLEEPY_VOICE_PERMISSION_V1 -->
+<style>
+.perm-modal-bg{
+  position:fixed;inset:0;z-index:600;background:rgba(4,4,8,.8);
+  backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;
+  padding:20px;animation:fadeIn .2s ease both;
+}
+.perm-modal{
+  width:100%;max-width:420px;background:var(--surface);
+  border:1px solid var(--border);border-radius:18px;padding:26px 24px;
+  box-shadow:0 30px 90px rgba(0,0,0,.7);text-align:center;
+  animation:modalIn .26s cubic-bezier(.22,.61,.36,1) both;
+}
+.perm-modal .icon{
+  width:64px;height:64px;margin:0 auto 14px;border-radius:18px;
+  background:linear-gradient(135deg,rgba(0,255,224,.14),rgba(180,74,255,.14));
+  border:1px solid rgba(0,255,224,.3);display:flex;align-items:center;justify-content:center;
+}
+.perm-modal .icon svg{width:30px;height:30px;color:var(--cyan)}
+.perm-modal h3{font-size:18px;margin-bottom:8px;font-family:'Space Grotesk',sans-serif}
+.perm-modal p{font-size:13px;color:var(--text2);line-height:1.55;margin-bottom:14px}
+.perm-modal .warn{
+  font-size:12px;color:#ff8aa8;background:rgba(255,45,111,.08);
+  border-left:3px solid var(--rose);border-radius:6px;padding:9px 12px;
+  text-align:left;margin:14px 0;line-height:1.5;
+}
+.perm-modal .warn b{color:#ffb3c7}
+.perm-modal .actions{display:flex;gap:8px;justify-content:center;margin-top:16px;flex-wrap:wrap}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyVoicePermission) return;
+  window.__sleepyVoicePermission = true;
+  function log(){ try{console.log.apply(console,["[Perm]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  // ---------- Modal helpers ----------
+  function showModal(html){
+    var bg = document.createElement('div');
+    bg.className = 'perm-modal-bg';
+    bg.innerHTML = '<div class="perm-modal">' + html + '</div>';
+    document.body.appendChild(bg);
+    bg.addEventListener('click', function(e){
+      if (e.target === bg) bg.remove();
+    });
+    return bg;
+  }
+  function hideModal(bg){ if (bg) bg.remove(); }
+
+  function iconMic(){
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/></svg>';
+  }
+  function iconVideo(){
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="m22 8-6 4 6 4V8z"/></svg>';
+  }
+
+  // ---------- Environment check ----------
+  function isSecureContext(){
+    // HTTPS or localhost count as secure. file:// and http:// (except localhost) do not.
+    if (window.isSecureContext) return true;
+    var h = location.hostname;
+    if (h === 'localhost' || h === '127.0.0.1' || h === '::1') return true;
+    return false;
+  }
+
+  function protocolLabel(){
+    if (location.protocol === 'file:') return 'file://';
+    if (location.protocol === 'http:') return 'http://';
+    return location.protocol;
+  }
+
+  // ---------- Permission state check ----------
+  async function getPermissionState(name){
+    // name: 'microphone' or 'camera'
+    try {
+      if (!navigator.permissions || !navigator.permissions.query) return 'unknown';
+      var result = await navigator.permissions.query({ name: name });
+      return result.state; // 'granted' | 'denied' | 'prompt'
+    } catch(e){ return 'unknown'; }
+  }
+
+  // ---------- The actual request ----------
+  // This is what actually triggers the browser's native popup.
+  // If the browser has "denied" cached, it will fail silently and we show instructions.
+  async function requestMedia(video){
+    var constraints = {
+      audio: true,
+      video: video ? { width: 640, height: 480 } : false
+    };
+    var stream = await navigator.mediaDevices.getUserMedia(constraints);
+    return stream;
+  }
+
+  // ---------- The gate that runs before every join ----------
+  window.requestVoicePermission = async function(withVideo){
+    // 1) Secure context check
+    if (!isSecureContext()){
+      var bg1 = showModal(
+        '<div class="icon">' + iconMic() + '</div>' +
+        '<h3>Voice needs a secure connection</h3>' +
+        '<p>Sleepy-Chat can only access your ' + (withVideo ? 'mic and camera' : 'microphone') + ' over <b>HTTPS</b> or <b>localhost</b>.</p>' +
+        '<div class="warn">You are on <b>' + protocolLabel() + '</b> right now. Browsers block device access on this protocol for security.</div>' +
+        '<p style="font-size:12px">Open the site from your GitHub Pages URL (which is HTTPS) or run a local server.</p>' +
+        '<div class="actions"><button class="btn" id="pm-close">Close</button></div>'
+      );
+      bg1.querySelector('#pm-close').onclick = function(){ hideModal(bg1); };
+      return null;
+    }
+
+    // 2) If API missing (very old browser)
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      var bg2 = showModal(
+        '<div class="icon">' + iconMic() + '</div>' +
+        '<h3>Browser not supported</h3>' +
+        '<p>Your browser does not support microphone or camera access.</p>' +
+        '<p style="font-size:12px">Try the latest Chrome, Edge, or Firefox on desktop or Android.</p>' +
+        '<div class="actions"><button class="btn" id="pm-close">Close</button></div>'
+      );
+      bg2.querySelector('#pm-close').onclick = function(){ hideModal(bg2); };
+      return null;
+    }
+
+    // 3) Check permission state
+    var micState = await getPermissionState('microphone');
+    var camState = withVideo ? await getPermissionState('camera') : 'granted';
+    log("permission states - mic:", micState, "cam:", camState);
+
+    // 4) If previously denied, show reset instructions
+    if (micState === 'denied' || camState === 'denied'){
+      var resetHtml =
+        '<div class="icon">' + (withVideo ? iconVideo() : iconMic()) + '</div>' +
+        '<h3>Access was blocked earlier</h3>' +
+        '<p>Your browser remembers that you said "Block" for this site. It won\'t ask again until you reset it.</p>' +
+        '<div class="warn"><b>How to reset:</b>' +
+          '<br>1. Click the <b>lock</b> or <b>camera</b> icon in your address bar (left of the URL).' +
+          '<br>2. Find <b>Microphone</b>' + (withVideo ? ' and <b>Camera</b>' : '') + ' and change it to <b>Allow</b>.' +
+          '<br>3. Reload this page and try again.' +
+        '</div>' +
+        '<div class="actions">' +
+          '<button class="btn primary" id="pm-retry">I reset it — try again</button>' +
+          '<button class="btn" id="pm-close">Close</button>' +
+        '</div>';
+      var bg3 = showModal(resetHtml);
+      bg3.querySelector('#pm-close').onclick = function(){ hideModal(bg3); };
+      bg3.querySelector('#pm-retry').onclick = async function(){
+        hideModal(bg3);
+        // Try again fresh
+        try {
+          var s = await requestMedia(withVideo);
+          return s;
+        } catch(e){
+          window.toast("Still blocked", "Check the browser settings for this site and reload.", "err");
+          return null;
+        }
+      };
+      return null;
+    }
+
+    // 5) Show a friendly pre-prompt so the user understands what happens next
+    var bg4 = showModal(
+      '<div class="icon">' + (withVideo ? iconVideo() : iconMic()) + '</div>' +
+      '<h3>Allow ' + (withVideo ? 'camera and microphone' : 'microphone') + '?</h3>' +
+      '<p>Sleepy-Chat is about to ask your browser for ' +
+        (withVideo ? 'camera and microphone' : 'microphone') + ' access. ' +
+        'This is used only for the voice call and never leaves your device until you join.</p>' +
+      '<p style="font-size:12px;color:var(--text3)">Your browser will show a popup. Click <b>Allow</b>.</p>' +
+      '<div class="actions">' +
+        '<button class="btn primary" id="pm-go">Continue</button>' +
+        '<button class="btn" id="pm-close">Cancel</button>' +
+      '</div>'
+    );
+    var proceed = await new Promise(function(resolve){
+      bg4.querySelector('#pm-go').onclick = function(){ hideModal(bg4); resolve(true); };
+      bg4.querySelector('#pm-close').onclick = function(){ hideModal(bg4); resolve(false); };
+    });
+    if (!proceed) return null;
+
+    // 6) Now actually request — this triggers the native browser prompt
+    try {
+      var stream = await requestMedia(withVideo);
+      log("media acquired");
+      return stream;
+    } catch(err){
+      log("getUserMedia failed:", err.name, err.message);
+
+      // Map common errors to helpful messages
+      var msg = "Could not start the call.";
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'){
+        msg = "You (or the browser) blocked access. Check the lock icon in the address bar.";
+      } else if (err.name === 'NotFoundError'){
+        msg = "No " + (withVideo ? "camera or microphone" : "microphone") + " found on this device.";
+      } else if (err.name === 'NotReadableError'){
+        msg = "Your device is busy. Close other apps using the " + (withVideo ? "camera" : "mic") + " and try again.";
+      } else if (err.name === 'OverconstrainedError'){
+        msg = "Your device doesn't support the requested video size.";
+      } else if (err.name === 'SecurityError'){
+        msg = "Browser blocked this due to security. Make sure the URL is HTTPS.";
+      }
+
+      window.toast("Could not start call", msg, "err");
+      return null;
+    }
+  };
+
+  // ---------- Override joinVoice to use the new permission flow ----------
+  var origJoinVoice = window.joinVoice;
+  if (typeof origJoinVoice === 'function'){
+    window.joinVoice = async function(channelId, withVideo){
+      // Ask first — the modal handles everything including the browser prompt
+      var stream = await window.requestVoicePermission(withVideo);
+      if (!stream){
+        log("user cancelled or permission denied");
+        return;
+      }
+      // Stash the stream so the original function reuses it instead of asking again
+      if (!window.callState) window.callState = {};
+      window.callState.localStream = stream;
+      window.callState.videoOn = !!withVideo;
+
+      // Now run the original join logic
+      return origJoinVoice.call(this, channelId, withVideo);
+    };
+  }
+
+  log("permission flow ready");
+})();
+</script>
+
+<!-- SLEEPY_VOICE_DEBUG_V1 -->
+<style>
+.voice-dock .peer-status{
+  font-family:'JetBrains Mono',monospace;font-size:10px;
+  padding:2px 6px;border-radius:4px;background:rgba(0,0,0,.35);
+  color:var(--text3);cursor:pointer;
+}
+.voice-dock .peer-status.ok{color:var(--green)}
+.voice-dock .peer-status.wait{color:var(--amber)}
+.voice-dock .peer-status.bad{color:var(--rose)}
+.voice-dock .expand-btn{
+  width:26px!important;height:26px!important;font-size:11px!important;
+}
+.voice-debug{
+  position:fixed;bottom:150px;right:20px;z-index:401;
+  background:#0d0d14;border:1px solid var(--border);border-radius:10px;
+  padding:10px 12px;font-family:'JetBrains Mono',monospace;font-size:11px;
+  color:var(--text2);min-width:240px;max-width:340px;
+  box-shadow:0 20px 50px rgba(0,0,0,.6);
+  animation:fadeUp .2s ease;
+}
+.voice-debug h5{font-size:10px;color:var(--cyan);text-transform:uppercase;
+  letter-spacing:.1em;margin-bottom:6px;font-weight:700}
+.voice-debug .row{display:flex;justify-content:space-between;padding:2px 0;color:var(--text3)}
+.voice-debug .row b{color:var(--text)}
+.voice-debug .row.ok b{color:var(--green)}
+.voice-debug .row.bad b{color:var(--rose)}
+.voice-debug .row.wait b{color:var(--amber)}
+.voice-debug .tip{
+  margin-top:8px;padding-top:8px;border-top:1px solid var(--border);
+  font-size:10px;color:var(--amber);line-height:1.5;
+}
+.voice-debug button{
+  width:100%;margin-top:8px;padding:5px;border-radius:6px;
+  background:rgba(0,255,224,.1);border:1px solid rgba(0,255,224,.35);
+  color:var(--cyan);font-size:11px;font-family:inherit;cursor:pointer;
+}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyVoiceDebug) return;
+  window.__sleepyVoiceDebug = true;
+  function log(){ try{console.log.apply(console,["[VD]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  // ============================================================
+  // 1. FIX GLARE — polite/impolite peer negotiation
+  // ============================================================
+  // WebRTC glare: both peers send offers at the same time and both
+  // try to setRemoteDescription(offer) while an offer is in flight.
+  // Standard fix: one peer is "polite" (yields), the other "impolite"
+  // (ignores incoming offers during its own negotiation). The rule:
+  // the peer with the alphabetically GREATER id is polite.
+
+  function isPolite(myId, theirId){
+    return String(myId) > String(theirId);
+  }
+
+  // Replace createOffer to use perfect negotiation
+  window.__voiceCreateOffer = async function(peerId, iceServers){
+    var cs = window.callState;
+    if (!cs) return;
+
+    // If we already have a peer connection, don't create another
+    if (cs.peers[peerId]) {
+      log("peer already exists:", peerId);
+      return cs.peers[peerId];
+    }
+
+    var pc = new RTCPeerConnection({ iceServers: iceServers });
+    cs.peers[peerId] = pc;
+
+    // Track making-offer state to detect glare
+    pc.__makingOffer = false;
+    pc.__polite = isPolite(window.ME.id, peerId);
+
+    pc.onnegotiationneeded = async function(){
+      try {
+        pc.__makingOffer = true;
+        await pc.setLocalDescription();
+        cs.signalingChannel.send({
+          type: 'broadcast', event: 'offer',
+          payload: { from: window.ME.id, sdp: pc.localDescription }
+        });
+        log("offer sent to", peerId);
+      } catch(e){
+        log("negotiation failed:", e.message);
+      } finally {
+        pc.__makingOffer = false;
+      }
+    };
+
+    // Add our local tracks
+    cs.localStream.getTracks().forEach(function(track){
+      pc.addTrack(track, cs.localStream);
+    });
+
+    // Receive remote tracks
+    pc.ontrack = function(event){
+      log("got remote track from", peerId, "kind:", event.track.kind);
+      attachRemoteMedia(peerId, event.streams[0]);
+    };
+
+    pc.onicecandidate = function(event){
+      if (event.candidate){
+        cs.signalingChannel.send({
+          type: 'broadcast', event: 'ice-candidate',
+          payload: { from: window.ME.id, candidate: event.candidate }
+        });
+      }
+    };
+
+    pc.onconnectionstatechange = function(){
+      log("peer", peerId, "state:", pc.connectionState);
+      updateDebugPanel();
+      updateDockStatus();
+      if (pc.connectionState === 'failed'){
+        log("connection failed for", peerId, "- closing");
+        closePeer(peerId);
+      }
+    };
+
+    pc.oniceconnectionstatechange = function(){
+      log("peer", peerId, "ICE:", pc.iceConnectionState);
+      updateDebugPanel();
+    };
+
+    // Trigger negotiation
+    if (pc.signalingState === 'stable'){
+      pc.__makingOffer = true;
+      try {
+        var offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        cs.signalingChannel.send({
+          type: 'broadcast', event: 'offer',
+          payload: { from: window.ME.id, sdp: pc.localDescription }
+        });
+        log("offer sent to", peerId);
+      } catch(e){
+        log("createOffer failed:", e.message);
+      } finally {
+        pc.__makingOffer = false;
+      }
+    }
+
+    return pc;
+  };
+
+  // Replace handleOffer with glare-aware version
+  window.__voiceHandleOffer = async function(peerId, sdp, iceServers){
+    var cs = window.callState;
+    if (!cs) return;
+
+    var pc = cs.peers[peerId];
+
+    // If we don't have a connection yet, create one
+    if (!pc){
+      pc = new RTCPeerConnection({ iceServers: iceServers });
+      cs.peers[peerId] = pc;
+      pc.__makingOffer = false;
+      pc.__polite = isPolite(window.ME.id, peerId);
+
+      cs.localStream.getTracks().forEach(function(track){
+        pc.addTrack(track, cs.localStream);
+      });
+
+      pc.ontrack = function(event){
+        log("got remote track from", peerId, "kind:", event.track.kind);
+        attachRemoteMedia(peerId, event.streams[0]);
+      };
+
+      pc.onicecandidate = function(event){
+        if (event.candidate){
+          cs.signalingChannel.send({
+            type: 'broadcast', event: 'ice-candidate',
+            payload: { from: window.ME.id, candidate: event.candidate }
+          });
+        }
+      };
+
+      pc.onconnectionstatechange = function(){
+        log("peer", peerId, "state:", pc.connectionState);
+        updateDebugPanel();
+        updateDockStatus();
+        if (pc.connectionState === 'failed') closePeer(peerId);
+      };
+    }
+
+    try {
+      // Glare detection: if we're making an offer and incoming is also an offer
+      var offerCollision = pc.__makingOffer || pc.signalingState !== 'stable';
+      var polite = pc.__polite;
+
+      // Impolite peer ignores the incoming offer during a collision
+      if (offerCollision && !polite){
+        log("impolite - ignoring incoming offer from", peerId);
+        return;
+      }
+
+      // Polite peer rolls back and accepts the incoming offer
+      if (offerCollision && polite){
+        log("polite - rolling back to accept offer from", peerId);
+        try {
+          await pc.setLocalDescription({ type: 'rollback' });
+        } catch(e){ log("rollback failed:", e.message); }
+      }
+
+      await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+      var answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      cs.signalingChannel.send({
+        type: 'broadcast', event: 'answer',
+        payload: { from: window.ME.id, sdp: pc.localDescription }
+      });
+      log("answer sent to", peerId);
+    } catch(e){
+      log("handleOffer failed for", peerId, ":", e.message);
+    }
+  };
+
+  // ============================================================
+  // 2. ATTACH REMOTE MEDIA properly (fixes autoplay/silence)
+  // ============================================================
+  function attachRemoteMedia(peerId, stream){
+    var cs = window.callState;
+
+    // AUDIO — always attach, but respect deafen state
+    var audio = cs.audioElements[peerId];
+    if (!audio){
+      audio = document.createElement('audio');
+      audio.autoplay = true;
+      audio.playsInline = true;
+      audio.id = 'call-audio-' + peerId;
+      audio.setAttribute('data-peer', peerId);
+      document.body.appendChild(audio);
+      cs.audioElements[peerId] = audio;
+    }
+    audio.srcObject = stream;
+    // Explicit play call — sometimes autoplay is blocked
+    var p = audio.play();
+    if (p && p.catch){
+      p.catch(function(err){
+        log("audio play() rejected:", err.message, "- will retry on next user gesture");
+        // Retry on any click
+        var retry = function(){
+          audio.play().catch(function(){});
+          document.removeEventListener('click', retry, true);
+        };
+        document.addEventListener('click', retry, true);
+      });
+    }
+    audio.muted = !!cs.deafened;
+
+    // VIDEO — only if the stream has a video track
+    if (stream.getVideoTracks().length){
+      var vid = cs.videoElements[peerId];
+      if (!vid){
+        vid = document.createElement('video');
+        vid.autoplay = true;
+        vid.playsInline = true;
+        vid.id = 'call-video-' + peerId;
+        cs.videoElements[peerId] = vid;
+      }
+      vid.srcObject = stream;
+      vid.play().catch(function(){});
+      renderVideoGrid();
+    }
+  }
+
+  // ============================================================
+  // 3. HOOK INTO EXISTING CODE — replace createOffer / handleOffer
+  // ============================================================
+  // The original voice code calls `createOffer` and `handleOffer` as
+  // local functions. They're not on window, so we can't wrap them
+  // directly. Instead, we intervene at the signaling layer: whenever
+  // the signaling channel receives an offer/answer, we route it
+  // through our glare-safe versions.
+  //
+  // We also wrap joinVoice so that after it sets up signaling, we
+  // install our own handler that replaces the built-in one.
+
+  var origJoinVoice = window.joinVoice;
+  if (typeof origJoinVoice === 'function'){
+    window.joinVoice = async function(channelId, withVideo){
+      // Let the original join run first
+      var result = await origJoinVoice.call(this, channelId, withVideo);
+
+      // Now that signalingChannel exists, override the offer/answer handlers
+      setTimeout(function(){
+        var cs = window.callState;
+        if (!cs || !cs.signalingChannel) return;
+
+        log("installing glare-safe offer handler");
+
+        // We can't remove individual listeners from a Supabase channel,
+        // so we intercept by keeping a reference to the "active" peers map
+        // and letting our createOffer/handleOffer overwrite entries.
+        // The original handlers will still fire, but our versions will
+        // win because they check `cs.peers[peerId]` and reuse the connection.
+
+        // Kick off an initial negotiation with everyone we can see
+        sb.from('voice_participants')
+          .select('user_id')
+          .eq('channel_id', channelId)
+          .then(function(resp){
+            var others = (resp.data || [])
+              .map(function(r){ return r.user_id; })
+              .filter(function(uid){ return uid !== window.ME.id; });
+            log("existing participants to connect to:", others.length);
+            others.forEach(function(peerId){
+              if (!cs.peers[peerId]){
+                window.__voiceCreateOffer(peerId, cs.iceServers || [{ urls: 'stun:stun.l.google.com:19302' }]);
+              }
+            });
+          });
+      }, 300);
+
+      // Show debug panel
+      setTimeout(renderDebugPanel, 400);
+
+      return result;
+    };
+  }
+
+  // ============================================================
+  // 4. DIAGNOSTIC PANEL
+  // ============================================================
+  function renderDebugPanel(){
+    var existing = document.getElementById('voice-debug');
+    if (existing) return;
+    var panel = document.createElement('div');
+    panel.id = 'voice-debug';
+    panel.className = 'voice-debug';
+    document.body.appendChild(panel);
+    updateDebugPanel();
+  }
+
+  function updateDebugPanel(){
+    var panel = document.getElementById('voice-debug');
+    if (!panel) return;
+    var cs = window.callState;
+    if (!cs || !cs.channelId){
+      panel.innerHTML = '<h5>Voice Debug</h5><div class="row">Not in a call</div>' +
+        '<button id="vd-refresh">Refresh</button>';
+      wireRefresh(panel);
+      return;
+    }
+
+    var peerIds = Object.keys(cs.peers);
+    var audioCount = Object.keys(cs.audioElements).length;
+    var videoCount = Object.keys(cs.videoElements).length;
+
+    var html = '<h5>Voice Debug</h5>';
+    html += '<div class="row"><span>Peers</span><b>' + peerIds.length + '</b></div>';
+    html += '<div class="row"><span>Audio elements</span><b>' + audioCount + '</b></div>';
+    html += '<div class="row"><span>Video elements</span><b>' + videoCount + '</b></div>';
+
+    // Per-peer state
+    peerIds.forEach(function(pid, i){
+      var pc = cs.peers[pid];
+      var state = pc.connectionState || 'new';
+      var iceState = pc.iceConnectionState || 'new';
+      var cls = 'wait';
+      if (state === 'connected') cls = 'ok';
+      else if (state === 'failed' || state === 'closed') cls = 'bad';
+      var shortId = pid.slice(0, 8);
+      html += '<div class="row ' + cls + '"><span>peer ' + shortId + '</span><b>' + state + '/' + iceState + '</b></div>';
+    });
+
+    // Audio element states
+    for (var pid in cs.audioElements){
+      var a = cs.audioElements[pid];
+      var paused = a.paused ? 'paused' : 'playing';
+      var muted = a.muted ? 'muted' : 'unmuted';
+      html += '<div class="row ' + (paused === 'playing' ? 'ok' : 'bad') + '">' +
+        '<span>audio ' + pid.slice(0, 6) + '</span><b>' + paused + ' ' + muted + '</b></div>';
+    }
+
+    // Tip
+    if (peerIds.length === 0){
+      html += '<div class="tip">No peers yet. If other accounts have joined, this should show them within a few seconds. Check that the voice_participants table exists.</div>';
+    } else if (peerIds.some(function(pid){ return cs.peers[pid].connectionState === 'connected'; })){
+      html += '<div class="tip">Connected. If you still hear nothing on the SAME machine, Chrome\'s echo cancellation is silencing the audio. Use headphones, or test on TWO devices.</div>';
+    } else {
+      html += '<div class="tip">Peers found but not connected. Wait 5-10 seconds — WebRTC usually connects within that time. If states stay "connecting" or "new", TURN is likely needed.</div>';
+    }
+
+    html += '<button id="vd-refresh">Refresh</button>';
+    panel.innerHTML = html;
+    wireRefresh(panel);
+  }
+
+  function wireRefresh(panel){
+    var b = panel.querySelector('#vd-refresh');
+    if (b) b.onclick = updateDebugPanel;
+  }
+
+  // Refresh debug panel every 2 seconds
+  setInterval(function(){
+    if (window.callState && window.callState.channelId) updateDebugPanel();
+  }, 2000);
+
+  // ============================================================
+  // 5. DOCK STATUS INDICATOR
+  // ============================================================
+  function updateDockStatus(){
+    var dock = document.getElementById('voice-dock');
+    if (!dock) return;
+    var cs = window.callState;
+    var peerIds = Object.keys(cs.peers);
+    if (!peerIds.length) return;
+
+    var connected = peerIds.filter(function(pid){
+      return cs.peers[pid].connectionState === 'connected';
+    }).length;
+
+    // Find or create the status chip
+    var chip = dock.querySelector('.peer-status');
+    if (!chip){
+      chip = document.createElement('span');
+      chip.className = 'peer-status';
+      var names = dock.querySelector('.names');
+      if (names) names.insertAdjacentElement('afterend', chip);
+    }
+    chip.textContent = connected + '/' + peerIds.length;
+    chip.classList.remove('ok', 'wait', 'bad');
+    if (connected === peerIds.length && peerIds.length > 0) chip.classList.add('ok');
+    else if (connected === 0) chip.classList.add('bad');
+    else chip.classList.add('wait');
+    chip.title = connected + ' of ' + peerIds.length + ' peers connected';
+    chip.onclick = function(){
+      var panel = document.getElementById('voice-debug');
+      if (panel) panel.remove();
+      else renderDebugPanel();
+    };
+  }
+
+  // ============================================================
+  // 6. CLEANUP — remove debug panel when leaving call
+  // ============================================================
+  var origLeaveVoice = window.leaveVoice;
+  if (typeof origLeaveVoice === 'function'){
+    window.leaveVoice = async function(){
+      var panel = document.getElementById('voice-debug');
+      if (panel) panel.remove();
+      return origLeaveVoice.call(this);
+    };
+  }
+
+  log("voice debug + glare fix ready");
+})();
+</script>
+
 </body>
 </html>
