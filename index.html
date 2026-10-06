@@ -7163,5 +7163,790 @@ html, body { overscroll-behavior: none; }
 })();
 </script>
 
+<!-- SLEEPY_SIMPLE_VOICE_V1 -->
+<style>
+/* Clean voice dock — replaces the old debug-heavy one */
+.voice-dock{
+  position:fixed;bottom:80px;right:20px;z-index:400;
+  background:linear-gradient(135deg, rgba(0,255,224,.08), rgba(180,74,255,.08)), #12121a;
+  border:1px solid rgba(0,255,224,.35);border-radius:14px;
+  padding:12px 16px;display:flex;align-items:center;gap:10px;
+  box-shadow:0 20px 50px rgba(0,0,0,.6);
+  font-family:'Inter',sans-serif;font-size:12px;
+}
+.voice-dock .status{
+  display:flex;align-items:center;gap:6px;font-weight:600;
+  font-size:12px;letter-spacing:.02em;
+}
+.voice-dock .status i{
+  width:8px;height:8px;border-radius:50%;display:inline-block;
+}
+.voice-dock .status.connected i{background:var(--green);animation:pulse 2s infinite}
+.voice-dock .status.connected{color:var(--green)}
+.voice-dock .status.connecting i{background:var(--amber);animation:pulse .8s infinite}
+.voice-dock .status.connecting{color:var(--amber)}
+.voice-dock .status.failed i{background:var(--rose)}
+.voice-dock .status.failed{color:var(--rose)}
+.voice-dock .count{
+  color:var(--text3);font-size:11.5px;font-family:'JetBrains Mono',monospace;
+}
+.voice-dock .divider{width:1px;height:20px;background:var(--border);margin:0 4px}
+.voice-dock button{
+  width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+  background:var(--surface2);border:1px solid var(--border);color:var(--text2);transition:all .15s;
+}
+.voice-dock button:hover{border-color:var(--border2);color:var(--text)}
+.voice-dock button.danger{background:rgba(255,45,111,.15);border-color:rgba(255,45,111,.35);color:#ff7aa2}
+.voice-dock button.on{background:rgba(0,255,224,.15);border-color:rgba(0,255,224,.4);color:var(--cyan)}
+.voice-dock button svg{width:15px;height:15px}
+
+/* Join panel inside chat */
+.voice-join-panel{
+  padding:40px 20px;text-align:center;
+}
+.voice-join-panel .ring{
+  width:88px;height:88px;margin:0 auto 20px;border-radius:50%;
+  background:linear-gradient(135deg,rgba(0,255,224,.14),rgba(180,74,255,.14));
+  border:2px solid rgba(0,255,224,.35);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 0 40px rgba(0,255,224,.2);
+}
+.voice-join-panel .ring svg{width:40px;height:40px;color:var(--cyan)}
+.voice-join-panel h2{
+  font-family:'Space Grotesk',sans-serif;font-size:24px;
+  margin-bottom:6px;color:var(--text);
+}
+.voice-join-panel .sub{
+  font-size:13px;color:var(--text3);max-width:400px;margin:0 auto 24px;
+}
+.voice-join-panel .people{
+  display:flex;flex-wrap:wrap;gap:16px;justify-content:center;
+  margin:24px auto;max-width:520px;
+}
+.voice-join-panel .person{
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  width:76px;
+}
+.voice-join-panel .person .nm{
+  font-size:11.5px;color:var(--text2);max-width:76px;text-align:center;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.voice-join-panel .empty-line{
+  font-size:13px;color:var(--text3);margin:24px 0;
+}
+.voice-join-panel .buttons{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepySimpleVoice) return;
+  window.__sleepySimpleVoice = true;
+  function log(){ try{console.log.apply(console,["[Voice]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  // ============================================================
+  // SIMPLE STATE
+  // ============================================================
+  window.vs = {
+    channelId: null,
+    stream: null,
+    muted: false,
+    deafened: false,
+    video: false,
+    peers: {},           // peerId -> { pc, pendingIce: [], remoteSet: false, retries: 0 }
+    signaling: null,
+    presence: null,
+    ice: null,
+    status: 'idle',      // 'idle' | 'connecting' | 'connected' | 'failed'
+    uiTimer: null,
+  };
+
+  // ============================================================
+  // HARD RESET — clean up everything from a previous session
+  // ============================================================
+  async function hardReset(){
+    var s = window.vs;
+
+    // Stop any existing mic/camera
+    if (s.stream){
+      try { s.stream.getTracks().forEach(function(t){ t.stop(); }); } catch(e){}
+      s.stream = null;
+    }
+
+    // Close every peer connection
+    for (var pid in s.peers){
+      try { s.peers[pid].pc.close(); } catch(e){}
+    }
+    s.peers = {};
+
+    // Remove every audio element
+    document.querySelectorAll('[data-voice-audio]').forEach(function(el){ el.remove(); });
+
+    // Unsubscribe signaling + presence
+    if (s.signaling){ try { sb.removeChannel(s.signaling); } catch(e){} s.signaling = null; }
+    if (s.presence){ try { sb.removeChannel(s.presence); } catch(e){} s.presence = null; }
+
+    // Remove this user from voice_participants entirely
+    if (window.ME){
+      try {
+        await sb.from('voice_participants').delete().eq('user_id', window.ME.id);
+      } catch(e){ log("cleanup failed:", e.message); }
+    }
+
+    // Remove any debug panels
+    var dbg = document.getElementById('voice-debug');
+    if (dbg) dbg.remove();
+
+    // Remove old dock
+    var dock = document.getElementById('voice-dock');
+    if (dock) dock.remove();
+
+    s.status = 'idle';
+    s.channelId = null;
+  }
+
+  // ============================================================
+  // MEDIA ACQUISITION
+  // ============================================================
+  async function getStream(video){
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      throw new Error("Your browser doesn't support mic/camera access.");
+    }
+    if (!window.isSecureContext && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1'){
+      throw new Error("Mic and camera need HTTPS. Open the site over https://");
+    }
+    return navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      video: video ? { width: 640, height: 480 } : false
+    });
+  }
+
+  async function getIce(){
+    if (window.vs.ice) return window.vs.ice;
+    try {
+      var session = await sb.auth.getSession();
+      var token = session && session.data && session.data.session && session.data.session.access_token;
+      if (!token) throw new Error("no auth");
+      var res = await fetch(SUPABASE_URL + "/functions/v1/turn-credentials", {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + token, "apikey": SUPABASE_ANON_KEY }
+      });
+      if (!res.ok) throw new Error("TURN " + res.status);
+      var data = await res.json();
+      window.vs.ice = data.iceServers;
+    } catch(e){
+      log("TURN unavailable, using public STUN");
+      window.vs.ice = [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" }
+      ];
+    }
+    return window.vs.ice;
+  }
+
+  // ============================================================
+  // PEER CREATION with ICE buffering
+  // ============================================================
+  function createPeer(peerId){
+    var s = window.vs;
+    if (s.peers[peerId]) return s.peers[peerId];
+
+    var pc = new RTCPeerConnection({ iceServers: s.ice || [] });
+    var peer = {
+      pc: pc,
+      pendingIce: [],
+      remoteSet: false,
+      retries: 0,
+      polite: String(window.ME.id) > String(peerId),
+      makingOffer: false,
+    };
+    s.peers[peerId] = peer;
+
+    // Local tracks
+    s.stream.getTracks().forEach(function(track){
+      pc.addTrack(track, s.stream);
+    });
+
+    // Remote media
+    pc.ontrack = function(event){
+      log("remote track from", peerId.slice(0,6), "kind:", event.track.kind);
+      attachRemote(peerId, event.streams[0]);
+    };
+
+    // ICE candidates → send to peer
+    pc.onicecandidate = function(event){
+      if (event.candidate){
+        s.signaling.send({
+          type: 'broadcast', event: 'ice',
+          payload: { from: window.ME.id, candidate: event.candidate }
+        });
+      }
+    };
+
+    // Connection state → update UI + retry on fail
+    pc.onconnectionstatechange = function(){
+      var st = pc.connectionState;
+      log("peer", peerId.slice(0,6), "state:", st);
+      refreshStatus();
+      if (st === 'failed'){
+        if (peer.retries < 2){
+          peer.retries++;
+          log("retrying peer", peerId.slice(0,6), "attempt", peer.retries);
+          closePeer(peerId);
+          setTimeout(function(){ makeOffer(peerId); }, 800);
+        } else {
+          log("giving up on", peerId.slice(0,6));
+          closePeer(peerId);
+          s.status = 'failed';
+          refreshStatus();
+        }
+      } else if (st === 'connected'){
+        s.status = 'connected';
+        refreshStatus();
+      }
+    };
+
+    return peer;
+  }
+
+  // ============================================================
+  // OFFER / ANSWER — with glare-safe negotiation
+  // ============================================================
+  async function makeOffer(peerId){
+    var s = window.vs;
+    if (!s.signaling) return;
+    var peer = s.peers[peerId] || createPeer(peerId);
+    var pc = peer.pc;
+
+    try {
+      peer.makingOffer = true;
+      var offer = await pc.createOffer();
+      if (pc.signalingState !== 'stable'){
+        log("skip offer — not stable:", pc.signalingState);
+        return;
+      }
+      await pc.setLocalDescription(offer);
+      s.signaling.send({
+        type: 'broadcast', event: 'offer',
+        payload: { from: window.ME.id, sdp: pc.localDescription }
+      });
+      log("offer sent to", peerId.slice(0,6));
+    } catch(e){
+      log("makeOffer error:", e.message);
+    } finally {
+      peer.makingOffer = false;
+    }
+  }
+
+  async function handleOffer(peerId, sdp){
+    var s = window.vs;
+    var peer = s.peers[peerId] || createPeer(peerId);
+    var pc = peer.pc;
+
+    try {
+      var collision = peer.makingOffer || pc.signalingState !== 'stable';
+      if (collision && !peer.polite){
+        log("impolite — ignoring offer from", peerId.slice(0,6));
+        return;
+      }
+      if (collision && peer.polite){
+        try { await pc.setLocalDescription({ type: 'rollback' }); } catch(e){}
+      }
+
+      await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+      peer.remoteSet = true;
+      flushIce(peer);
+
+      var answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      s.signaling.send({
+        type: 'broadcast', event: 'answer',
+        payload: { from: window.ME.id, sdp: pc.localDescription }
+      });
+      log("answer sent to", peerId.slice(0,6));
+    } catch(e){
+      log("handleOffer error:", e.message);
+    }
+  }
+
+  async function handleAnswer(peerId, sdp){
+    var s = window.vs;
+    var peer = s.peers[peerId];
+    if (!peer) return;
+    try {
+      if (peer.pc.signalingState === 'have-local-offer'){
+        await peer.pc.setRemoteDescription(new RTCSessionDescription(sdp));
+        peer.remoteSet = true;
+        flushIce(peer);
+        log("answer accepted from", peerId.slice(0,6));
+      }
+    } catch(e){
+      log("handleAnswer error:", e.message);
+    }
+  }
+
+  async function handleIce(peerId, candidate){
+    var s = window.vs;
+    var peer = s.peers[peerId];
+    if (!peer){
+      // Peer not yet created — create one so we can buffer
+      peer = createPeer(peerId);
+    }
+    if (!peer.remoteSet){
+      // Buffer until remote description is set
+      peer.pendingIce.push(candidate);
+      return;
+    }
+    try {
+      await peer.pc.addIceCandidate(new RTCIceCandidate(candidate));
+    } catch(e){
+      log("ICE add error:", e.message);
+    }
+  }
+
+  async function flushIce(peer){
+    while (peer.pendingIce.length){
+      var c = peer.pendingIce.shift();
+      try { await peer.pc.addIceCandidate(new RTCIceCandidate(c)); } catch(e){}
+    }
+  }
+
+  function closePeer(peerId){
+    var s = window.vs;
+    var peer = s.peers[peerId];
+    if (!peer) return;
+    try { peer.pc.close(); } catch(e){}
+    delete s.peers[peerId];
+    var el = document.getElementById('voice-audio-' + peerId);
+    if (el) el.remove();
+    var vid = document.getElementById('voice-video-' + peerId);
+    if (vid) vid.remove();
+  }
+
+  function attachRemote(peerId, stream){
+    var s = window.vs;
+
+    // Audio element
+    var audio = document.getElementById('voice-audio-' + peerId);
+    if (!audio){
+      audio = document.createElement('audio');
+      audio.id = 'voice-audio-' + peerId;
+      audio.setAttribute('data-voice-audio', '1');
+      audio.autoplay = true;
+      audio.playsInline = true;
+      document.body.appendChild(audio);
+    }
+    audio.srcObject = stream;
+    audio.muted = !!s.deafened;
+    var p = audio.play();
+    if (p && p.catch){
+      p.catch(function(){
+        // Autoplay blocked — retry on next click
+        var retry = function(){
+          audio.play().catch(function(){});
+          document.removeEventListener('click', retry, true);
+        };
+        document.addEventListener('click', retry, true);
+      });
+    }
+
+    // Video element
+    if (stream.getVideoTracks().length){
+      renderVideoGrid();
+    }
+  }
+
+  // ============================================================
+  // JOIN / LEAVE
+  // ============================================================
+  window.joinVoice = async function(channelId, withVideo){
+    // If already in this channel, do nothing
+    if (window.vs.channelId === channelId) return;
+
+    // Full cleanup of any previous session
+    await hardReset();
+
+    log("joining", channelId, "video:", withVideo);
+    window.vs.channelId = channelId;
+    window.vs.status = 'connecting';
+    window.vs.video = !!withVideo;
+
+    // Get mic (+ camera)
+    try {
+      window.vs.stream = await getStream(withVideo);
+    } catch(e){
+      window.vs.status = 'idle';
+      window.vs.channelId = null;
+      window.toast("Couldn't start mic", e.message || String(e), "err");
+      throw e;
+    }
+
+    // Get ICE servers
+    await getIce();
+
+    // Announce presence in the DB
+    try {
+      await sb.from('voice_participants').upsert({
+        channel_id: channelId,
+        user_id: window.ME.id,
+        is_muted: false,
+        is_deafened: false,
+        is_video_on: !!withVideo
+      });
+    } catch(e){ log("participant upsert failed:", e.message); }
+
+    // Set up signaling channel
+    var sigName = "voice-sig-" + channelId;
+    window.vs.signaling = sb.channel(sigName, { config: { broadcast: { self: false } } });
+
+    window.vs.signaling
+      .on('broadcast', { event: 'offer' }, function(p){
+        if (p.payload.from === window.ME.id) return;
+        handleOffer(p.payload.from, p.payload.sdp);
+      })
+      .on('broadcast', { event: 'answer' }, function(p){
+        if (p.payload.from === window.ME.id) return;
+        handleAnswer(p.payload.from, p.payload.sdp);
+      })
+      .on('broadcast', { event: 'ice' }, function(p){
+        if (p.payload.from === window.ME.id) return;
+        handleIce(p.payload.from, p.payload.candidate);
+      })
+      .on('broadcast', { event: 'bye' }, function(p){
+        if (p.payload.from === window.ME.id) return;
+        closePeer(p.payload.from);
+      })
+      .subscribe(async function(status){
+        if (status === 'SUBSCRIBED'){
+          log("signaling ready");
+          // Tell everyone we're here
+          window.vs.signaling.send({
+            type: 'broadcast', event: 'hello',
+            payload: { from: window.ME.id }
+          });
+          // Find who's already here and connect to them
+          connectToExisting(channelId);
+        }
+      });
+
+    // Also listen for "hello" so existing members create offers to newcomers
+    window.vs.signaling.on('broadcast', { event: 'hello' }, function(p){
+      if (p.payload.from === window.ME.id) return;
+      log("newcomer:", p.payload.from.slice(0,6));
+      // If we're the existing member, we create the offer
+      if (!window.vs.peers[p.payload.from]){
+        setTimeout(function(){ makeOffer(p.payload.from); }, 400);
+      }
+    });
+
+    // Presence channel to know when peers leave
+    var presName = "voice-pres-" + channelId;
+    window.vs.presence = sb.channel(presName, { config: { presence: { key: window.ME.id } } });
+    window.vs.presence
+      .on('presence', { event: 'leave' }, function(o){ closePeer(o.key); })
+      .subscribe(async function(status){
+        if (status === 'SUBSCRIBED'){
+          await window.vs.presence.track({ user_id: window.ME.id });
+        }
+      });
+
+    // UI
+    renderDock();
+    window.renderChat(false);
+    window.toast("Joined call", "You're in the voice channel.", "ok");
+  };
+
+  async function connectToExisting(channelId){
+    try {
+      var resp = await sb.from('voice_participants').select('user_id').eq('channel_id', channelId);
+      var others = (resp.data || [])
+        .map(function(r){ return r.user_id; })
+        .filter(function(uid){ return uid !== window.ME.id; });
+      log("connecting to existing:", others.length);
+      // Don't create offers immediately — wait for hello handshake
+      // (avoids glare where both sides offer at the same time)
+      others.forEach(function(peerId){
+        setTimeout(function(){
+          if (!window.vs.peers[peerId]){
+            makeOffer(peerId);
+          }
+        }, 300 + Math.random() * 400);
+      });
+    } catch(e){ log("connectToExisting error:", e.message); }
+  }
+
+  window.leaveVoice = async function(){
+    var s = window.vs;
+    if (s.signaling){
+      try {
+        s.signaling.send({ type: 'broadcast', event: 'bye', payload: { from: window.ME.id } });
+      } catch(e){}
+    }
+    await hardReset();
+    window.renderChat(false);
+    window.toast("Left call", "", "ok");
+  };
+
+  // ============================================================
+  // MUTE / DEAFEN / VIDEO
+  // ============================================================
+  window.toggleMute = function(){
+    var s = window.vs;
+    if (!s.stream) return;
+    s.muted = !s.muted;
+    s.stream.getAudioTracks().forEach(function(t){ t.enabled = !s.muted; });
+    if (s.channelId){
+      sb.from('voice_participants').update({ is_muted: s.muted })
+        .eq('channel_id', s.channelId).eq('user_id', window.ME.id).then(function(){});
+    }
+    renderDock();
+  };
+
+  window.toggleDeafen = function(){
+    var s = window.vs;
+    s.deafened = !s.deafened;
+    document.querySelectorAll('[data-voice-audio]').forEach(function(el){
+      el.muted = s.deafened;
+    });
+    renderDock();
+  };
+
+  window.toggleVideo = function(){
+    var s = window.vs;
+    if (!s.stream) return;
+    s.video = !s.video;
+    s.stream.getVideoTracks().forEach(function(t){ t.enabled = s.video; });
+    if (s.channelId){
+      sb.from('voice_participants').update({ is_video_on: s.video })
+        .eq('channel_id', s.channelId).eq('user_id', window.ME.id).then(function(){});
+    }
+    renderDock();
+    renderVideoGrid();
+  };
+
+  // ============================================================
+  // UI — CLEAN VOICE DOCK
+  // ============================================================
+  function refreshStatus(){
+    // Determine aggregate status from all peers
+    var s = window.vs;
+    var ids = Object.keys(s.peers);
+    if (ids.length === 0){
+      s.status = 'connecting';
+    } else {
+      var connected = ids.filter(function(pid){ return s.peers[pid].pc.connectionState === 'connected'; }).length;
+      var failed = ids.filter(function(pid){ return s.peers[pid].pc.connectionState === 'failed'; }).length;
+      if (connected === ids.length) s.status = 'connected';
+      else if (failed > 0 && connected === 0) s.status = 'failed';
+      else s.status = 'connecting';
+    }
+    renderDock();
+  }
+
+  function renderDock(){
+    var s = window.vs;
+    var existing = document.getElementById('voice-dock');
+    if (existing) existing.remove();
+    if (!s.channelId) return;
+
+    var ch = (window.CHANNELS || []).filter(function(c){ return c.id === s.channelId; })[0];
+    var chName = ch ? ch.name : 'call';
+    var peers = Object.keys(s.peers).length;
+
+    var label = {
+      connecting: 'Connecting',
+      connected: 'Connected',
+      failed: 'Connection failed',
+      idle: 'Idle'
+    }[s.status] || 'Idle';
+
+    var dock = document.createElement('div');
+    dock.id = 'voice-dock';
+    dock.className = 'voice-dock';
+    dock.innerHTML =
+      '<span class="status ' + s.status + '"><i></i>' + label + '</span>' +
+      '<span class="divider"></span>' +
+      '<span class="count">' + (peers + 1) + ' in #' + chName + '</span>' +
+      (s.status === 'failed' ? '<button id="vd-retry" title="Retry" style="color:var(--amber)">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>' +
+      '</button>' : '') +
+      '<button id="vd-mute" class="' + (s.muted ? 'on' : '') + '" title="Mute">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/></svg>' +
+      '</button>' +
+      '<button id="vd-deafen" class="' + (s.deafened ? 'on' : '') + '" title="Deafen">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg>' +
+      '</button>' +
+      '<button id="vd-video" class="' + (s.video ? 'on' : '') + '" title="Camera">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="m22 8-6 4 6 4V8z"/></svg>' +
+      '</button>' +
+      '<button id="vd-leave" class="danger" title="Leave">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>' +
+      '</button>';
+
+    document.body.appendChild(dock);
+
+    document.getElementById('vd-mute').onclick = window.toggleMute;
+    document.getElementById('vd-deafen').onclick = window.toggleDeafen;
+    document.getElementById('vd-video').onclick = window.toggleVideo;
+    document.getElementById('vd-leave').onclick = window.leaveVoice;
+    var rt = document.getElementById('vd-retry');
+    if (rt) rt.onclick = retryAllPeers;
+  }
+
+  function retryAllPeers(){
+    var s = window.vs;
+    for (var pid in s.peers) closePeer(pid);
+    s.status = 'connecting';
+    renderDock();
+    connectToExisting(s.channelId);
+  }
+
+  function renderVideoGrid(){
+    var s = window.vs;
+    var grid = document.getElementById('voice-video-grid');
+    var hasVideo = s.video || Object.keys(s.peers).some(function(pid){
+      return document.getElementById('voice-video-' + pid);
+    });
+    if (!hasVideo){
+      if (grid) grid.remove();
+      return;
+    }
+    if (!grid){
+      grid = document.createElement('div');
+      grid.id = 'voice-video-grid';
+      grid.style.cssText = 'position:fixed;inset:0;z-index:300;background:rgba(4,4,8,.92);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:20px;cursor:pointer';
+      grid.onclick = function(e){ if (e.target === grid) grid.remove(); };
+      document.body.appendChild(grid);
+    }
+    var tiles = '<div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;max-width:1200px">';
+    if (s.video && s.stream){
+      tiles += '<div style="width:280px;height:210px;background:#000;border-radius:12px;overflow:hidden;position:relative">' +
+        '<video id="voice-self-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover"></video>' +
+        '<div style="position:absolute;bottom:6px;left:8px;font-size:11px;background:rgba(0,0,0,.6);padding:2px 6px;border-radius:4px">You</div>' +
+      '</div>';
+    }
+    for (var pid in s.peers){
+      var p = window.PROFILES[pid] || { display_name: 'User' };
+      var hasVid = document.getElementById('voice-video-' + pid);
+      if (!hasVid) continue;
+      tiles += '<div style="width:280px;height:210px;background:#000;border-radius:12px;overflow:hidden;position:relative">' +
+        '<video id="voice-remote-' + pid + '" autoplay playsinline style="width:100%;height:100%;object-fit:cover"></video>' +
+        '<div style="position:absolute;bottom:6px;left:8px;font-size:11px;background:rgba(0,0,0,.6);padding:2px 6px;border-radius:4px">' + window.esc(p.display_name || p.username) + '</div>' +
+      '</div>';
+    }
+    tiles += '</div>';
+    grid.innerHTML = tiles;
+    var self = document.getElementById('voice-self-video');
+    if (self && s.stream) self.srcObject = s.stream;
+    for (var pid2 in s.peers){
+      var el = document.getElementById('voice-remote-' + pid2);
+      var src = document.getElementById('voice-video-' + pid2);
+      if (el && src && src.srcObject) el.srcObject = src.srcObject;
+    }
+  }
+
+  // ============================================================
+  // CHANNEL UI — clean Join panel
+  // ============================================================
+  async function renderVoiceJoinPanel(ch){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+
+    var pIds = [];
+    try {
+      var resp = await sb.from('voice_participants').select('user_id').eq('channel_id', ch.id);
+      pIds = (resp.data || []).map(function(r){ return r.user_id; });
+      if (pIds.length) await window.fetchProfiles(pIds);
+    } catch(e){}
+
+    var isIn = window.vs.channelId === ch.id;
+
+    var peopleHtml = '';
+    if (pIds.length){
+      peopleHtml = '<div class="people">' + pIds.map(function(uid){
+        return '<div class="person">' +
+          window.avatarHTML(uid, 48) +
+          '<div class="nm">' + window.esc(window.userLabel(uid)) + '</div>' +
+        '</div>';
+      }).join('') + '</div>';
+    } else {
+      peopleHtml = '<div class="empty-line">Nobody is here yet. Be the first.</div>';
+    }
+
+    var buttons = isIn
+      ? '<button class="btn danger" data-voice="leave">Leave Call</button>' +
+        '<button class="btn ' + (window.vs.video ? '' : 'primary') + '" data-voice="toggle-video">' +
+          (window.vs.video ? 'Camera Off' : 'Camera On') + '</button>'
+      : '<button class="btn primary" data-voice="join-voice">Join Voice</button>' +
+        '<button class="btn primary" style="background:linear-gradient(135deg,#b44aff,#7c2fd6);color:#fff" data-voice="join-video">Join Video</button>';
+
+    body.innerHTML =
+      '<div class="voice-join-panel">' +
+        '<div class="ring">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+            '<path d="M11 5 6 9H3v6h3l5 4V5z"/>' +
+            '<path d="M15.5 8.5a5 5 0 0 1 0 7"/>' +
+            '<path d="M18.5 5.5a9 9 0 0 1 0 13"/>' +
+          '</svg>' +
+        '</div>' +
+        '<h2>' + window.esc(ch.name) + '</h2>' +
+        '<div class="sub">' + (ch.topic ? window.esc(ch.topic) : 'Voice & video channel') + '</div>' +
+        peopleHtml +
+        '<div class="buttons">' + buttons + '</div>' +
+      '</div>';
+
+    var comp = document.getElementById('composer-wrap');
+    if (comp) comp.innerHTML = '';
+    var typ = document.getElementById('typing-bar');
+    if (typ) typ.innerHTML = '';
+
+    body.querySelectorAll('[data-voice]').forEach(function(btn){
+      btn.onclick = function(){
+        var a = btn.dataset.voice;
+        if (a === 'join-voice') window.joinVoice(ch.id, false);
+        else if (a === 'join-video') window.joinVoice(ch.id, true);
+        else if (a === 'leave') window.leaveVoice();
+        else if (a === 'toggle-video') window.toggleVideo();
+      };
+    });
+  }
+
+  // Override renderChat for voice channels
+  var origRenderChat = window.renderChat;
+  window.renderChat = function(scroll){
+    if (window.CURRENT && window.CURRENT.type === 'server' && window.CURRENT.channel){
+      var ch = window.CURRENT.channel;
+      if (ch.type === 'voice' || ch.type === 'video'){
+        renderVoiceJoinPanel(ch);
+        return;
+      }
+    }
+    return origRenderChat(scroll);
+  };
+
+  // Refresh the participant list every few seconds while viewing a voice channel
+  setInterval(function(){
+    if (!window.CURRENT || !window.CURRENT.channel) return;
+    if (window.CURRENT.channel.type !== 'voice' && window.CURRENT.channel.type !== 'video') return;
+    window.renderChat(false);
+  }, 5000);
+
+  // ============================================================
+  // CLEANUP on page unload
+  // ============================================================
+  window.addEventListener('beforeunload', function(){
+    if (window.vs && window.vs.channelId && window.ME){
+      // Fire and forget — can't await during unload
+      try {
+        sb.from('voice_participants').delete()
+          .eq('channel_id', window.vs.channelId)
+          .eq('user_id', window.ME.id);
+      } catch(e){}
+    }
+  });
+
+  log("simple voice ready");
+})();
+</script>
+
 </body>
 </html>
