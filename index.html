@@ -1548,7 +1548,7 @@ document.addEventListener("click",async function(e){
   }
 });
 document.addEventListener("contextmenu",function(e){
-  var sb=t=null;
+  var sb=null,t=null;
   var srvBtn=e.target.closest("[data-server]");
   if(srvBtn&&CURRENT.server&&srvBtn.dataset.server===CURRENT.server.id){
     e.preventDefault();
@@ -9023,6 +9023,163 @@ html, body { overscroll-behavior: none; }
   window.installSleepyChat = doInstall;
 
   log("one-click install ready");
+})();
+</script>
+
+<!-- SLEEPY_FIX_CRASH_INSTALL_V1 -->
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyBetterInstall) return;
+  window.__sleepyBetterInstall = true;
+  function log(){ try{console.log.apply(console,["[Install+]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  // Wait for the deferred prompt event whenever Chrome decides to fire it
+  window.addEventListener('beforeinstallprompt', function(e){
+    e.preventDefault();
+    window.__bipPrompt = e;
+    log("beforeinstallprompt captured — install available now");
+    var b = document.getElementById('oc-install-btn');
+    if (b){
+      b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Install Now</span>';
+      b.style.background = 'linear-gradient(135deg,#00ffe0,#00c9b4)';
+    }
+  });
+
+  // Replace the click handler on the install button with our smarter version
+  function wireButton(){
+    var b = document.getElementById('oc-install-btn');
+    if (!b || b.__smarterWired) return;
+    b.__smarterWired = true;
+
+    // Remove any existing click handlers by cloning the button
+    var clone = b.cloneNode(true);
+    b.parentNode.replaceChild(clone, b);
+    clone.onclick = smartInstall;
+  }
+
+  async function smartInstall(){
+    var b = document.getElementById('oc-install-btn');
+    if (!b) return;
+    var originalHTML = b.innerHTML;
+    var originalBg = b.style.background;
+
+    // If the event has already fired, use it immediately
+    if (window.__bipPrompt){
+      var prompt = window.__bipPrompt;
+      window.__bipPrompt = null;
+      try {
+        prompt.prompt();
+        var choice = await prompt.userChoice;
+        log("user choice:", choice.outcome);
+        if (choice.outcome === 'accepted'){
+          b.innerHTML = 'Installing...';
+          return;
+        } else {
+          // User said no — reset for later
+          b.innerHTML = originalHTML;
+          return;
+        }
+      } catch(e){
+        log("prompt failed:", e.message);
+        showManual();
+        return;
+      }
+    }
+
+    // Otherwise: wait up to 15 seconds for beforeinstallprompt to fire
+    b.innerHTML = 'Preparing...';
+    b.style.background = 'linear-gradient(135deg,#b44aff,#7c2fd6)';
+    b.disabled = true;
+    var gotIt = await new Promise(function(resolve){
+      var timer = setTimeout(function(){ resolve(false); }, 15000);
+      var once = function(){
+        clearTimeout(timer);
+        window.removeEventListener('beforeinstallprompt', once);
+        resolve(true);
+      };
+      window.addEventListener('beforeinstallprompt', once);
+      // Also resolve if it already fired during our wait
+      if (window.__bipPrompt){
+        clearTimeout(timer);
+        window.removeEventListener('beforeinstallprompt', once);
+        resolve(true);
+      }
+    });
+
+    b.disabled = false;
+    b.innerHTML = originalHTML;
+    b.style.background = originalBg;
+
+    if (gotIt && window.__bipPrompt){
+      var prompt2 = window.__bipPrompt;
+      window.__bipPrompt = null;
+      try {
+        prompt2.prompt();
+        var choice2 = await prompt2.userChoice;
+        log("user choice:", choice2.outcome);
+        if (choice2.outcome === 'accepted'){
+          b.innerHTML = 'Installing...';
+        }
+        return;
+      } catch(e){
+        log("prompt failed:", e.message);
+      }
+    }
+
+    // Still nothing — show manual instructions
+    showManual();
+  }
+
+  function showManual(){
+    var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) && !window.MSStream;
+    var isAndroid = /Android/i.test(navigator.userAgent);
+    var steps;
+    if (isIOS){
+      steps = '<ol>' +
+        '<li>Tap the <b>Share</b> icon (square with arrow) at the bottom of Safari</li>' +
+        '<li>Scroll and tap <b>Add to Home Screen</b></li>' +
+        '<li>Tap <b>Add</b></li>' +
+      '</ol>';
+    } else if (isAndroid){
+      steps = '<ol>' +
+        '<li>Tap the <b>three dots</b> (⋮) in Chrome\'s top right</li>' +
+        '<li>Tap <b>Install app</b> or <b>Add to Home screen</b></li>' +
+        '<li>Tap <b>Install</b> to confirm</li>' +
+      '</ol>';
+    } else {
+      steps = '<ol>' +
+        '<li>Click the <b>three dots</b> (⋮) in Chrome\'s top right</li>' +
+        '<li>Click <b>Save and share</b></li>' +
+        '<li>Click <b>Install page as app...</b></li>' +
+        '<li>Click <b>Install</b></li>' +
+      '</ol>' +
+      '<div style="font-size:11.5px;color:var(--text3);margin-top:8px;line-height:1.5">' +
+        '<b style="color:var(--amber)">Note:</b> If Chrome doesn\'t show the "Install page as app" option, ' +
+        'use the site normally for 30 seconds, then reload the page. Chrome requires you to ' +
+        'interact with the site before it allows installation.' +
+      '</div>';
+    }
+    window.openModal("How to Install Sleepy-Chat",
+      '<div class="oc-manual-steps" style="padding:12px 14px;background:rgba(0,0,0,.35);border-radius:8px;font-size:13px;color:var(--text2);line-height:1.75">' +
+        steps +
+      '</div>' +
+      '<div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">' +
+        '<button class="btn" id="oc-manual-close">Got it</button>' +
+      '</div>'
+    );
+    var c = document.getElementById('oc-manual-close');
+    if (c) c.onclick = window.closeModal;
+  }
+
+  // Wire the button when it appears
+  setInterval(wireButton, 500);
+  wireButton();
+
+  // Also expose for the settings modal button
+  window.smartInstall = smartInstall;
+
+  log("smart install ready");
 })();
 </script>
 
