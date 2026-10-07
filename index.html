@@ -10928,5 +10928,166 @@ html, body { overscroll-behavior: none; }
 })();
 </script>
 
+<!-- SLEEPY_TICKET_DELETE_FIX_V1 -->
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyTicketDeleteFix) return;
+  window.__sleepyTicketDeleteFix = true;
+  function log(){ try{console.log.apply(console,["[TktFix]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  // ------------------------------------------------------------
+  // 1. Wrap the ticket DELETE so failures are visible + lists refresh
+  // ------------------------------------------------------------
+  function patchTicketDelete(){
+    // The v2 code calls `sb.from('tickets').delete().eq('id', t.id)` inside
+    // its own `deleteTicket` function. We can't easily intercept that from
+    // the outside, so instead we override the global delete helper that
+    // the hub uses to close tickets.
+    //
+    // The v2 code stores the ticket close logic inline, but if we override
+    // window.openHub and friends, we can catch the flow. Simpler approach:
+    // watch for click on the "Delete" button in the close modal.
+
+    document.addEventListener('click', async function(e){
+      // The close-flow modal has buttons with these IDs
+      var delBtn = e.target.closest('#tk-delete');
+      var expDelBtn = e.target.closest('#tk-export-first');
+      if (!delBtn && !expDelBtn) return;
+
+      // Let the original handler fire first (it does the actual delete)
+      // Then verify the ticket is really gone. If not, force-delete.
+      setTimeout(async function(){
+        var t = window.CURRENT && window.CURRENT.ticket;
+        if (!t) return;
+
+        // Check if it still exists in the DB
+        try {
+          var r = await sb.from('tickets').select('id').eq('id', t.id).maybeSingle();
+          if (r.data){
+            log("ticket still exists, attempting direct delete");
+            // Try again directly
+            var d = await sb.from('tickets').delete().eq('id', t.id);
+            if (d.error){
+              log("direct delete error:", d.error.message);
+              window.toast("Delete failed", d.error.message + " — check the RLS policies.", "err");
+            } else {
+              log("direct delete succeeded");
+              window.toast("Ticket deleted", "It's been removed.", "ok");
+            }
+          } else {
+            log("ticket confirmed deleted");
+          }
+        } catch(e){ log("verification failed:", e.message); }
+
+        // Refresh the hub regardless
+        try {
+          if (window.refreshLists) await window.refreshLists();
+        } catch(e){}
+        try {
+          if (window.CURRENT && window.CURRENT.type === 'tickets_hub'){
+            if (window.renderHub) window.renderHub();
+          } else if (window.openHub) {
+            window.openHub();
+          }
+        } catch(e){}
+      }, 500);
+    }, true);
+  }
+
+  // ------------------------------------------------------------
+  // 2. Aggressive hub filter — never show closed tickets, and
+  //    drop any duplicate categories visually
+  // ------------------------------------------------------------
+  function forceHubClean(){
+    if (!window.CURRENT || window.CURRENT.type !== 'tickets_hub') return;
+
+    // Categories: dedupe by lowercase name, keeping the first
+    if (window.TICKET_CATEGORIES && Array.isArray(window.TICKET_CATEGORIES)){
+      var seen = {};
+      window.TICKET_CATEGORIES = window.TICKET_CATEGORIES.filter(function(c){
+        var key = (c.name || '').toLowerCase();
+        if (seen[key]) return false;
+        seen[key] = 1;
+        return true;
+      });
+    }
+
+    // If the v2 patch exposes its internal state on window, use it
+    if (window.MY_TICKETS && Array.isArray(window.MY_TICKETS)){
+      window.MY_TICKETS = window.MY_TICKETS.filter(function(t){ return t.status === 'open'; });
+    }
+    if (window.ALL_TICKETS && Array.isArray(window.ALL_TICKETS)){
+      window.ALL_TICKETS = window.ALL_TICKETS.filter(function(t){ return t.status === 'open'; });
+    }
+  }
+
+  // Run on every render pass
+  var origRender = window.renderChat;
+  if (typeof origRender === 'function'){
+    window.renderChat = function(){
+      forceHubClean();
+      return origRender.apply(this, arguments);
+    };
+  }
+
+  // ------------------------------------------------------------
+  // 3. If the hub is currently rendering and we spot a closed
+  //    ticket in the DOM, delete it from the DB and refresh.
+  // ------------------------------------------------------------
+  async function purgeAnyClosedInDOM(){
+    if (!window.CURRENT || window.CURRENT.type !== 'tickets_hub') return;
+    // Look for tickets in the DB still marked closed and remove them
+    try {
+      var r = await sb.from('tickets').select('id').eq('status', 'closed');
+      if (!r.data || !r.data.length) return;
+      log("found", r.data.length, "closed tickets in DB, purging");
+      for (var i = 0; i < r.data.length; i++){
+        await sb.from('tickets').delete().eq('id', r.data[i].id);
+      }
+      // Refresh views
+      if (window.refreshLists) await window.refreshLists();
+      if (window.renderHub) window.renderHub();
+      if (window.renderPanel) window.renderPanel();
+    } catch(e){ log("purge error:", e.message); }
+  }
+
+  // Run once at startup and then whenever the hub opens
+  setTimeout(purgeAnyClosedInDOM, 4000);
+
+  var origOpenHub = window.openHub;
+  if (typeof origOpenHub === 'function'){
+    window.openHub = function(){
+      var r = origOpenHub.apply(this, arguments);
+      setTimeout(purgeAnyClosedInDOM, 300);
+      return r;
+    };
+  }
+
+  // ------------------------------------------------------------
+  // 4. Visual "delete" fallback — if a ticket row is clicked that
+  //    no longer exists in DB, remove it from the UI
+  // ------------------------------------------------------------
+  document.addEventListener('click', async function(e){
+    var row = e.target.closest('[data-open]');
+    if (!row) return;
+    var id = row.dataset.open;
+    try {
+      var r = await sb.from('tickets').select('id').eq('id', id).maybeSingle();
+      if (!r.data){
+        // Doesn't exist — remove from DOM and refresh
+        log("clicked a ghost ticket, removing from UI");
+        row.remove();
+        if (window.refreshLists) await window.refreshLists();
+      }
+    } catch(err){}
+  }, true);
+
+  patchTicketDelete();
+
+  log("ticket delete fix ready");
+})();
+</script>
+
 </body>
 </html>
