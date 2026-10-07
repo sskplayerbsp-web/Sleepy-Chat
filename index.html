@@ -13332,5 +13332,805 @@ body{
 })();
 </script>
 
+<!-- SLEEPY_HIDDEN_PUFFER_V1 -->
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyHiddenPuffer) return;
+  window.__sleepyHiddenPuffer = true;
+  function log(){ try{console.log.apply(console,["[Puffer]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  // ============================================================
+  // HIDDEN MECHANIC
+  // ------------------------------------------------------------
+  // After 10 consecutive non-puffer catches, the next catch is
+  // forced to be a pufferfish. Then the counter resets.
+  //
+  // Nothing in the UI shows this. The player just experiences it
+  // as bad luck. The puffer still poisons them normally.
+  // ============================================================
+
+  var THRESHOLD = 10;
+  var PUFFER = {
+    fish_name:  'Pufferfish',
+    fish_emoji: '🐡',
+    fish_tier:  'puffer',
+    fish_value: 0
+  };
+
+  // Count non-puffer catches since the last puffer.
+  async function countSinceLastPuffer(){
+    if (!window.ME) return 0;
+    try {
+      // Fetch the most recent 20 catches (enough to cover the threshold)
+      var r = await sb.from('fishing_catches')
+        .select('fish_tier, caught_at')
+        .eq('user_id', window.ME.id)
+        .order('caught_at', { ascending: false })
+        .limit(20);
+
+      var rows = r.data || [];
+      // Find the most recent puffer
+      var pufferAt = -1;
+      for (var i = 0; i < rows.length; i++){
+        if (rows[i].fish_tier === 'puffer'){ pufferAt = i; break; }
+      }
+      // Count is everything more recent than that puffer (or all catches if never puffed)
+      if (pufferAt < 0){
+        // No puffer in recent history: count how many we fetched
+        // But if they have 20+ catches with no puffer, they're already overdue
+        return rows.length;
+      }
+      return pufferAt; // items at index 0..pufferAt-1 are non-puffer catches AFTER the puffer
+    } catch(e){
+      log("count failed:", e.message);
+      return 0;
+    }
+  }
+
+  // ============================================================
+  // Intercept sb.rpc('record_catch') and silently swap the fish
+  // ============================================================
+  // The fishing game calls sb.rpc('record_catch', params) after
+  // rolling the fish. We hook in, check the cycle, and if the
+  // threshold is reached, replace the params before the server
+  // ever sees them.
+
+  var origRpc = sb.rpc.bind(sb);
+  var lastForcedAt = 0;   // guard against double-swaps
+
+  sb.rpc = async function(fn, params, options){
+    if (fn === 'record_catch' && params){
+      // Don't swap if the roll already came up puffer (random puffer)
+      var alreadyPuffer = params.fish_name === 'Pufferfish';
+
+      if (!alreadyPuffer){
+        var count = await countSinceLastPuffer();
+
+        // Debounce: if we just forced one, don't force again immediately
+        var sinceLastForce = Date.now() - lastForcedAt;
+        if (count >= THRESHOLD && sinceLastForce > 3000){
+          log("forcing puffer after", count, "non-puffer catches");
+          lastForcedAt = Date.now();
+          params = Object.assign({}, PUFFER);
+        }
+      }
+    }
+    return origRpc(fn, params, options);
+  };
+
+  log("hidden puffer cycle active");
+})();
+</script>
+
+<!-- SLEEPY_GAMING_V1 -->
+<style>
+.rail-btn.games-btn{background:linear-gradient(135deg,rgba(139,124,255,.18),rgba(94,231,215,.12));border:1px solid rgba(139,124,255,.45)}
+.rail-btn.games-btn:hover{box-shadow:0 0 18px rgba(139,124,255,.6);transform:translateY(-2px)}
+.rail-btn.games-btn.active{border-color:rgba(139,124,255,.7);box-shadow:0 0 26px rgba(139,124,255,.55)}
+
+.games-wrap{padding:24px 20px 60px;max-width:680px;margin:0 auto;font-family:'Inter',sans-serif}
+.games-head{text-align:center;margin-bottom:20px}
+.games-head .ico{width:68px;height:68px;margin:0 auto 12px;border-radius:20px;background:linear-gradient(135deg,rgba(139,124,255,.22),rgba(94,231,215,.16));border:1px solid rgba(139,124,255,.5);display:flex;align-items:center;justify-content:center;font-size:32px}
+.games-head h2{font-family:'Space Grotesk',sans-serif;font-size:24px;margin-bottom:4px;color:var(--text)}
+.games-head .sub{font-size:12.5px;color:var(--text3)}
+.games-head .bal{display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:4px 12px;border-radius:99px;background:rgba(255,200,87,.12);border:1px solid rgba(255,200,87,.35);font-family:monospace;font-weight:700;color:var(--gold);font-size:12.5px}
+
+.games-tabs{display:flex;gap:4px;background:var(--void);padding:4px;border-radius:10px;border:1px solid var(--border);margin-bottom:18px}
+.games-tabs button{flex:1;padding:9px;border-radius:7px;font-size:13px;font-weight:600;color:var(--text3);cursor:pointer;transition:all .15s;font-family:inherit;background:none;border:none}
+.games-tabs button.active{background:var(--surface2);color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(94,231,215,.28)}
+
+.new-challenge{padding:16px;border-radius:14px;background:rgba(255,255,255,.03);border:1px solid var(--border);margin-bottom:18px}
+.new-challenge h3{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--text3);margin-bottom:10px}
+.bet-picks{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.bet-picks button{padding:8px 14px;border-radius:8px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-size:12.5px;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit}
+.bet-picks button:hover{border-color:var(--border2);color:var(--text)}
+.bet-picks button.sel{background:rgba(255,200,87,.14);border-color:rgba(255,200,87,.5);color:var(--gold)}
+.custom-bet{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+.custom-bet input{flex:1;padding:9px 12px;border-radius:8px;background:var(--void);border:1px solid var(--border);color:var(--text);font-size:13px}
+.custom-bet input:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 0 3px rgba(94,231,215,.12)}
+.new-challenge .go{width:100%;padding:12px;border-radius:10px;background:linear-gradient(135deg,var(--purple),#6a5cff);color:#fff;font-weight:700;font-size:13.5px;border:none;cursor:pointer;transition:all .15s;font-family:inherit}
+.new-challenge .go:hover{box-shadow:0 6px 20px rgba(139,124,255,.5)}
+.new-challenge .go:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}
+
+.challenge-list{display:flex;flex-direction:column;gap:8px}
+.challenge-row{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:11px;background:rgba(255,255,255,.03);border:1px solid var(--border);transition:all .15s}
+.challenge-row:hover{border-color:var(--border2)}
+.challenge-row.mine{border-color:rgba(94,231,215,.35);background:rgba(94,231,215,.05)}
+.challenge-row .info{flex:1;min-width:0}
+.challenge-row .info .nm{font-weight:600;font-size:13.5px;margin-bottom:2px}
+.challenge-row .info .meta{font-size:11.5px;color:var(--text3)}
+.challenge-row .bet{font-family:monospace;font-weight:700;color:var(--gold);font-size:14px;flex:none}
+.challenge-row button{padding:7px 14px;border-radius:8px;font-size:12px;font-weight:700;border:none;cursor:pointer;font-family:inherit;transition:all .15s}
+.challenge-row .accept{background:linear-gradient(135deg,#4ade80,#2ba854);color:#04210f}
+.challenge-row .accept:hover{box-shadow:0 4px 14px rgba(74,222,128,.4)}
+.challenge-row .cancel{background:rgba(255,127,159,.14);color:#ff7f9f;border:1px solid rgba(255,127,159,.35)}
+.challenge-row .watch{background:rgba(94,231,215,.14);color:var(--cyan);border:1px solid rgba(94,231,215,.35)}
+
+.board-wrap{text-align:center;padding:24px 20px}
+.board-turn{font-size:14px;font-weight:700;margin-bottom:16px;font-family:'Space Grotesk',sans-serif;letter-spacing:.04em}
+.board-turn.mine{color:var(--cyan)}
+.board-turn.theirs{color:var(--text3)}
+.board-turn.over{color:var(--gold)}
+
+.ttt{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:300px;margin:0 auto 20px;background:rgba(0,0,0,.2);padding:10px;border-radius:14px;border:1px solid var(--border)}
+.ttt-cell{aspect-ratio:1;background:var(--surface2);border:1px solid var(--border);border-radius:10px;font-family:'Space Grotesk',sans-serif;font-weight:800;font-size:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s;color:var(--text);user-select:none}
+.ttt-cell:hover:not(.taken){border-color:rgba(94,231,215,.5);background:rgba(94,231,215,.08);transform:translateY(-2px)}
+.ttt-cell.taken{cursor:not-allowed}
+.ttt-cell.X{color:var(--cyan);text-shadow:0 0 18px rgba(94,231,215,.5)}
+.ttt-cell.O{color:var(--rose);text-shadow:0 0 18px rgba(255,127,159,.5)}
+.ttt-cell.win{background:linear-gradient(135deg,rgba(255,200,87,.25),rgba(255,159,28,.15));border-color:rgba(255,200,87,.6);animation:winPulse 1s ease-in-out infinite}
+@keyframes winPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,200,87,.4)}50%{box-shadow:0 0 0 8px rgba(255,200,87,0)}}
+
+.board-players{display:flex;justify-content:center;gap:20px;margin-bottom:16px;font-size:12.5px;color:var(--text2)}
+.board-players .p{display:flex;align-items:center;gap:6px}
+.board-players .p .mark{font-family:'Space Grotesk',sans-serif;font-weight:800;font-size:14px}
+.board-players .p .mark.X{color:var(--cyan)}
+.board-players .p .mark.O{color:var(--rose)}
+
+.board-result{padding:16px;border-radius:12px;margin:0 auto 16px;max-width:340px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px}
+.board-result.win{background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.4);color:var(--green)}
+.board-result.lose{background:rgba(255,127,159,.1);border:1px solid rgba(255,127,159,.4);color:#ff7f9f}
+.board-result.draw{background:rgba(255,200,87,.1);border:1px solid rgba(255,200,87,.4);color:var(--gold)}
+
+.shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.shop-card{padding:14px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid var(--border);text-align:center;transition:all .15s}
+.shop-card:hover{border-color:var(--border2);transform:translateY(-2px)}
+.shop-card .preview{font-size:38px;line-height:1;margin-bottom:8px;height:44px;display:flex;align-items:center;justify-content:center}
+.shop-card .n{font-weight:600;font-size:13.5px;margin-bottom:3px}
+.shop-card .d{font-size:11px;color:var(--text3);line-height:1.45;margin-bottom:10px;min-height:30px}
+.shop-card .p{font-family:monospace;font-weight:700;color:var(--gold);font-size:14px;margin-bottom:10px}
+.shop-card button{width:100%;padding:8px;border-radius:8px;font-size:12px;font-weight:700;border:none;cursor:pointer;font-family:inherit;transition:all .15s}
+.shop-card .buy{background:linear-gradient(135deg,#ffc857,#ff9f1c);color:#1a0f00}
+.shop-card .buy:hover{box-shadow:0 4px 16px rgba(255,200,87,.5)}
+.shop-card .buy:disabled{background:var(--surface3);color:var(--text3);cursor:not-allowed;box-shadow:none}
+.shop-card .equip{background:rgba(94,231,215,.14);color:var(--cyan);border:1px solid rgba(94,231,215,.35)}
+.shop-card .equipped{background:rgba(74,222,128,.14);color:var(--green);border:1px solid rgba(74,222,128,.35)}
+.shop-card .unequip{background:transparent;color:var(--text3);border:1px solid var(--border)}
+
+.preview-sample{display:inline-block;padding:2px 8px;border-radius:6px;font-weight:700;font-size:13px}
+.sample-gold{background:linear-gradient(90deg,#ffc857,#ff9f1c);color:#1a0f00}
+.sample-rose{background:linear-gradient(90deg,#ff7f9f,#ff4d70);color:#1a0008}
+.sample-teal{background:linear-gradient(90deg,#5ee7d7,#3bb8aa);color:#04211d}
+.sample-rainbow{background:linear-gradient(90deg,#ff2d6f,#ffc857,#4ade80,#5ee7d7,#8b7cff);background-size:200%;color:#0a0a0f;animation:rbFlow 3s linear infinite}
+@keyframes rbFlow{to{background-position:200% 0}}
+
+/* Badge-like name color overlay in messages */
+.msg .author.nc-gold{color:var(--gold)!important}
+.msg .author.nc-rose{color:#ff7f9f!important}
+.msg .author.nc-teal{color:var(--cyan)!important}
+.msg .author.nc-rainbow{background:linear-gradient(90deg,#ff2d6f,#ffc857,#4ade80,#5ee7d7,#8b7cff);background-size:200% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:rbFlow 3s linear infinite}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyGaming) return;
+  window.__sleepyGaming = true;
+  function log(){ try{console.log.apply(console,["[Games]"].concat([].slice.call(arguments)));}catch(e){} }
+  function esc(s){ return window.esc(s); }
+
+  var TAB = 'play';   // 'play' | 'shop'
+  var ACTIVE = null;  // active challenge being played/watched
+  var MY_ACCOUNT = null;
+  var LOBBY = [];     // open challenges
+  var MY_GAMES = [];  // my active + recent
+  var SHOP = [
+    { id:'name_color_gold',    price:500,   category:'name_color', preview:'<span class="preview-sample sample-gold">Aa</span>',   name:'Gold Name',   desc:'Name shows in gold in chat' },
+    { id:'name_color_rose',    price:500,   category:'name_color', preview:'<span class="preview-sample sample-rose">Aa</span>',   name:'Rose Name',   desc:'Name shows in rose' },
+    { id:'name_color_teal',    price:500,   category:'name_color', preview:'<span class="preview-sample sample-teal">Aa</span>',   name:'Teal Name',   desc:'Name shows in teal' },
+    { id:'name_color_rainbow', price:2000,  category:'name_color', preview:'<span class="preview-sample sample-rainbow">Aa</span>',name:'Rainbow Name',desc:'Animated rainbow gradient' },
+    { id:'title_angler',       price:500,   category:'title',      preview:'🎣',  name:'Angler Title',  desc:'Show "Angler" on your profile' },
+    { id:'title_champion',     price:1000,  category:'title',      preview:'🏆',  name:'Champion Title',desc:'Show "Champion" on your profile' },
+    { id:'title_legend',       price:5000,  category:'title',      preview:'⭐',  name:'Legend Title',  desc:'Show "Legend" on your profile' },
+    { id:'frame_gold',         price:1000,  category:'frame',      preview:'🟡',  name:'Gold Frame',    desc:'Gold ring around your avatar' },
+    { id:'frame_glow',         price:1500,  category:'frame',      preview:'✨',  name:'Glow Frame',    desc:'Animated glow around your avatar' },
+    { id:'rod_silver',         price:2000,  category:'rod',        preview:'🥈',  name:'Silver Rod',    desc:'+5% chance of rare fish' },
+    { id:'rod_gold',           price:5000,  category:'rod',        preview:'🥇',  name:'Gold Rod',      desc:'+10% chance of rare fish' },
+    { id:'rod_diamond',        price:15000, category:'rod',        preview:'💎',  name:'Diamond Rod',   desc:'+20% chance of rare fish' }
+  ];
+
+  var INVENTORY = [];
+  var EQUIPPED = { name_color:null, title:null, profile_frame:null };
+
+  function titleName(t){
+    return { title_angler:'Angler', title_champion:'Champion', title_legend:'Legend' }[t] || null;
+  }
+
+  async function refreshAccount(){
+    if (!window.ME) return;
+    var r = await sb.from('bank_accounts').select('*').eq('user_id', window.ME.id).maybeSingle();
+    MY_ACCOUNT = r.data;
+  }
+  async function refreshInventory(){
+    if (!window.ME) return;
+    var r = await sb.from('shop_inventory').select('item_id').eq('user_id', window.ME.id);
+    INVENTORY = (r.data || []).map(function(x){ return x.item_id; });
+    var e = await sb.from('shop_equipped').select('*').eq('user_id', window.ME.id).maybeSingle();
+    EQUIPPED = e.data || { name_color:null, title:null, profile_frame:null };
+  }
+
+  async function refreshLobby(){
+    var r = await sb.from('game_challenges')
+      .select('*')
+      .eq('status', 'open')
+      .order('created_at', { ascending: false })
+      .limit(30);
+    var rows = r.data || [];
+    var ids = rows.map(function(x){ return x.creator_id; }).filter(function(v,i,a){ return a.indexOf(v)===i; });
+    if (ids.length) await window.fetchProfiles(ids);
+    LOBBY = rows;
+  }
+
+  async function refreshMyGames(){
+    var r = await sb.from('game_challenges')
+      .select('*')
+      .or('creator_id.eq.' + window.ME.id + ',opponent_id.eq.' + window.ME.id)
+      .in('status', ['open','in_progress','finished'])
+      .order('created_at', { ascending: false })
+      .limit(20);
+    MY_GAMES = r.data || [];
+    var ids = [];
+    MY_GAMES.forEach(function(g){ ids.push(g.creator_id); if (g.opponent_id) ids.push(g.opponent_id); });
+    if (ids.length) await window.fetchProfiles(ids);
+  }
+
+  // ============================================================
+  // NAV
+  // ============================================================
+  async function openGames(){
+    window.CURRENT = { type: 'games', server: null, channel: null, conv: null, ticket: null };
+    await refreshAccount();
+    await Promise.all([refreshLobby(), refreshMyGames(), refreshInventory()]);
+    window.renderChatHead();
+    renderGames();
+  }
+
+  // ============================================================
+  // RENDER
+  // ============================================================
+  function renderGames(){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+    var html = '<div class="games-wrap">';
+
+    html += '<div class="games-head">' +
+      '<div class="ico">🎮</div>' +
+      '<h2>Game Room</h2>' +
+      '<div class="sub">Play against other Sleepers. Winner takes the pot.</div>' +
+      '<div class="bal">🪙 ' + (MY_ACCOUNT ? MY_ACCOUNT.balance.toLocaleString() : '0') + '</div>' +
+    '</div>';
+
+    html += '<div class="games-tabs">' +
+      '<button class="' + (TAB === 'play' ? 'active' : '') + '" data-gtab="play">Play</button>' +
+      '<button class="' + (TAB === 'shop' ? 'active' : '') + '" data-gtab="shop">Shop</button>' +
+    '</div>';
+
+    if (TAB === 'play'){
+      html += renderPlay();
+    } else {
+      html += renderShop();
+    }
+
+    html += '</div>';
+    body.innerHTML = html;
+    wire();
+  }
+
+  function renderPlay(){
+    // If watching/playing a game, show board
+    if (ACTIVE){
+      return renderBoard();
+    }
+    var h = '';
+    // New challenge form
+    h += '<div class="new-challenge">' +
+      '<h3>Create a Challenge · Tic-Tac-Toe</h3>' +
+      '<div class="bet-picks" id="bet-picks">' +
+        [0, 50, 100, 250, 500, 1000].map(function(v){
+          return '<button data-bet="' + v + '"' + (v === 100 ? ' class="sel"' : '') + '>' + (v === 0 ? 'Free' : '🪙 ' + v) + '</button>';
+        }).join('') +
+      '</div>' +
+      '<div class="custom-bet"><input id="custom-bet" type="number" min="0" max="100000" placeholder="Custom bet amount" style="flex:1"></div>' +
+      '<button class="go" id="create-challenge">Create Challenge</button>' +
+    '</div>';
+
+    // Open lobby
+    h += '<h3 style="font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--text3);margin:20px 0 10px">Open challenges</h3>';
+    if (!LOBBY.length){
+      h += '<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px;border:1px dashed var(--border);border-radius:10px">No open challenges yet. Be the first!</div>';
+    } else {
+      h += '<div class="challenge-list">';
+      LOBBY.forEach(function(c){
+        var p = window.PROFILES[c.creator_id] || { username: 'user', display_name: 'User' };
+        var mine = c.creator_id === window.ME.id;
+        var betLabel = c.bet_amount > 0 ? '🪙 ' + c.bet_amount : 'Free';
+        h += '<div class="challenge-row' + (mine ? ' mine' : '') + '">' +
+          '<div style="position:relative">' + window.avatarHTML(c.creator_id, 38) + '</div>' +
+          '<div class="info"><div class="nm">' + esc(p.display_name || p.username) + (mine ? ' (you)' : '') + '</div>' +
+            '<div class="meta">Tic-Tac-Toe · ' + Math.floor((Date.now() - new Date(c.created_at).getTime()) / 60000) + 'm ago</div></div>' +
+          '<div class="bet">' + betLabel + '</div>' +
+          (mine
+            ? '<button class="cancel" data-cancel="' + c.id + '">Cancel</button>'
+            : '<button class="accept" data-accept="' + c.id + '">Accept</button>') +
+        '</div>';
+      });
+      h += '</div>';
+    }
+
+    // My recent games
+    var recent = MY_GAMES.filter(function(g){ return g.status === 'finished'; }).slice(0, 5);
+    if (recent.length){
+      h += '<h3 style="font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--text3);margin:24px 0 10px">Recent games</h3>';
+      h += '<div class="challenge-list">';
+      recent.forEach(function(g){
+        var other = g.creator_id === window.ME.id ? g.opponent_id : g.creator_id;
+        var op = other ? (window.PROFILES[other] || { username: 'user', display_name: 'User' }) : null;
+        var result;
+        if (!g.winner_id) result = { t: 'Draw', cls: 'watch' };
+        else if (g.winner_id === window.ME.id) result = { t: 'Won', cls: 'accept' };
+        else result = { t: 'Lost', cls: 'cancel' };
+        h += '<div class="challenge-row">' +
+          '<div style="position:relative">' + (other ? window.avatarHTML(other, 38) : '<div class="avatar" style="width:38px;height:38px;background:var(--surface2)"></div>') + '</div>' +
+          '<div class="info"><div class="nm">' + (op ? esc(op.display_name || op.username) : 'Unknown') + '</div>' +
+            '<div class="meta">' + new Date(g.finished_at || g.created_at).toLocaleString() + '</div></div>' +
+          '<div class="bet">' + (g.bet_amount > 0 ? '🪙 ' + g.bet_amount : 'Free') + '</div>' +
+          '<button class="' + result.cls + '" style="cursor:default">' + result.t + '</button>' +
+        '</div>';
+      });
+      h += '</div>';
+    }
+
+    return h;
+  }
+
+  function renderBoard(){
+    var g = ACTIVE;
+    var isCreator = g.creator_id === window.ME.id;
+    var myMark = isCreator ? 'X' : 'O';
+    var oppMark = isCreator ? 'O' : 'X';
+    var opId = isCreator ? g.opponent_id : g.creator_id;
+    var op = opId ? (window.PROFILES[opId] || { username: 'user', display_name: 'User' }) : { display_name: 'Waiting...' };
+    var me = window.PROFILES[window.ME.id];
+
+    var board = (g.state && g.state.board) || ['','','','','','','','',''];
+    var turn = g.state ? g.state.turn : 'X';
+    var winning = (g.state && g.state.winning_line) || null;
+    var isOver = g.status === 'finished';
+    var myTurn = !isOver && turn === myMark;
+    var iWon = g.winner_id === window.ME.id;
+    var isDraw = isOver && !g.winner_id;
+
+    var h = '<div class="board-wrap">';
+
+    // Players
+    h += '<div class="board-players">' +
+      '<div class="p"><span class="mark X">X</span> ' + esc(me.display_name || me.username) + '</div>' +
+      '<div class="p"><span class="mark O">O</span> ' + esc(op.display_name || op.username) + '</div>' +
+    '</div>';
+
+    // Bet display
+    if (g.bet_amount > 0){
+      h += '<div style="text-align:center;font-size:12px;color:var(--text3);margin-bottom:12px">Pot: <b style="color:var(--gold);font-family:monospace">🪙 ' + (g.bet_amount * 2) + '</b></div>';
+    }
+
+    // Turn label
+    if (isOver){
+      if (isDraw){
+        h += '<div class="board-result draw">🤝 Draw — bets refunded</div>';
+      } else if (iWon){
+        h += '<div class="board-result win">🏆 You won!' + (g.bet_amount > 0 ? ' +' + (g.bet_amount * 2) + ' 🪙' : '') + '</div>';
+      } else {
+        h += '<div class="board-result lose">😔 You lost' + (g.bet_amount > 0 ? ' -' + g.bet_amount + ' 🪙' : '') + '</div>';
+      }
+    } else {
+      h += '<div class="board-turn ' + (myTurn ? 'mine' : 'theirs') + '">' +
+        (myTurn ? '🎯 Your turn' : '⏳ Waiting for ' + esc(op.display_name || op.username)) +
+      '</div>';
+    }
+
+    // Board
+    h += '<div class="ttt">';
+    for (var i = 0; i < 9; i++){
+      var v = board[i] || '';
+      var cls = 'ttt-cell';
+      if (v) cls += ' taken ' + v;
+      if (winning && winning.indexOf(i) >= 0) cls += ' win';
+      h += '<div class="' + cls + '" data-cell="' + i + '">' + esc(v) + '</div>';
+    }
+    h += '</div>';
+
+    // Leave / back
+    h += '<div style="margin-top:16px">' +
+      '<button class="btn" id="game-back">← Back to lobby</button>' +
+    '</div>';
+
+    h += '</div>';
+    return h;
+  }
+
+  function renderShop(){
+    var h = '';
+    var bal = MY_ACCOUNT ? MY_ACCOUNT.balance : 0;
+    h += '<div style="font-size:12.5px;color:var(--text3);margin-bottom:12px">Spend your fishing coins on cosmetics. Items are permanent.</div>';
+    h += '<div class="shop-grid">';
+    SHOP.forEach(function(item){
+      var owned = INVENTORY.indexOf(item.id) >= 0;
+      var isNameColor = item.category === 'name_color';
+      var isTitle = item.category === 'title';
+      var isFrame = item.category === 'frame';
+      var equipped = (isNameColor && EQUIPPED.name_color === item.id) ||
+                     (isTitle && EQUIPPED.title === item.id) ||
+                     (isFrame && EQUIPPED.profile_frame === item.id);
+      var canEquip = isNameColor || isTitle || isFrame;
+      var afford = bal >= item.price;
+
+      h += '<div class="shop-card">' +
+        '<div class="preview">' + item.preview + '</div>' +
+        '<div class="n">' + esc(item.name) + '</div>' +
+        '<div class="d">' + esc(item.desc) + '</div>' +
+        '<div class="p">🪙 ' + item.price.toLocaleString() + '</div>';
+
+      if (owned){
+        if (equipped){
+          h += '<button class="equipped" data-unequip="' + item.category + '">Equipped · click to remove</button>';
+        } else if (canEquip){
+          h += '<button class="equip" data-equip="' + item.id + '">Equip</button>';
+        } else {
+          h += '<button class="equipped" style="cursor:default">Owned</button>';
+        }
+      } else {
+        h += '<button class="buy" data-buy="' + item.id + '"' + (afford ? '' : ' disabled') + '>' +
+          (afford ? 'Buy' : 'Need ' + (item.price - bal) + ' more') + '</button>';
+      }
+      h += '</div>';
+    });
+    h += '</div>';
+    return h;
+  }
+
+  function wire(){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+
+    body.querySelectorAll('[data-gtab]').forEach(function(b){
+      b.onclick = function(){ TAB = b.dataset.gtab; renderGames(); };
+    });
+
+    var betBtns = body.querySelectorAll('[data-bet]');
+    betBtns.forEach(function(b){
+      b.onclick = function(){
+        betBtns.forEach(function(x){ x.classList.remove('sel'); });
+        b.classList.add('sel');
+        var inp = document.getElementById('custom-bet');
+        if (inp) inp.value = '';
+      };
+    });
+
+    var cc = document.getElementById('create-challenge');
+    if (cc) cc.onclick = async function(){
+      var sel = body.querySelector('[data-bet].sel');
+      var custom = document.getElementById('custom-bet');
+      var bet = 100;
+      if (custom && custom.value !== ''){
+        bet = parseInt(custom.value, 10);
+      } else if (sel){
+        bet = parseInt(sel.dataset.bet, 10);
+      }
+      if (isNaN(bet) || bet < 0 || bet > 100000){
+        return window.toast("Invalid bet", "Bet must be 0-100000.", "err");
+      }
+      try {
+        await sb.rpc('create_game_challenge', { p_bet: bet });
+        window.toast("Challenge created", "Waiting for an opponent.", "ok");
+        await refreshAccount();
+        await Promise.all([refreshLobby(), refreshMyGames()]);
+        renderGames();
+      } catch(e){ window.toast("Failed", e.message || String(e), "err"); }
+    };
+
+    body.querySelectorAll('[data-accept]').forEach(function(b){
+      b.onclick = async function(){
+        try {
+          await sb.rpc('accept_game_challenge', { cid: b.dataset.accept });
+          await refreshAccount();
+          await refreshMyGames();
+          var found = MY_GAMES.find(function(g){ return g.id === b.dataset.accept; });
+          if (found){ ACTIVE = found; renderGames(); }
+        } catch(e){ window.toast("Failed to accept", e.message || String(e), "err"); }
+      };
+    });
+    body.querySelectorAll('[data-cancel]').forEach(function(b){
+      b.onclick = async function(){
+        try {
+          await sb.rpc('cancel_game_challenge', { cid: b.dataset.cancel });
+          await refreshAccount();
+          await Promise.all([refreshLobby(), refreshMyGames()]);
+          renderGames();
+        } catch(e){ window.toast("Failed to cancel", e.message || String(e), "err"); }
+      };
+    });
+
+    body.querySelectorAll('[data-cell]').forEach(function(c){
+      c.onclick = async function(){
+        if (!ACTIVE || ACTIVE.status !== 'in_progress') return;
+        if (c.classList.contains('taken')) return;
+        try {
+          await sb.rpc('make_game_move', { cid: ACTIVE.id, p_cell: parseInt(c.dataset.cell, 10) });
+        } catch(e){ window.toast("Move rejected", e.message || String(e), "err"); }
+      };
+    });
+
+    var back = document.getElementById('game-back');
+    if (back) back.onclick = function(){
+      ACTIVE = null;
+      refreshAccount().then(function(){ return Promise.all([refreshLobby(), refreshMyGames()]); }).then(renderGames);
+    };
+
+    body.querySelectorAll('[data-buy]').forEach(function(b){
+      b.onclick = async function(){
+        try {
+          var r = await sb.rpc('purchase_shop_item', { p_item: b.dataset.buy });
+          if (r.error) throw r.error;
+          window.toast("Purchased", "Enjoy your new item!", "ok");
+          await Promise.all([refreshAccount(), refreshInventory()]);
+          renderGames();
+        } catch(e){ window.toast("Purchase failed", e.message || String(e), "err"); }
+      };
+    });
+    body.querySelectorAll('[data-equip]').forEach(function(b){
+      b.onclick = async function(){
+        try {
+          await sb.rpc('equip_shop_item', { p_item: b.dataset.equip });
+          await refreshInventory();
+          window.toast("Equipped", "", "ok");
+          renderGames();
+          // Reflect everywhere
+          if (window.renderAll) window.renderAll();
+        } catch(e){ window.toast("Equip failed", e.message || String(e), "err"); }
+      };
+    });
+    body.querySelectorAll('[data-unequip]').forEach(function(b){
+      b.onclick = async function(){
+        try {
+          await sb.rpc('unequip_shop_item', { p_kind: b.dataset.unequip });
+          await refreshInventory();
+          window.toast("Removed", "", "ok");
+          renderGames();
+          if (window.renderAll) window.renderAll();
+        } catch(e){ window.toast("Failed", e.message || String(e), "err"); }
+      };
+    });
+  }
+
+  // ============================================================
+  // REAL-TIME
+  // ============================================================
+  function subscribeGames(){
+    var ch = sb.channel('games-' + window.ME.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'game_challenges' }, async function(p){
+        // Refresh our local state
+        if (window.CURRENT && window.CURRENT.type === 'games'){
+          await refreshAccount();
+          await Promise.all([refreshLobby(), refreshMyGames()]);
+          // If we're watching a game, update it
+          if (ACTIVE){
+            var fresh = MY_GAMES.find(function(g){ return g.id === ACTIVE.id; });
+            if (fresh) ACTIVE = fresh;
+          }
+          renderGames();
+        }
+        // Notifications for our own challenges
+        var row = p.new || {};
+        if (p.eventType === 'UPDATE'){
+          if (row.opponent_id === window.ME.id && row.status === 'in_progress' && p.old && p.old.status === 'open'){
+            window.toast("Challenge accepted", "Your game has started!", "ok");
+            // Auto-enter the game
+            await refreshMyGames();
+            var fresh = MY_GAMES.find(function(g){ return g.id === row.id; });
+            if (fresh && window.CURRENT && window.CURRENT.type === 'games'){
+              ACTIVE = fresh; renderGames();
+            }
+          }
+          if ((row.creator_id === window.ME.id || row.opponent_id === window.ME.id) && row.status === 'finished'){
+            if (row.winner_id === window.ME.id){
+              window.toast("You won!", "+" + ((row.bet_amount || 0) * 2) + " coins", "ok");
+            } else if (!row.winner_id){
+              window.toast("Draw", "Bets refunded.", "ok");
+            } else {
+              window.toast("You lost", "-" + (row.bet_amount || 0) + " coins", "err");
+            }
+            await refreshAccount();
+            setTimeout(function(){
+              if (window.CURRENT && window.CURRENT.type === 'games'){
+                ACTIVE = null;
+                refreshLobby().then(renderGames);
+              }
+            }, 1800);
+          }
+        }
+      })
+      .subscribe(function(s){ log("games sub:", s); });
+    return ch;
+  }
+
+  // ============================================================
+  // NAME COLOR / FRAME in messages
+  // ============================================================
+  // Wrap messageHTML to apply equipped name colors
+  var origMessageHTML = window.messageHTML;
+  if (typeof origMessageHTML === 'function'){
+    window.messageHTML = function(m, grouped){
+      var html = origMessageHTML.apply(this, arguments);
+      if (grouped) return html;
+      // Look up equipped name color for the sender
+      var color = window.__nameColors ? window.__nameColors[m.sender_id] : null;
+      if (!color) return html;
+      var cls = color === 'name_color_gold' ? 'nc-gold' :
+                color === 'name_color_rose' ? 'nc-rose' :
+                color === 'name_color_teal' ? 'nc-teal' :
+                color === 'name_color_rainbow' ? 'nc-rainbow' : null;
+      if (!cls) return html;
+      // Add the class to the author span
+      html = html.replace('<span class="author"', '<span class="author ' + cls + '"');
+      // Remove inline role color if present (name color wins)
+      html = html.replace(/(<span class="author [^"]*")\s+style="[^"]*"/, '$1');
+      return html;
+    };
+  }
+
+  // Cache name colors for all visible users
+  window.__nameColors = {};
+  async function refreshNameColors(){
+    try {
+      var r = await sb.from('shop_equipped').select('user_id, name_color').not('name_color', 'is', null);
+      var map = {};
+      (r.data || []).forEach(function(x){ map[x.user_id] = x.name_color; });
+      window.__nameColors = map;
+    } catch(e){}
+  }
+
+  // Hook into profile opening to show title
+  var origOpenProfile = window.openProfile;
+  if (typeof origOpenProfile === 'function'){
+    window.openProfile = function(uid){
+      origOpenProfile.apply(this, arguments);
+      setTimeout(async function(){
+        var body = document.getElementById('modal-body');
+        if (!body || body.querySelector('.eq-title-strip')) return;
+        var e = await sb.from('shop_equipped').select('*').eq('user_id', uid).maybeSingle();
+        if (!e.data) return;
+        var t = titleName(e.data.title);
+        var frame = e.data.profile_frame;
+        var html = '';
+        if (t){
+          html += '<span style="display:inline-block;padding:3px 10px;border-radius:99px;background:linear-gradient(135deg,rgba(255,200,87,.14),rgba(139,124,255,.1));border:1px solid rgba(255,200,87,.4);font-size:11px;font-weight:700;color:var(--gold);letter-spacing:.05em;text-transform:uppercase">' + esc(t) + '</span>';
+        }
+        if (frame === 'frame_gold'){
+          html += '<span style="display:inline-block;padding:3px 10px;border-radius:99px;background:linear-gradient(135deg,rgba(255,200,87,.2),rgba(255,159,28,.1));border:1px solid rgba(255,200,87,.5);font-size:11px;font-weight:700;color:var(--gold)">🟡 Gold Frame</span>';
+        }
+        if (frame === 'frame_glow'){
+          html += '<span style="display:inline-block;padding:3px 10px;border-radius:99px;background:rgba(94,231,215,.14);border:1px solid rgba(94,231,215,.45);font-size:11px;font-weight:700;color:var(--cyan)">✨ Glow Frame</span>';
+        }
+        if (!html) return;
+        var card = body.querySelector('.profile-card') || body;
+        var strip = document.createElement('div');
+        strip.className = 'eq-title-strip';
+        strip.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-top:8px';
+        strip.innerHTML = html;
+        card.appendChild(strip);
+      }, 350);
+    };
+  }
+
+  // ============================================================
+  // RAIL BUTTON
+  // ============================================================
+  function injectRailButton(){
+    var rail = document.getElementById('rail');
+    if (!rail) return;
+    if (rail.querySelector('.games-btn')) return;
+    var btn = document.createElement('button');
+    btn.className = 'rail-btn games-btn';
+    btn.title = 'Game Room';
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="15" y1="13" x2="15.01" y2="13"/><line x1="18" y1="11" x2="18.01" y2="11"/><rect x="2" y="6" width="20" height="12" rx="3"/></svg>';
+    btn.onclick = openGames;
+    var anchor = rail.querySelector('.fishing-btn') || rail.querySelector('[data-rail="create-community"]');
+    if (anchor) rail.insertBefore(btn, anchor.nextSibling);
+    else rail.appendChild(btn);
+  }
+
+  // ============================================================
+  // OVERRIDES
+  // ============================================================
+  var origRenderRail = window.renderRail;
+  if (typeof origRenderRail === 'function'){
+    window.renderRail = function(){
+      var r = origRenderRail.apply(this, arguments);
+      setTimeout(injectRailButton, 10);
+      return r;
+    };
+  }
+  var origRenderChat = window.renderChat;
+  if (typeof origRenderChat === 'function'){
+    window.renderChat = function(){
+      if (window.CURRENT && window.CURRENT.type === 'games'){ renderGames(); return; }
+      return origRenderChat.apply(this, arguments);
+    };
+  }
+  var origRenderChatHead = window.renderChatHead;
+  if (typeof origRenderChatHead === 'function'){
+    window.renderChatHead = function(){
+      if (window.CURRENT && window.CURRENT.type === 'games'){
+        var el = document.getElementById('chat-head');
+        if (el){
+          el.innerHTML =
+            '<button class="hbtn mobile-only" data-act="toggle-panel">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:20px;height:20px"><path d="M3 6h18M3 12h18M3 18h18"/></svg>' +
+            '</button>' +
+            '<div class="title"><span style="font-size:16px">🎮</span><span class="txt">Game Room</span></div>' +
+            '<div class="spacer"></div>' +
+            '<button class="hbtn" id="games-shop-head" title="Shop">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:17px;height:17px"><path d="M3 3h2l2 12h11l2-8H6"/><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/></svg>' +
+            '</button>';
+          var sh = document.getElementById('games-shop-head');
+          if (sh) sh.onclick = function(){ TAB = 'shop'; renderGames(); };
+        }
+        return;
+      }
+      return origRenderChatHead.apply(this, arguments);
+    };
+  }
+  var origRenderComposer = window.renderComposer;
+  if (typeof origRenderComposer === 'function'){
+    window.renderComposer = function(){
+      if (window.CURRENT && window.CURRENT.type === 'games'){
+        var w = document.getElementById('composer-wrap'); if (w) w.innerHTML = '';
+        var t = document.getElementById('typing-bar'); if (t) t.innerHTML = '';
+        return;
+      }
+      return origRenderComposer.apply(this, arguments);
+    };
+  }
+
+  // ============================================================
+  // BOOT
+  // ============================================================
+  setTimeout(async function(){
+    if (!window.ME) return;
+    injectRailButton();
+    await refreshAccount();
+    await refreshInventory();
+    await refreshNameColors();
+    subscribeGames();
+    setInterval(refreshNameColors, 30000);
+    log("gaming area online");
+  }, 4500);
+
+  setInterval(injectRailButton, 3000);
+
+  log("gaming ready");
+})();
+</script>
+
 </body>
 </html>
