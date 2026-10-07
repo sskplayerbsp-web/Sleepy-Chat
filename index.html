@@ -11089,5 +11089,232 @@ html, body { overscroll-behavior: none; }
 })();
 </script>
 
+<!-- SLEEPY_VIDEO_FIX_V1 -->
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyVideoFix) return;
+  window.__sleepyVideoFix = true;
+  function log(){ try{console.log.apply(console,["[VideoFix]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  // ============================================================
+  // 1. ROBUST VIDEO ELEMENT ATTACHMENT
+  // ============================================================
+  // Autoplay + autoplay-with-muted is finicky. This attaches the
+  // stream properly, forces mute as a property, and calls play()
+  // with retry on rejection.
+
+  function attachStreamToVideo(videoEl, stream){
+    if (!videoEl || !stream) return;
+    if (videoEl.__attachedStream === stream) {
+      // Already attached, just make sure it's playing
+      ensurePlaying(videoEl);
+      return;
+    }
+    videoEl.__attachedStream = stream;
+    videoEl.srcObject = stream;
+    videoEl.muted = true;
+    videoEl.playsInline = true;
+    videoEl.autoplay = true;
+    videoEl.setAttribute('muted', '');
+    videoEl.setAttribute('playsinline', '');
+    videoEl.setAttribute('autoplay', '');
+    ensurePlaying(videoEl);
+  }
+
+  function ensurePlaying(el){
+    var attempt = el.play();
+    if (attempt && attempt.catch){
+      attempt.catch(function(err){
+        log("play rejected:", err.name, "- retrying on user gesture");
+        var once = function(){
+          el.play().catch(function(){});
+          document.removeEventListener('click', once, true);
+          document.removeEventListener('touchstart', once, true);
+        };
+        document.addEventListener('click', once, true);
+        document.addEventListener('touchstart', once, true);
+      });
+    }
+  }
+
+  // ============================================================
+  // 2. OVERRIDE renderVideoGrid with a version that attaches streams
+  // ============================================================
+  // We can't easily reach the internal renderVideoGrid, so we watch
+  // for the #voice-video-grid element appearing and attach streams
+  // to any videos inside it.
+
+  function fixVideoGrid(){
+    var grid = document.getElementById('voice-video-grid');
+    if (!grid) return;
+    if (!window.vs || !window.vs.stream) return;
+
+    // Find the local video and self stream
+    var selfVid = document.getElementById('voice-self-video');
+    if (selfVid){
+      attachStreamToVideo(selfVid, window.vs.stream);
+    }
+
+    // Remote videos: match each to its source element
+    document.querySelectorAll('[id^="voice-remote-"]').forEach(function(remoteVid){
+      var peerId = remoteVid.id.replace('voice-remote-', '');
+      var srcVid = document.getElementById('voice-video-' + peerId);
+      if (srcVid && srcVid.srcObject){
+        attachStreamToVideo(remoteVid, srcVid.srcObject);
+      }
+    });
+  }
+
+  // Run this repeatedly — cheap and reliable
+  setInterval(fixVideoGrid, 800);
+
+  // Also run immediately when the grid appears
+  var gridObserver = new MutationObserver(function(){
+    if (document.getElementById('voice-video-grid')) fixVideoGrid();
+  });
+  gridObserver.observe(document.body, { childList: true, subtree: true });
+
+  // ============================================================
+  // 3. ON-DEMAND CAMERA when toggling video after joining audio-only
+  // ============================================================
+  // The original toggleVideo just flips .enabled on existing tracks.
+  // If there are no video tracks, nothing happens. This wraps it to
+  // request the camera the first time, add the track to every peer
+  // connection, and renegotiate.
+
+  var origToggleVideo = window.toggleVideo;
+  if (typeof origToggleVideo === 'function'){
+    window.toggleVideo = async function(){
+      var s = window.vs;
+      if (!s || !s.stream) return;
+
+      // If we already have video tracks, just flip them like before
+      var hasVideoTrack = s.stream.getVideoTracks().length > 0;
+      if (hasVideoTrack){
+        return origToggleVideo.call(this);
+      }
+
+      // No video track: request one now
+      log("requesting camera on demand");
+      var camStream;
+      try {
+        camStream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 640, height: 480 }
+        });
+      } catch(e){
+        log("camera request failed:", e.name, e.message);
+        if (e.name === 'NotAllowedError'){
+          window.toast("Camera blocked", "Allow camera access in your browser settings.", "err");
+        } else if (e.name === 'NotFoundError'){
+          window.toast("No camera found", "This device has no camera.", "err");
+        } else {
+          window.toast("Camera error", e.message || String(e), "err");
+        }
+        return;
+      }
+
+      // Attach the new video track to our stream
+      var videoTrack = camStream.getVideoTracks()[0];
+      s.stream.addTrack(videoTrack);
+      s.video = true;
+
+      // Add the track to every peer connection and renegotiate
+      for (var pid in s.peers){
+        var peer = s.peers[pid];
+        if (!peer || !peer.pc) continue;
+        try {
+          peer.pc.addTrack(videoTrack, s.stream);
+          // Renegotiate: create a new offer
+          setTimeout(function(){
+            renegotiatePeer(peer);
+          }, 200);
+        } catch(e){ log("addTrack to peer failed:", e.message); }
+      }
+
+      // Re-render the grid so the local video shows
+      if (window.renderVideoGrid) window.renderVideoGrid();
+      setTimeout(fixVideoGrid, 100);
+
+      // Update the DB flag
+      try {
+        await sb.from('voice_participants').update({ is_video_on: true })
+          .eq('channel_id', s.channelId).eq('user_id', window.ME.id);
+      } catch(e){}
+
+      window.toast("Camera on", "Your video is now visible to others.", "ok");
+    };
+  }
+
+  // Renegotiation helper — a fresh offer that includes the new track
+  async function renegotiatePeer(peer){
+    if (!peer || !peer.pc) return;
+    try {
+      peer.makingOffer = true;
+      var offer = await peer.pc.createOffer();
+      await peer.pc.setLocalDescription(offer);
+      window.vs.signaling.send({
+        type: 'broadcast', event: 'offer',
+        payload: { from: window.ME.id, sdp: peer.pc.localDescription }
+      });
+      log("renegotiation offer sent");
+    } catch(e){
+      log("renegotiate failed:", e.message);
+    } finally {
+      peer.makingOffer = false;
+    }
+  }
+
+  // ============================================================
+  // 4. "Join Video" BUG — original code requests video but the
+  //    video track isn't guaranteed to be enabled or played
+  // ============================================================
+  // Wrap joinVoice so that after it completes with a video request,
+  // we force the local video element to attach + play.
+
+  var origJoinVoice = window.joinVoice;
+  if (typeof origJoinVoice === 'function'){
+    window.joinVoice = async function(channelId, withVideo){
+      var r = await origJoinVoice.call(this, channelId, withVideo);
+      // Force-fix the video grid after join
+      if (withVideo){
+        setTimeout(function(){
+          if (window.renderVideoGrid) window.renderVideoGrid();
+          setTimeout(fixVideoGrid, 100);
+          setTimeout(fixVideoGrid, 500);
+          setTimeout(fixVideoGrid, 1500);
+        }, 300);
+      }
+      return r;
+    };
+  }
+
+  // ============================================================
+  // 5. DIAGNOSTIC — small camera indicator in the voice dock
+  // ============================================================
+  function addCameraIndicator(){
+    var dock = document.getElementById('voice-dock');
+    if (!dock) return;
+    if (dock.querySelector('.cam-indicator')) return;
+    if (!window.vs || !window.vs.stream) return;
+
+    var count = window.vs.stream.getVideoTracks().length;
+    var enabled = window.vs.stream.getVideoTracks().filter(function(t){ return t.enabled && t.readyState === 'live'; }).length;
+
+    var el = document.createElement('span');
+    el.className = 'cam-indicator';
+    el.style.cssText = 'font-size:10px;font-family:monospace;padding:2px 6px;border-radius:4px;' +
+      (enabled > 0 ? 'background:rgba(0,230,118,.15);color:var(--green)' : 'background:rgba(90,90,114,.2);color:var(--text3)');
+    el.textContent = '📹 ' + enabled + '/' + count;
+    el.title = enabled + ' active video track' + (enabled === 1 ? '' : 's');
+    var status = dock.querySelector('.status');
+    if (status) status.insertAdjacentElement('afterend', el);
+  }
+  setInterval(addCameraIndicator, 1500);
+
+  log("video fix ready");
+})();
+</script>
+
 </body>
 </html>
