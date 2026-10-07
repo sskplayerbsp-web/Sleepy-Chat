@@ -14310,5 +14310,823 @@ body{
 })();
 </script>
 
+<!-- SLEEPY_GAME_ROOM_V2 -->
+<style>
+/* ================================================================
+   GAME ROOM — visually distinct from channels
+   ================================================================ */
+
+/* Game Room shell has its own background */
+body.in-game-room .chat{
+  background:
+    radial-gradient(900px 600px at 50% -10%, rgba(139,124,255,.14), transparent 55%),
+    radial-gradient(800px 500px at 90% 110%, rgba(94,231,215,.1), transparent 60%),
+    #0b0d14;
+}
+body.in-game-room .chat-head{
+  background:linear-gradient(90deg, rgba(139,124,255,.15), rgba(94,231,215,.08));
+  border-bottom:1px solid rgba(139,124,255,.35);
+}
+body.in-game-room .chat-head .title{ color:var(--text); text-shadow:0 0 18px rgba(139,124,255,.5); }
+body.in-game-room .panel{ background:linear-gradient(180deg, rgba(24,20,40,.85), rgba(15,13,26,.9)); }
+body.in-game-room .panel-head{
+  background:linear-gradient(90deg, rgba(139,124,255,.14), rgba(94,231,215,.06));
+  border-bottom-color:rgba(139,124,255,.3);
+}
+
+/* Game nav panel (replaces DM list when in Game Room) */
+.game-nav{padding:12px 10px}
+.game-nav .gbtn{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 14px;border-radius:12px;
+  background:rgba(255,255,255,.03);border:1px solid transparent;
+  color:var(--text2);font-size:13.5px;font-weight:600;
+  cursor:pointer;transition:all .18s;width:100%;text-align:left;
+  font-family:inherit;margin-bottom:6px;
+}
+.game-nav .gbtn:hover{background:rgba(255,255,255,.06);color:var(--text)}
+.game-nav .gbtn.active{
+  background:linear-gradient(135deg, rgba(139,124,255,.22), rgba(94,231,215,.1));
+  border-color:rgba(139,124,255,.5);
+  color:#fff;
+  box-shadow:0 0 18px rgba(139,124,255,.25);
+}
+.game-nav .gbtn .emoji{font-size:20px;flex:none;line-height:1}
+.game-nav .gbtn .lbl{flex:1;min-width:0}
+.game-nav .gbtn .sub{font-size:11px;color:var(--text3);display:block;margin-top:1px;font-weight:400}
+.game-nav .gbtn.active .sub{color:rgba(255,255,255,.55)}
+.game-nav h3{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--text3);padding:12px 8px 6px;font-family:'JetBrains Mono',monospace}
+
+/* ================================================================
+   IN-CHAT COSMETICS — badges, titles, frames visible everywhere
+   ================================================================ */
+
+/* Avatar frames around message author avatars */
+.msg .avatar-frame-wrap{position:relative;display:inline-flex}
+.msg .avatar-frame-wrap.frame_gold::after{
+  content:'';position:absolute;inset:-3px;border-radius:50%;
+  border:2px solid rgba(255,200,87,.85);
+  box-shadow:0 0 12px rgba(255,200,87,.6), inset 0 0 6px rgba(255,200,87,.3);
+  pointer-events:none;
+}
+.msg .avatar-frame-wrap.frame_glow::after{
+  content:'';position:absolute;inset:-4px;border-radius:50%;
+  border:2px solid rgba(94,231,215,.85);
+  box-shadow:0 0 18px rgba(94,231,215,.7), inset 0 0 8px rgba(94,231,215,.4);
+  animation:frameGlow 2.4s ease-in-out infinite;
+  pointer-events:none;
+}
+@keyframes frameGlow{0%,100%{opacity:.75}50%{opacity:1}}
+
+/* Badge strip under a message author name */
+.chat-badges{
+  display:inline-flex;gap:3px;align-items:center;margin-left:6px;
+  vertical-align:middle;
+}
+.chat-badges .cb{
+  font-size:11px;line-height:1;
+  padding:1px 4px;border-radius:4px;
+  background:rgba(255,200,87,.12);
+  border:1px solid rgba(255,200,87,.3);
+  filter:drop-shadow(0 0 4px rgba(255,200,87,.4));
+  cursor:help;
+}
+.chat-badges .cb.common{background:rgba(90,90,114,.2);border-color:rgba(90,90,114,.5);filter:none}
+.chat-badges .cb.gold{background:rgba(255,200,87,.16);border-color:rgba(255,200,87,.5);filter:drop-shadow(0 0 5px rgba(255,200,87,.6))}
+.chat-badges .cb.legendary{background:linear-gradient(135deg, rgba(255,200,87,.28), rgba(255,127,159,.22));border-color:rgba(255,200,87,.7);filter:drop-shadow(0 0 8px rgba(255,200,87,.8))}
+
+/* Title chip next to username */
+.chat-title{
+  font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  padding:1px 7px;border-radius:99px;margin-left:6px;
+  background:linear-gradient(135deg, rgba(139,124,255,.18), rgba(94,231,215,.14));
+  border:1px solid rgba(139,124,255,.45);
+  color:#c4b8ff;
+  vertical-align:middle;
+}
+
+/* ================================================================
+   FISHING MINIGAME — timing bar
+   ================================================================ */
+.fish-cast-stage{position:relative;height:280px;border-radius:16px;background:linear-gradient(180deg, rgba(0,80,140,.6), rgba(0,40,90,.8));border:1px solid rgba(0,200,255,.3);overflow:hidden;margin-bottom:16px}
+.fish-cast-stage::before{
+  content:'';position:absolute;inset:0;
+  background:repeating-linear-gradient(90deg,transparent 0 40px,rgba(0,255,224,.05) 40px 42px);
+  animation:waterMove 8s linear infinite;
+}
+@keyframes waterMove{from{background-position:0 0}to{background-position:80px 0}}
+.cast-swimmer{position:absolute;font-size:24px;filter:drop-shadow(0 0 6px rgba(0,200,255,.5));animation:swimFloat 4s ease-in-out infinite;opacity:.75}
+.cast-swimmer:nth-child(1){top:20%;left:10%;animation-delay:0s;animation-duration:5s}
+.cast-swimmer:nth-child(2){top:50%;left:70%;animation-delay:.5s;animation-duration:4.5s;font-size:30px}
+.cast-swimmer:nth-child(3){top:75%;left:25%;animation-delay:1s;animation-duration:5.5s}
+.cast-swimmer:nth-child(4){top:35%;left:50%;animation-delay:1.5s;animation-duration:4.8s;font-size:20px}
+@keyframes swimFloat{0%,100%{transform:translate(0,0) rotate(-5deg)}25%{transform:translate(20px,-8px) rotate(5deg)}50%{transform:translate(-10px,10px) rotate(-3deg)}75%{transform:translate(-20px,-5px) rotate(3deg)}}
+
+.cast-state-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;z-index:5;background:rgba(10,10,15,.55);backdrop-filter:blur(4px);font-family:'Space Grotesk',sans-serif}
+.cast-state-overlay .msg{font-size:16px;font-weight:700;color:var(--cyan);letter-spacing:.06em;text-transform:uppercase;text-shadow:0 0 12px rgba(94,231,215,.6)}
+.cast-state-overlay .hint{font-size:12px;color:var(--text3);text-align:center;max-width:280px;line-height:1.5}
+.cast-state-overlay .bite{font-size:64px;animation:bitePop .3s ease}
+@keyframes bitePop{0%{transform:scale(0) rotate(-20deg)}70%{transform:scale(1.3) rotate(10deg)}100%{transform:scale(1) rotate(0)}}
+
+/* Timing bar */
+.timing-wrap{padding:10px 0}
+.timing-bar{position:relative;height:36px;border-radius:8px;overflow:hidden;background:linear-gradient(90deg,
+  rgba(255,45,111,.4) 0%,
+  rgba(255,171,0,.4) 20%,
+  rgba(74,222,128,.5) 40%,
+  rgba(94,231,215,.7) 48%,
+  rgba(94,231,215,.7) 52%,
+  rgba(74,222,128,.5) 60%,
+  rgba(255,171,0,.4) 80%,
+  rgba(255,45,111,.4) 100%);
+  border:1px solid rgba(94,231,215,.4);
+  box-shadow:inset 0 0 20px rgba(0,0,0,.4);
+}
+.timing-mark{
+  position:absolute;top:-4px;bottom:-4px;width:4px;
+  background:#fff;border-radius:2px;
+  box-shadow:0 0 12px #fff, 0 0 24px rgba(94,231,215,.9);
+  transition:left .016s linear;
+}
+.timing-labels{display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:var(--text3);font-family:monospace}
+.timing-labels b{color:var(--text2)}
+
+.timing-hit{text-align:center;padding:14px;border-radius:12px;margin-top:14px;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;animation:catchIn .3s ease}
+.timing-hit.perfect{background:linear-gradient(135deg,rgba(255,200,87,.15),rgba(94,231,215,.1));border:1px solid rgba(255,200,87,.5);color:var(--gold);text-shadow:0 0 14px rgba(255,200,87,.6)}
+.timing-hit.great{background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.45);color:var(--green)}
+.timing-hit.ok{background:rgba(255,171,0,.1);border:1px solid rgba(255,171,0,.4);color:var(--amber)}
+.timing-hit.miss{background:rgba(255,45,111,.1);border:1px solid rgba(255,45,111,.4);color:#ff7f9f}
+
+/* Enhanced catch card */
+.catch-card{position:relative;overflow:hidden}
+.catch-card.rarity-legendary::before{
+  content:'';position:absolute;inset:-50%;background:conic-gradient(from 0deg, transparent, rgba(255,200,87,.4), transparent);
+  animation:legendarySpin 4s linear infinite;z-index:0;
+}
+@keyframes legendarySpin{to{transform:rotate(360deg)}}
+.catch-card > *{position:relative;z-index:1}
+.catch-card.rarity-rare::before{
+  content:'';position:absolute;inset:-50%;background:conic-gradient(from 0deg, transparent, rgba(94,231,215,.35), transparent);
+  animation:legendarySpin 5s linear infinite;z-index:0;
+}
+
+/* Cast history strip */
+.cast-streak{display:flex;gap:4px;justify-content:center;margin:12px 0 0;font-size:14px}
+.cast-streak .dot{width:10px;height:10px;border-radius:50%;background:var(--surface3)}
+.cast-streak .dot.perfect{background:var(--gold);box-shadow:0 0 8px rgba(255,200,87,.8)}
+.cast-streak .dot.great{background:var(--green);box-shadow:0 0 6px rgba(74,222,128,.7)}
+.cast-streak .dot.ok{background:var(--amber)}
+.cast-streak .dot.miss{background:var(--rose)}
+
+/* More shop items */
+.shop-cat{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--text3);margin:16px 0 8px;padding:0 4px;font-family:'JetBrains Mono',monospace}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyGameRoomV2) return;
+  window.__sleepyGameRoomV2 = true;
+  function log(){ try{console.log.apply(console,["[GR2]"].concat([].slice.call(arguments)));}catch(e){} }
+  function esc(s){ return window.esc(s); }
+
+  var BANK_ID = '00000000-0000-0000-0000-0000000000ba';
+
+  // ============================================================
+  // 1. COSMETICS CACHE
+  // ============================================================
+  window.__cosmetics = {};   // uid -> { name_color, title, profile_frame, badges: [] }
+  window.__catchStreak = []; // recent timing result: 'perfect'|'great'|'ok'|'miss'
+
+  async function loadCosmetics(){
+    try {
+      var eq = await sb.from('shop_equipped').select('*');
+      var byUser = {};
+      (eq.data || []).forEach(function(x){
+        byUser[x.user_id] = byUser[x.user_id] || {};
+        byUser[x.user_id].name_color = x.name_color;
+        byUser[x.user_id].title = x.title;
+        byUser[x.user_id].profile_frame = x.profile_frame;
+      });
+      var bg = await sb.from('user_badges').select('user_id, badge_id');
+      (bg.data || []).forEach(function(x){
+        byUser[x.user_id] = byUser[x.user_id] || {};
+        byUser[x.user_id].badges = byUser[x.user_id].badges || [];
+        byUser[x.user_id].badges.push(x.badge_id);
+      });
+      window.__cosmetics = byUser;
+    } catch(e){ log("cosmetics load failed:", e.message); }
+  }
+
+  var BADGE_RARITY = {
+    rich_10000:   { e:'💎', c:'legendary', name:'Ten Thousand' },
+    legendary_5:  { e:'🌟', c:'legendary', name:'Legend Master' },
+    legendary_1:  { e:'⭐', c:'gold',      name:'Legend Hunter' },
+    rich_1000:    { e:'💰', c:'gold',      name:'Thousandaire' },
+    catch_100:    { e:'🏆', c:'gold',      name:'Master Angler' },
+    puffer_5:     { e:'💀', c:'gold',      name:'Cursed' },
+    catch_50:     { e:'🎏', c:'common',    name:'Avid Angler' },
+    puffer_1:     { e:'☠️', c:'common',    name:'Poisoned' },
+    catch_10:     { e:'🐟', c:'common',    name:'Getting Started' },
+    first_catch:  { e:'🎣', c:'common',    name:'First Catch' },
+  };
+
+  function badgesFor(uid){
+    var c = window.__cosmetics[uid];
+    if (!c || !c.badges) return [];
+    var order = ['legendary','gold','common'];
+    return c.badges
+      .map(function(b){ return BADGE_RARITY[b] ? { id:b, ...BADGE_RARITY[b] } : null; })
+      .filter(Boolean)
+      .sort(function(a,b){ return order.indexOf(a.c) - order.indexOf(b.c); })
+      .slice(0, 4);
+  }
+  function titleFor(uid){
+    var c = window.__cosmetics[uid];
+    if (!c || !c.title) return null;
+    return { title_angler:'Angler', title_champion:'Champion', title_legend:'Legend' }[c.title] || null;
+  }
+  function frameFor(uid){
+    var c = window.__cosmetics[uid];
+    if (!c) return null;
+    if (c.profile_frame === 'frame_gold') return 'frame_gold';
+    if (c.profile_frame === 'frame_glow') return 'frame_glow';
+    return null;
+  }
+  function nameColorClass(uid){
+    var c = window.__cosmetics[uid];
+    if (!c || !c.name_color) return '';
+    return {
+      name_color_gold:'nc-gold', name_color_rose:'nc-rose',
+      name_color_teal:'nc-teal', name_color_rainbow:'nc-rainbow'
+    }[c.name_color] || '';
+  }
+
+  // ============================================================
+  // 2. MESSAGE HTML — inject badges, titles, frames
+  // ============================================================
+  var origMessageHTML = window.messageHTML;
+  if (typeof origMessageHTML === 'function'){
+    window.messageHTML = function(m, grouped){
+      var html = origMessageHTML.apply(this, arguments);
+      if (m.deleted) return html;
+
+      var uid = m.sender_id;
+      var frame = frameFor(uid);
+
+      // Wrap avatar with frame
+      if (frame && !grouped){
+        html = html.replace(
+          /(<div style="position:relative">)(.*?)(<\/div>)/,
+          function(all, open, inner, close){
+            if (inner.indexOf('avatar-frame-wrap') >= 0) return all;
+            return open.replace('position:relative',
+              'position:relative;display:inline-flex;padding:3px;border-radius:50%;' +
+              (frame === 'frame_gold'
+                ? 'box-shadow:0 0 0 2px rgba(255,200,87,.85),0 0 14px rgba(255,200,87,.5);'
+                : 'box-shadow:0 0 0 2px rgba(94,231,215,.85),0 0 20px rgba(94,231,215,.6);animation:frameGlow 2.4s ease-in-out infinite;')
+            ) + inner + close;
+          }
+        );
+      }
+
+      // Add badges + title to the author line
+      var badges = badgesFor(uid);
+      var title = titleFor(uid);
+      if (badges.length || title){
+        var injected = '';
+        if (title) injected += '<span class="chat-title">' + esc(title) + '</span>';
+        if (badges.length){
+          injected += '<span class="chat-badges">' +
+            badges.map(function(b){
+              return '<span class="cb ' + b.c + '" title="' + esc(b.name) + '">' + b.e + '</span>';
+            }).join('') +
+          '</span>';
+        }
+        // Insert after </span> closing the author, before the uid span
+        html = html.replace(
+          /(<span class="author[^"]*"[^>]*>.*?<\/span>)(\s*<span class="uid">)/,
+          function(all, authorClose, uidOpen){
+            return authorClose + injected + uidOpen;
+          }
+        );
+      }
+
+      // Apply name color class
+      var nc = nameColorClass(uid);
+      if (nc){
+        html = html.replace('<span class="author"', '<span class="author ' + nc + '"');
+        // remove inline role-color style so name color wins
+        html = html.replace(/(<span class="author[^"]*")\s+style="[^"]*"/, '$1');
+      }
+
+      return html;
+    };
+  }
+
+  // ============================================================
+  // 3. GAME ROOM — move fishing in, distinct visual
+  // ============================================================
+  var ACTIVE_TAB = 'play'; // 'play' | 'shop' | 'fishing'
+
+  function setGameRoomMode(on){
+    document.body.classList.toggle('in-game-room', !!on);
+  }
+
+  // Which "game room" tab is currently rendered
+  function isGameRoom(){ return window.CURRENT && window.CURRENT.type === 'games'; }
+  function isFishing(){ return window.CURRENT && window.CURRENT.type === 'fishing'; }
+
+  // When in games/fishing, replace the panel with the game nav
+  function renderGamePanel(){
+    var body = document.getElementById('panel-body');
+    if (!body) return;
+    var on = isGameRoom() || isFishing();
+    if (!on) return;
+    // Save the DM list DOM so we can restore it later
+    if (!window.__savedPanelHTML && body.innerHTML && !body.querySelector('.game-nav')){
+      window.__savedPanelHTML = body.innerHTML;
+    }
+
+    var head = document.getElementById('panel-head');
+    if (head) head.innerHTML = '<div class="ttl">🎮 Game Room</div>';
+
+    var tabs = [
+      { id:'play',    e:'🎮', l:'Play',    s:'Tic-Tac-Toe matches' },
+      { id:'fishing', e:'🎣', l:'Fishing', s:'Cast & earn coins' },
+      { id:'shop',    e:'🛒', l:'Shop',    s:'Spend your coins' }
+    ];
+    var current = isFishing() ? 'fishing' : ACTIVE_TAB;
+
+    var html = '<div class="game-nav">';
+    html += '<h3>Games</h3>';
+    tabs.forEach(function(t){
+      var active = current === t.id ? ' active' : '';
+      html += '<button class="gbtn' + active + '" data-gtab="' + t.id + '">' +
+        '<span class="emoji">' + t.e + '</span>' +
+        '<span class="lbl">' + t.l + '<span class="sub">' + t.s + '</span></span>' +
+      '</button>';
+    });
+    html += '</div>';
+    body.innerHTML = html;
+
+    body.querySelectorAll('[data-gtab]').forEach(function(b){
+      b.onclick = function(){
+        var t = b.dataset.gtab;
+        if (t === 'fishing'){
+          if (typeof window.openFishing === 'function') window.openFishing();
+        } else {
+          ACTIVE_TAB = t;
+          if (!isGameRoom()){
+            if (typeof window.openGames === 'function') window.openGames();
+          } else {
+            if (typeof window.renderGames === 'function') window.renderGames();
+          }
+        }
+        setTimeout(renderGamePanel, 10);
+      };
+    });
+  }
+
+  // Restore panel when leaving game room
+  function restorePanelIfNeeded(){
+    var on = isGameRoom() || isFishing();
+    if (on){ setGameRoomMode(true); return; }
+    setGameRoomMode(false);
+    var body = document.getElementById('panel-body');
+    if (body && window.__savedPanelHTML){
+      // Only restore if we're showing the game nav
+      if (body.querySelector('.game-nav')){
+        body.innerHTML = window.__savedPanelHTML;
+        window.__savedPanelHTML = null;
+        if (typeof window.renderPanel === 'function') window.renderPanel();
+      }
+    }
+  }
+
+  // Wrap renderPanel to inject the game nav when needed
+  var origRenderPanel = window.renderPanel;
+  if (typeof origRenderPanel === 'function'){
+    window.renderPanel = function(){
+      var r = origRenderPanel.apply(this, arguments);
+      setTimeout(function(){
+        if (isGameRoom() || isFishing()){
+          renderGamePanel();
+          setGameRoomMode(true);
+        } else {
+          restorePanelIfNeeded();
+        }
+      }, 15);
+      return r;
+    };
+  }
+
+  // Also hook renderChatHead for the fishing page header restyle
+  var origRenderChatHead = window.renderChatHead;
+  if (typeof origRenderChatHead === 'function'){
+    window.renderChatHead = function(){
+      var r = origRenderChatHead.apply(this, arguments);
+      if (isFishing()){
+        var el = document.getElementById('chat-head');
+        if (el && !el.querySelector('.title .txt').textContent.match(/Fishing/i)){
+          // Let the fishing patch handle it
+        }
+      }
+      setTimeout(function(){
+        if (isGameRoom() || isFishing()){
+          setGameRoomMode(true);
+          renderGamePanel();
+        } else {
+          setGameRoomMode(false);
+        }
+      }, 10);
+      return r;
+    };
+  }
+
+  // ============================================================
+  // 4. FISHING MINIGAME — timing bar
+  // ============================================================
+  // The fishing patch has its own castLine. We override it here to
+  // add the timing minigame: cast → wait for bite → click to hook →
+  // click in the green zone for the best result.
+
+  var fishingState = {
+    phase: 'idle',  // idle | casting | waiting | bite | timing | result
+    castAt: 0,
+    biteAt: 0,
+    timingStart: 0,
+    timingRAF: null,
+    timingPos: 0,
+    direction: 1,
+    timingWindow: 3000,  // ms for the marker to travel across
+    resultQuality: null, // perfect | great | ok | miss
+    pendingRoll: null
+  };
+
+  function stopTiming(){
+    if (fishingState.timingRAF){
+      cancelAnimationFrame(fishingState.timingRAF);
+      fishingState.timingRAF = null;
+    }
+  }
+
+  async function doFishCast(){
+    if (fishingState.phase !== 'idle') return;
+    if (!window.ME) return;
+    // Need bank account
+    try {
+      var r = await sb.from('bank_accounts').select('*').eq('user_id', window.ME.id).maybeSingle();
+      if (!r.data){
+        await sb.from('bank_accounts').insert({ user_id: window.ME.id, balance: 100 });
+      } else if (r.data.poisoned){
+        window.toast("You're poisoned", "Cure yourself before fishing.", "err");
+        return;
+      }
+    } catch(e){}
+
+    fishingState.phase = 'casting';
+    fishingState.castAt = Date.now();
+    renderFishingScene();
+
+    // Wait, then a bite comes at a random time
+    var wait = 1200 + Math.random() * 2600;
+    setTimeout(function(){
+      if (fishingState.phase !== 'casting') return;
+      fishingState.phase = 'bite';
+      fishingState.biteAt = Date.now();
+      renderFishingScene();
+      if (navigator.vibrate) try { navigator.vibrate(60); } catch(e){}
+
+      // If user doesn't click within 1.5s, miss
+      setTimeout(function(){
+        if (fishingState.phase === 'bite'){
+          finishCast('miss');
+        }
+      }, 1500);
+    }, wait);
+  }
+
+  function startTiming(){
+    fishingState.phase = 'timing';
+    fishingState.timingStart = Date.now();
+    fishingState.timingPos = 0;
+    fishingState.direction = 1;
+    renderFishingScene();
+
+    var update = function(){
+      var elapsed = Date.now() - fishingState.timingStart;
+      // Marker goes 0 -> 100 in `timingWindow` ms, then bounces
+      var t = (elapsed % (fishingState.timingWindow * 2)) / fishingState.timingWindow;
+      fishingState.timingPos = t <= 1 ? t * 100 : (2 - t) * 100;
+      var el = document.getElementById('timing-mark');
+      if (el) el.style.left = 'calc(' + fishingState.timingPos + '% - 2px)';
+      fishingState.timingRAF = requestAnimationFrame(update);
+    };
+    update();
+  }
+
+  function hookTimingClick(){
+    if (fishingState.phase !== 'timing') return;
+    var pos = fishingState.timingPos;
+    stopTiming();
+
+    // Zones:
+    // 0-20 or 80-100: perfect | 20-30 or 70-80: great | 30-45 or 55-70: ok | 45-55: perfect | else: miss
+    // Simplify with distance from center (50)
+    var d = Math.abs(pos - 50);
+    var quality;
+    if (d <= 6) quality = 'perfect';
+    else if (d <= 14) quality = 'great';
+    else if (d <= 28) quality = 'ok';
+    else quality = 'miss';
+
+    finishCast(quality);
+  }
+
+  async function finishCast(quality){
+    fishingState.phase = 'result';
+    fishingState.resultQuality = quality;
+    window.__catchStreak.unshift(quality);
+    window.__catchStreak = window.__catchStreak.slice(0, 10);
+
+    if (quality === 'miss'){
+      setTimeout(function(){
+        fishingState.phase = 'idle';
+        renderFishingScene();
+      }, 1800);
+      window.toast("Missed!", "The fish got away.", "err");
+      renderFishingScene();
+      return;
+    }
+
+    // Roll a fish
+    var FISH = [
+      { name:'Minnow',         emoji:'🐟', tier:'common',    value:10,   weight:25 },
+      { name:'Sardine',        emoji:'🐟', tier:'common',    value:15,   weight:20 },
+      { name:'Bass',           emoji:'🐟', tier:'common',    value:25,   weight:15 },
+      { name:'Trout',          emoji:'🐟', tier:'uncommon',  value:50,   weight:10 },
+      { name:'Salmon',         emoji:'🐠', tier:'uncommon',  value:75,   weight:8 },
+      { name:'Tuna',           emoji:'🐟', tier:'uncommon',  value:100,  weight:7 },
+      { name:'Clownfish',      emoji:'🐠', tier:'rare',      value:150,  weight:4 },
+      { name:'Swordfish',      emoji:'🐟', tier:'rare',      value:250,  weight:3 },
+      { name:'Golden Koi',     emoji:'🐠', tier:'legendary', value:500,  weight:1 },
+      { name:'Mythic Arowana', emoji:'🐉', tier:'legendary', value:1000, weight:0.5 },
+      { name:'Pufferfish',     emoji:'🐡', tier:'puffer',    value:0,    weight:6.5 }
+    ];
+    var total = FISH.reduce(function(s,f){ return s + f.weight; }, 0);
+    var r = Math.random() * total;
+    var acc = 0;
+    var caught = FISH[0];
+    for (var i = 0; i < FISH.length; i++){
+      acc += FISH[i].weight;
+      if (r < acc){ caught = FISH[i]; break; }
+    }
+
+    // Apply quality multiplier (except for puffer, which stays puffer)
+    var mult = quality === 'perfect' ? 2 : quality === 'great' ? 1.5 : 1;
+
+    try {
+      // Check hidden puffer cycle
+      var pr = await sb.from('fishing_catches')
+        .select('fish_tier').eq('user_id', window.ME.id)
+        .order('caught_at', { ascending: false }).limit(20);
+      var rows = pr.data || [];
+      var lastPuffIdx = -1;
+      for (var j = 0; j < rows.length; j++) if (rows[j].fish_tier === 'puffer'){ lastPuffIdx = j; break; }
+      var nonPuff = lastPuffIdx < 0 ? rows.length : lastPuffIdx;
+      if (nonPuff >= 10 && caught.tier !== 'puffer'){
+        caught = { name:'Pufferfish', emoji:'🐡', tier:'puffer', value:0 };
+      }
+
+      var rec = await sb.rpc('record_catch', {
+        fish_name:  caught.name,
+        fish_emoji: caught.emoji,
+        fish_tier:  caught.tier,
+        fish_value: Math.round(caught.value * mult)
+      });
+      if (rec.error) throw rec.error;
+
+      // Reload account
+      var ar = await sb.from('bank_accounts').select('*').eq('user_id', window.ME.id).maybeSingle();
+      window.__myAccount = ar.data;
+
+      renderFishingScene(caught, quality, mult);
+      setTimeout(function(){
+        fishingState.phase = 'idle';
+        renderFishingScene();
+      }, 3000);
+    } catch(e){
+      log("catch save failed:", e.message);
+      window.toast("Error", e.message || String(e), "err");
+      fishingState.phase = 'idle';
+      renderFishingScene();
+    }
+  }
+
+  function renderFishingScene(caught, quality, mult){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+    var phase = fishingState.phase;
+
+    var acc = window.__myAccount || { balance: 0, poisoned: false };
+
+    var stageHTML = '<div class="fish-cast-stage">';
+    // Swimmers always present
+    stageHTML += '<div class="cast-swimmer">🐟</div>' +
+                 '<div class="cast-swimmer">🐠</div>' +
+                 '<div class="cast-swimmer">🐟</div>' +
+                 '<div class="cast-swimmer">🐡</div>';
+    if (phase === 'casting'){
+      stageHTML += '<div class="cast-state-overlay">' +
+        '<div class="msg">Casting...</div>' +
+        '<div class="hint">Wait for a bite...</div>' +
+      '</div>';
+    } else if (phase === 'bite'){
+      stageHTML += '<div class="cast-state-overlay" id="bite-overlay" style="cursor:pointer">' +
+        '<div class="bite">❗</div>' +
+        '<div class="msg">CLICK NOW!</div>' +
+        '<div class="hint">Hook the fish before it escapes</div>' +
+      '</div>';
+    } else if (phase === 'timing'){
+      stageHTML += '<div class="cast-state-overlay">' +
+        '<div class="msg">Reel it in!</div>' +
+        '<div class="hint">Click when the marker is in the center zone</div>' +
+      '</div>';
+    }
+    stageHTML += '</div>';
+
+    var h = '<div class="fish-wrap">';
+
+    h += '<div class="fish-head">' +
+      '<div class="ico">🎣</div>' +
+      '<h2>Fishing</h2>' +
+      '<div class="sub">Cast, hook, and reel — timing matters</div>' +
+    '</div>';
+
+    h += '<div class="bank-balance">' +
+      '<div class="amt"><span class="coin">🪙</span>' + (acc.balance || 0).toLocaleString() + '</div>' +
+      '<div class="lbl">Your Balance</div>' +
+    '</div>';
+
+    if (acc.poisoned){
+      h += '<div class="poison-bar">' +
+        '<div class="icon">🐡</div>' +
+        '<div class="info"><div class="t">POISONED</div>' +
+          '<div class="d">-10 coins/min</div></div>' +
+        '<button id="fish-cure2">Cure -100</button>' +
+      '</div>';
+    }
+
+    h += stageHTML;
+
+    // Timing bar
+    if (phase === 'timing'){
+      h += '<div class="timing-wrap">' +
+        '<div class="timing-bar">' +
+          '<div class="timing-mark" id="timing-mark" style="left:0"></div>' +
+        '</div>' +
+        '<div class="timing-labels">' +
+          '<span>Miss</span><span>OK</span><span><b>PERFECT</b></span><span>OK</span><span>Miss</span>' +
+        '</div>' +
+      '</div>';
+      // Restart animation
+      setTimeout(startTiming, 0);
+    }
+
+    // Result overlay
+    if (phase === 'result' && caught){
+      var q = quality || 'ok';
+      var qLabel = { perfect:'🌟 PERFECT!', great:'✨ Great!', ok:'👍 Nice', miss:'💨 Missed' }[q];
+      var qCls = q;
+      var rarityCls = caught.tier === 'legendary' ? 'rarity-legendary' : caught.tier === 'rare' ? 'rarity-rare' : '';
+      h += '<div class="catch-result">' +
+        '<div class="catch-card ' + rarityCls + '">' +
+          '<div class="emoji">' + caught.emoji + '</div>' +
+          '<div class="name">' + esc(caught.name) + '</div>' +
+          '<div class="tier ' + caught.tier + '">' + esc(caught.tier === 'puffer' ? 'HAZARD' : caught.tier) + '</div>' +
+          (caught.tier !== 'puffer'
+            ? '<div class="value">+' + Math.round(caught.value * (mult || 1)) + ' 🪙' + (mult > 1 ? ' (x' + mult + ')' : '') + '</div>'
+            : '<div class="value bad">+ POISON</div>') +
+          '<div class="timing-hit ' + qCls + '" style="margin-top:14px">' + qLabel + '</div>' +
+        '</div>' +
+      '</div>';
+    }
+
+    // Cast button (only when idle)
+    if (phase === 'idle'){
+      h += '<button class="cast-btn" id="fish-cast2">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 12 12M12 12l8-8M12 12H4M12 12v8"/></svg>' +
+        (acc.poisoned ? 'Cure first' : 'Cast Line') +
+      '</button>';
+    }
+
+    // Streak
+    if (window.__catchStreak.length){
+      h += '<div class="cast-streak">' +
+        window.__catchStreak.map(function(q){
+          return '<span class="dot ' + q + '"></span>';
+        }).join('') +
+      '</div>';
+    }
+
+    h += '<div style="text-align:center;margin-top:20px;font-size:11.5px;color:var(--text3);line-height:1.6">' +
+      'Perfect timing = <b style="color:var(--gold)">2x coins</b> · ' +
+      'Great = <b style="color:var(--green)">1.5x</b> · ' +
+      'Miss = no catch' +
+    '</div>';
+
+    h += '</div>';
+    body.innerHTML = h;
+
+    var castBtn = document.getElementById('fish-cast2');
+    if (castBtn && phase === 'idle') castBtn.onclick = doFishCast;
+
+    var bite = document.getElementById('bite-overlay');
+    if (bite) bite.onclick = function(){
+      if (fishingState.phase === 'bite'){
+        startTiming();
+      }
+    };
+
+    var stage = document.querySelector('.fish-cast-stage');
+    if (stage && (phase === 'timing')){
+      stage.style.cursor = 'pointer';
+      stage.onclick = hookTimingClick;
+    }
+
+    var cure = document.getElementById('fish-cure2');
+    if (cure) cure.onclick = async function(){
+      try {
+        var r = await sb.rpc('cure_poison');
+        if (r.error) throw r.error;
+        var ar = await sb.from('bank_accounts').select('*').eq('user_id', window.ME.id).maybeSingle();
+        window.__myAccount = ar.data;
+        renderFishingScene();
+        window.toast("Cured", "You're healthy again.", "ok");
+      } catch(e){ window.toast("Error", e.message || String(e), "err"); }
+    };
+  }
+
+  // Override the fishing open
+  var origOpenFishing = window.openFishing;
+  if (typeof origOpenFishing === 'function'){
+    window.openFishing = async function(){
+      window.CURRENT = { type: 'fishing', server: null, channel: null, conv: null, ticket: null };
+      // Load account
+      try {
+        var r = await sb.from('bank_accounts').select('*').eq('user_id', window.ME.id).maybeSingle();
+        if (!r.data){
+          var ins = await sb.from('bank_accounts').insert({ user_id: window.ME.id, balance: 100 }).select().single();
+          window.__myAccount = ins.data;
+        } else {
+          window.__myAccount = r.data;
+        }
+      } catch(e){}
+      fishingState.phase = 'idle';
+      setGameRoomMode(true);
+      window.renderChatHead();
+      renderFishingScene();
+      setTimeout(renderGamePanel, 30);
+    };
+  }
+
+  // ============================================================
+  // 5. HOOK GAME ROOM OPEN to close overrides from the game room patch
+  // ============================================================
+  var origOpenGames = window.openGames;
+  if (typeof origOpenGames === 'function'){
+    window.openGames = async function(){
+      setGameRoomMode(true);
+      var r = await origOpenGames.apply(this, arguments);
+      setTimeout(renderGamePanel, 20);
+      return r;
+    };
+  }
+
+  // ============================================================
+  // 6. BOOT
+  // ============================================================
+  setTimeout(async function(){
+    if (!window.ME) return;
+    await loadCosmetics();
+    // Reload periodically
+    setInterval(loadCosmetics, 30000);
+    log("game room v2 online");
+  }, 5000);
+
+  // ============================================================
+  // 7. More shop items (added via existing shop system)
+  // ============================================================
+  // We can't add new shop item types easily without an SQL change.
+  // But we CAN add new affordable items using the existing
+  // name_color/title/frame categories. The patch author for the
+  // shop patch is SQL-based; we suggest them via toast on first
+  // open, but adding new item types requires an SQL update which
+  // the user runs separately (documented in the message).
+
+  log("game room v2 ready");
+})();
+</script>
+
 </body>
 </html>
