@@ -15128,5 +15128,449 @@ body.in-game-room .panel-head{
 })();
 </script>
 
+<!-- SLEEPY_FIX_JOIN_GAME_V1 -->
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyFixJoinGame) return;
+  window.__sleepyFixJoinGame = true;
+  function log(){ try{console.log.apply(console,["[JoinFix]"].concat([].slice.call(arguments)));}catch(e){} }
+  function esc(s){ return window.esc(s); }
+
+  var FOCUS_GAME_ID = null;
+  var FOCUS_GAME = null;
+  var MY_GAMES_CACHE = [];
+  var LOBBY_CACHE = [];
+  var LAST_ACCOUNT = null;
+
+  // ------------------------------------------------------------
+  // Replace the rail button's handler with our own
+  // ------------------------------------------------------------
+  function wireRailButton(){
+    var btn = document.querySelector('.rail-btn.games-btn');
+    if (!btn) return;
+    if (btn.__sleepyWired) return;
+    btn.__sleepyWired = true;
+    btn.onclick = openGameRoomFixed;
+    log("rail button rewired");
+  }
+
+  async function openGameRoomFixed(){
+    window.CURRENT = { type: 'games', server: null, channel: null, conv: null, ticket: null };
+    FOCUS_GAME_ID = null;
+    FOCUS_GAME = null;
+    await refreshAll();
+    window.renderChatHead && window.renderChatHead();
+    renderFixed();
+  }
+  window.openGameRoomFixed = openGameRoomFixed;
+
+  // ------------------------------------------------------------
+  // Data
+  // ------------------------------------------------------------
+  async function refreshAll(){
+    await refreshAccount();
+    await Promise.all([refreshLobby(), refreshMyGames()]);
+  }
+  async function refreshAccount(){
+    if (!window.ME) return;
+    var r = await sb.from('bank_accounts').select('*').eq('user_id', window.ME.id).maybeSingle();
+    if (!r.data){
+      var ins = await sb.from('bank_accounts').insert({ user_id: window.ME.id, balance: 100 }).select().single();
+      LAST_ACCOUNT = ins.data;
+    } else {
+      LAST_ACCOUNT = r.data;
+    }
+  }
+  async function refreshLobby(){
+    var r = await sb.from('game_challenges').select('*').eq('status', 'open')
+      .order('created_at', { ascending: false }).limit(30);
+    LOBBY_CACHE = r.data || [];
+    var ids = LOBBY_CACHE.map(function(x){ return x.creator_id; });
+    if (ids.length) await window.fetchProfiles(ids);
+  }
+  async function refreshMyGames(){
+    var r = await sb.from('game_challenges').select('*')
+      .or('creator_id.eq.' + window.ME.id + ',opponent_id.eq.' + window.ME.id)
+      .order('created_at', { ascending: false }).limit(30);
+    MY_GAMES_CACHE = r.data || [];
+    var ids = [];
+    MY_GAMES_CACHE.forEach(function(g){
+      ids.push(g.creator_id);
+      if (g.opponent_id) ids.push(g.opponent_id);
+    });
+    if (ids.length) await window.fetchProfiles(ids);
+  }
+  async function fetchOneGame(id){
+    var r = await sb.from('game_challenges').select('*').eq('id', id).maybeSingle();
+    return r.data;
+  }
+
+  // ------------------------------------------------------------
+  // Render
+  // ------------------------------------------------------------
+  function renderFixed(){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+    if (FOCUS_GAME) {
+      renderBoard(FOCUS_GAME);
+      return;
+    }
+    var bal = LAST_ACCOUNT ? LAST_ACCOUNT.balance : 0;
+
+    var html = '<div class="games-wrap">';
+    html += '<div class="games-head">' +
+      '<div class="ico">🎮</div>' +
+      '<h2>Game Room</h2>' +
+      '<div class="sub">Play against other Sleepers. Winner takes the pot.</div>' +
+      '<div class="bal">🪙 ' + bal.toLocaleString() + '</div>' +
+    '</div>';
+
+    // ACTIVE GAMES — most important section
+    var inProgress = MY_GAMES_CACHE.filter(function(g){ return g.status === 'in_progress'; });
+    if (inProgress.length){
+      html += '<h3 style="font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--gold);margin:20px 0 10px">' +
+        '⚡ Your active games — ' + inProgress.length + '</h3>';
+      html += '<div class="challenge-list">';
+      inProgress.forEach(function(g){
+        var iAmCreator = g.creator_id === window.ME.id;
+        var other = iAmCreator ? g.opponent_id : g.creator_id;
+        var op = other ? window.PROFILES[other] : null;
+        var myMark = iAmCreator ? 'X' : 'O';
+        var turn = g.state && g.state.turn;
+        var itsMyTurn = turn === myMark;
+        html += '<div class="challenge-row" style="border-color:rgba(255,200,87,.55);background:rgba(255,200,87,.06)">' +
+          '<div style="position:relative">' + (other ? window.avatarHTML(other, 38) : '<div class="avatar" style="width:38px;height:38px;background:var(--surface2)"></div>') + '</div>' +
+          '<div class="info">' +
+            '<div class="nm">' + (op ? esc(op.display_name || op.username) : 'Waiting...') + '</div>' +
+            '<div class="meta">' +
+              (itsMyTurn ? '<span style="color:var(--green);font-weight:700">● Your turn (' + myMark + ')</span>' : '<span style="color:var(--text3)">⏳ Their turn — you are ' + myMark + '</span>') +
+            '</div>' +
+          '</div>' +
+          '<div class="bet">' + (g.bet_amount > 0 ? '🪙 ' + g.bet_amount : 'Free') + '</div>' +
+          '<button class="accept" data-enter="' + g.id + '">Play</button>' +
+        '</div>';
+      });
+      html += '</div>';
+    }
+
+    // Open challenges — mine first, then others
+    var myOpen = LOBBY_CACHE.filter(function(c){ return c.creator_id === window.ME.id; });
+    var othersOpen = LOBBY_CACHE.filter(function(c){ return c.creator_id !== window.ME.id; });
+
+    html += '<h3 style="font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--text3);margin:20px 0 10px">Open challenges</h3>';
+    if (!myOpen.length && !othersOpen.length){
+      html += '<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px;border:1px dashed var(--border);border-radius:10px">No open challenges. Create one below!</div>';
+    } else {
+      html += '<div class="challenge-list">';
+      myOpen.forEach(function(c){
+        html += '<div class="challenge-row mine">' +
+          '<div style="position:relative">' + window.avatarHTML(c.creator_id, 38) + '</div>' +
+          '<div class="info"><div class="nm">You (waiting)</div>' +
+            '<div class="meta">Waiting for an opponent...</div></div>' +
+          '<div class="bet">' + (c.bet_amount > 0 ? '🪙 ' + c.bet_amount : 'Free') + '</div>' +
+          '<button class="cancel" data-cancel="' + c.id + '">Cancel</button>' +
+        '</div>';
+      });
+      othersOpen.forEach(function(c){
+        var p = window.PROFILES[c.creator_id] || { username: 'user', display_name: 'User' };
+        html += '<div class="challenge-row">' +
+          '<div style="position:relative">' + window.avatarHTML(c.creator_id, 38) + '</div>' +
+          '<div class="info"><div class="nm">' + esc(p.display_name || p.username) + '</div>' +
+            '<div class="meta">Tic-Tac-Toe · ' + Math.floor((Date.now() - new Date(c.created_at).getTime()) / 60000) + 'm ago</div></div>' +
+          '<div class="bet">' + (c.bet_amount > 0 ? '🪙 ' + c.bet_amount : 'Free') + '</div>' +
+          '<button class="accept" data-accept="' + c.id + '">Accept</button>' +
+        '</div>';
+      });
+      html += '</div>';
+    }
+
+    // Create challenge
+    html += '<div class="new-challenge" style="margin-top:24px">' +
+      '<h3>Create a Challenge · Tic-Tac-Toe</h3>' +
+      '<div class="bet-picks" id="bet-picks">' +
+        [0, 50, 100, 250, 500, 1000].map(function(v){
+          return '<button data-bet="' + v + '"' + (v === 100 ? ' class="sel"' : '') + '>' + (v === 0 ? 'Free' : '🪙 ' + v) + '</button>';
+        }).join('') +
+      '</div>' +
+      '<div class="custom-bet"><input id="custom-bet" type="number" min="0" max="100000" placeholder="Custom bet"></div>' +
+      '<button class="go" id="create-challenge">Create Challenge</button>' +
+    '</div>';
+
+    // Recent
+    var finished = MY_GAMES_CACHE.filter(function(g){ return g.status === 'finished'; }).slice(0, 8);
+    if (finished.length){
+      html += '<h3 style="font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--text3);margin:24px 0 10px">Recent</h3>';
+      html += '<div class="challenge-list">';
+      finished.forEach(function(g){
+        var iAmCreator = g.creator_id === window.ME.id;
+        var other = iAmCreator ? g.opponent_id : g.creator_id;
+        var op = other ? window.PROFILES[other] : null;
+        var result, cls;
+        if (!g.winner_id){ result = 'Draw'; cls = 'watch'; }
+        else if (g.winner_id === window.ME.id){ result = 'Won'; cls = 'accept'; }
+        else { result = 'Lost'; cls = 'cancel'; }
+        html += '<div class="challenge-row">' +
+          '<div style="position:relative">' + (other ? window.avatarHTML(other, 38) : '<div class="avatar" style="width:38px;height:38px;background:var(--surface2)"></div>') + '</div>' +
+          '<div class="info"><div class="nm">' + (op ? esc(op.display_name || op.username) : 'Unknown') + '</div>' +
+            '<div class="meta">' + new Date(g.finished_at || g.created_at).toLocaleString() + '</div></div>' +
+          '<div class="bet">' + (g.bet_amount > 0 ? '🪙 ' + g.bet_amount : 'Free') + '</div>' +
+          '<button class="' + cls + '" style="cursor:default">' + result + '</button>' +
+        '</div>';
+      });
+      html += '</div>';
+    }
+
+    html += '</div>';
+    body.innerHTML = html;
+    wireLobby();
+  }
+
+  function renderBoard(g){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+    var isCreator = g.creator_id === window.ME.id;
+    var myMark = isCreator ? 'X' : 'O';
+    var opId = isCreator ? g.opponent_id : g.creator_id;
+    var op = opId ? (window.PROFILES[opId] || { username: 'user', display_name: 'User' }) : null;
+    var me = window.PROFILES[window.ME.id];
+
+    var board = (g.state && g.state.board) || ['','','','','','','','',''];
+    var turn = g.state ? g.state.turn : 'X';
+    var winning = (g.state && g.state.winning_line) || null;
+    var isOver = g.status === 'finished';
+    var myTurn = !isOver && turn === myMark;
+    var iWon = g.winner_id === window.ME.id;
+    var isDraw = isOver && !g.winner_id;
+
+    var html = '<div class="board-wrap">';
+    html += '<div class="board-players">' +
+      '<div class="p"><span class="mark X">X</span> ' + esc(me.display_name || me.username) + (isCreator ? ' <span style="font-size:10px;color:var(--gold);margin-left:4px">(host)</span>' : '') + '</div>' +
+      '<div class="p"><span class="mark O">O</span> ' + (op ? esc(op.display_name || op.username) : 'Waiting...') + (!isCreator ? ' <span style="font-size:10px;color:var(--gold);margin-left:4px">(host)</span>' : '') + '</div>' +
+    '</div>';
+
+    if (g.bet_amount > 0){
+      html += '<div style="text-align:center;font-size:12px;color:var(--text3);margin-bottom:12px">Pot: <b style="color:var(--gold);font-family:monospace">🪙 ' + (g.bet_amount * 2) + '</b></div>';
+    }
+
+    if (isOver){
+      if (isDraw) html += '<div class="board-result draw">🤝 Draw — bets refunded</div>';
+      else if (iWon) html += '<div class="board-result win">🏆 You won!' + (g.bet_amount > 0 ? ' +' + (g.bet_amount * 2) + ' 🪙' : '') + '</div>';
+      else html += '<div class="board-result lose">😔 You lost' + (g.bet_amount > 0 ? ' -' + g.bet_amount + ' 🪙' : '') + '</div>';
+    } else {
+      html += '<div class="board-turn ' + (myTurn ? 'mine' : 'theirs') + '">' +
+        (myTurn ? '🎯 Your turn — you are ' + myMark : '⏳ Waiting for ' + (op ? esc(op.display_name || op.username) : 'opponent')) +
+      '</div>';
+    }
+
+    html += '<div class="ttt">';
+    for (var i = 0; i < 9; i++){
+      var v = board[i] || '';
+      var cls = 'ttt-cell';
+      if (v) cls += ' taken ' + v;
+      if (winning && winning.indexOf(i) >= 0) cls += ' win';
+      html += '<div class="' + cls + '" data-cell="' + i + '">' + esc(v) + '</div>';
+    }
+    html += '</div>';
+
+    html += '<div style="margin-top:16px;text-align:center">' +
+      '<button class="btn" id="board-back">← Back to lobby</button>' +
+    '</div>';
+    html += '</div>';
+    body.innerHTML = html;
+
+    body.querySelectorAll('[data-cell]').forEach(function(c){
+      c.onclick = async function(){
+        if (isOver) return;
+        if (c.classList.contains('taken')) return;
+        if (!myTurn){ window.toast("Not your turn", "", "err"); return; }
+        try {
+          var r = await sb.rpc('make_game_move', { cid: g.id, p_cell: parseInt(c.dataset.cell, 10) });
+          if (r.error) throw r.error;
+        } catch(e){ window.toast("Move rejected", e.message || String(e), "err"); }
+      };
+    });
+
+    var back = document.getElementById('board-back');
+    if (back) back.onclick = async function(){
+      FOCUS_GAME = null;
+      FOCUS_GAME_ID = null;
+      await refreshAll();
+      renderFixed();
+    };
+  }
+
+  function wireLobby(){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+
+    body.querySelectorAll('[data-bet]').forEach(function(b){
+      b.onclick = function(){
+        body.querySelectorAll('[data-bet]').forEach(function(x){ x.classList.remove('sel'); });
+        b.classList.add('sel');
+        var inp = document.getElementById('custom-bet');
+        if (inp) inp.value = '';
+      };
+    });
+
+    var cc = document.getElementById('create-challenge');
+    if (cc) cc.onclick = async function(){
+      var sel = body.querySelector('[data-bet].sel');
+      var custom = document.getElementById('custom-bet');
+      var bet = 100;
+      if (custom && custom.value !== '') bet = parseInt(custom.value, 10);
+      else if (sel) bet = parseInt(sel.dataset.bet, 10);
+      if (isNaN(bet) || bet < 0 || bet > 100000) return window.toast("Invalid bet", "0-100000", "err");
+      try {
+        var r = await sb.rpc('create_game_challenge', { p_bet: bet });
+        if (r.error) throw r.error;
+        window.toast("Challenge created", "Waiting for an opponent.", "ok");
+        await refreshAll();
+        renderFixed();
+      } catch(e){ window.toast("Failed", e.message || String(e), "err"); }
+    };
+
+    body.querySelectorAll('[data-accept]').forEach(function(b){
+      b.onclick = async function(){
+        b.disabled = true; b.textContent = "...";
+        try {
+          var r = await sb.rpc('accept_game_challenge', { cid: b.dataset.accept });
+          if (r.error) throw r.error;
+          await refreshAccount();
+          await refreshMyGames();
+          var fresh = MY_GAMES_CACHE.find(function(g){ return g.id === b.dataset.accept; });
+          if (fresh){
+            FOCUS_GAME = fresh;
+            FOCUS_GAME_ID = fresh.id;
+            renderFixed();
+          }
+        } catch(e){
+          window.toast("Failed", e.message || String(e), "err");
+          b.disabled = false; b.textContent = "Accept";
+        }
+      };
+    });
+
+    body.querySelectorAll('[data-cancel]').forEach(function(b){
+      b.onclick = async function(){
+        try {
+          var r = await sb.rpc('cancel_game_challenge', { cid: b.dataset.cancel });
+          if (r.error) throw r.error;
+          await refreshAccount();
+          await refreshAll();
+          renderFixed();
+        } catch(e){ window.toast("Failed", e.message || String(e), "err"); }
+      };
+    });
+
+    body.querySelectorAll('[data-enter]').forEach(function(b){
+      b.onclick = function(){
+        var g = MY_GAMES_CACHE.find(function(x){ return x.id === b.dataset.enter; });
+        if (g){ FOCUS_GAME = g; FOCUS_GAME_ID = g.id; renderFixed(); }
+      };
+    });
+  }
+
+  // ------------------------------------------------------------
+  // Realtime — refresh and auto-enter
+  // ------------------------------------------------------------
+  function subscribeFixed(){
+    sb.channel('game-room-fix-' + window.ME.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'game_challenges' }, async function(p){
+        var row = p.new;
+        if (!row) return;
+        var isMine = row.creator_id === window.ME.id || row.opponent_id === window.ME.id;
+        if (!isMine) return;
+
+        // Refresh caches
+        await refreshAccount();
+        await Promise.all([refreshLobby(), refreshMyGames()]);
+
+        // Are we on the games page?
+        var onGames = window.CURRENT && window.CURRENT.type === 'games';
+
+        if (onGames){
+          // If we're viewing a specific game, refresh its data
+          if (FOCUS_GAME_ID){
+            var fresh = MY_GAMES_CACHE.find(function(g){ return g.id === FOCUS_GAME_ID; });
+            if (fresh){ FOCUS_GAME = fresh; }
+            else {
+              // Game disappeared
+              FOCUS_GAME = null;
+              FOCUS_GAME_ID = null;
+            }
+          }
+
+          // Auto-enter if we have exactly one in-progress game and we're in the lobby
+          if (!FOCUS_GAME){
+            var inProgress = MY_GAMES_CACHE.filter(function(g){ return g.status === 'in_progress'; });
+            if (inProgress.length === 1){
+              FOCUS_GAME = inProgress[0];
+              FOCUS_GAME_ID = inProgress[0].id;
+            }
+          }
+
+          renderFixed();
+        } else {
+          // Not on games page — notifications
+          if (p.eventType === 'UPDATE' && row.status === 'in_progress' && p.old && p.old.status === 'open'){
+            if (row.creator_id === window.ME.id){
+              window.toast("Challenge accepted!", "Open Game Room to play.", "ok");
+            } else if (row.opponent_id === window.ME.id){
+              window.toast("You're in a game!", "Open Game Room to play.", "ok");
+            }
+          }
+          if (p.eventType === 'UPDATE' && row.status === 'finished'){
+            if (row.winner_id === window.ME.id){
+              window.toast("You won a game!", "+" + ((row.bet_amount || 0) * 2) + " 🪙", "ok");
+            } else if (row.winner_id && row.winner_id !== window.ME.id && (row.creator_id === window.ME.id || row.opponent_id === window.ME.id)){
+              window.toast("You lost a game", "-" + (row.bet_amount || 0) + " 🪙", "err");
+            }
+          }
+        }
+      })
+      .subscribe();
+  }
+
+  // ------------------------------------------------------------
+  // Render overrides
+  // ------------------------------------------------------------
+  var origRC = window.renderChat;
+  window.renderChat = function(){
+    if (window.CURRENT && window.CURRENT.type === 'games'){
+      renderFixed();
+      return;
+    }
+    return origRC.apply(this, arguments);
+  };
+
+  // ------------------------------------------------------------
+  // Boot
+  // ------------------------------------------------------------
+  setTimeout(async function(){
+    if (!window.ME) return;
+    wireRailButton();
+    await refreshAll();
+    subscribeFixed();
+    log("joined-game fix online");
+  }, 7000);
+
+  setInterval(wireRailButton, 2000);
+
+  // Also expose for testing
+  window.__forceEnterGame = async function(gameId){
+    var g = await fetchOneGame(gameId);
+    if (!g) return window.toast("Not found", "", "err");
+    window.CURRENT = { type: 'games', server: null, channel: null, conv: null, ticket: null };
+    await refreshAll();
+    FOCUS_GAME = g;
+    FOCUS_GAME_ID = g.id;
+    renderFixed();
+  };
+
+  log("join fix ready");
+})();
+</script>
+
 </body>
 </html>
