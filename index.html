@@ -11316,5 +11316,192 @@ html, body { overscroll-behavior: none; }
 })();
 </script>
 
+<!-- SLEEPY_SWAP_POSITIONS_V1 -->
+<style>
+/* ---- Install button: back to floating bottom-right ---- */
+#oc-install-btn{
+  display:flex !important;
+  position:fixed !important;
+  bottom:80px !important;
+  right:20px !important;
+  z-index:800 !important;
+  background:linear-gradient(135deg,#00ffe0,#00c9b4) !important;
+  color:#04120f !important;
+  font-weight:700 !important;
+  font-size:13px !important;
+  padding:12px 20px !important;
+  border-radius:12px !important;
+  border:none !important;
+  cursor:pointer !important;
+  box-shadow:0 8px 32px rgba(0,255,224,.45) !important;
+  align-items:center !important;
+  gap:10px !important;
+  font-family:'Inter',sans-serif !important;
+  letter-spacing:.02em !important;
+  animation:ocPulseSwap 2.5s ease-in-out infinite !important;
+  transition:transform .15s !important;
+}
+#oc-install-btn:hover{transform:translateY(-2px) scale(1.03) !important}
+#oc-install-btn svg{width:18px;height:18px !important}
+@keyframes ocPulseSwap{
+  0%,100%{box-shadow:0 8px 32px rgba(0,255,224,.45)}
+  50%{box-shadow:0 8px 42px rgba(0,255,224,.75)}
+}
+
+/* Hide the inline install bar (from the previous patch) */
+#install-inline-bar{display:none!important}
+
+/* ---- Voice dock: relocate from floating to composer slot ---- */
+#voice-dock{
+  position:static !important;
+  bottom:auto !important;
+  right:auto !important;
+  width:100% !important;
+  max-width:none !important;
+  margin:0 !important;
+  padding:10px 14px !important;
+  background:linear-gradient(135deg,rgba(0,255,224,.08),rgba(180,74,255,.08)),var(--surface2) !important;
+  border:1px solid rgba(0,255,224,.4) !important;
+  border-radius:12px !important;
+  box-shadow:0 4px 20px rgba(0,255,224,.15) !important;
+  display:flex !important;
+  align-items:center !important;
+  gap:10px !important;
+  font-size:13px !important;
+  flex-wrap:wrap !important;
+  animation:fadeUp .25s ease !important;
+}
+#voice-dock .status{font-size:12.5px !important;font-weight:600 !important}
+#voice-dock .count{font-size:12px !important;color:var(--text3) !important;font-family:monospace !important}
+#voice-dock .divider{background:var(--border) !important;margin:0 4px !important}
+#voice-dock button{
+  width:38px !important;height:38px !important;border-radius:10px !important;
+  background:var(--surface) !important;border:1px solid var(--border) !important;
+  color:var(--text2) !important;transition:all .15s !important;
+  display:flex !important;align-items:center !important;justify-content:center !important;
+}
+#voice-dock button:hover{border-color:var(--border2) !important;color:var(--text) !important;transform:translateY(-1px) !important}
+#voice-dock button.on{background:rgba(0,255,224,.15) !important;border-color:rgba(0,255,224,.4) !important;color:var(--cyan) !important}
+#voice-dock button.danger{background:rgba(255,45,111,.15) !important;border-color:rgba(255,45,111,.35) !important;color:#ff7aa2 !important}
+#voice-dock button.danger:hover{background:rgba(255,45,111,.25) !important}
+#voice-dock button svg{width:17px !important;height:17px !important}
+
+/* Slot container that replaces the composer while in voice */
+.voice-composer-slot{
+  flex:none;
+  padding:0 20px 18px;
+}
+@media (max-width:760px){
+  .voice-composer-slot{padding:0 10px 10px}
+  #voice-dock button{width:42px !important;height:42px !important}
+}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepySwapPositions) return;
+  window.__sleepySwapPositions = true;
+  function log(){ try{console.log.apply(console,["[Swap]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  // ============================================================
+  // 1. Move the voice dock into the composer slot
+  // ============================================================
+  // The voice dock is created and appended to body by the voice
+  // patch. Every time it appears, we relocate it into the composer
+  // area (above/instead of the message input). And when the call
+  // ends, we put things back.
+
+  function relocateVoiceDock(){
+    var dock = document.getElementById('voice-dock');
+    if (!dock) return;
+
+    var wrap = document.getElementById('composer-wrap');
+    if (!wrap) return;
+
+    // Already in the wrap?
+    if (dock.parentElement === wrap) return;
+
+    // Ensure a slot exists
+    var slot = document.getElementById('voice-composer-slot');
+    if (!slot){
+      slot = document.createElement('div');
+      slot.id = 'voice-composer-slot';
+      slot.className = 'voice-composer-slot';
+      // Insert it as the last child of .chat, right after composer-wrap
+      wrap.parentElement.insertBefore(slot, wrap.nextSibling);
+    }
+
+    slot.appendChild(dock);
+    log("voice dock moved to composer slot");
+  }
+
+  // Poll every 500ms — cheap and reliable
+  setInterval(relocateVoiceDock, 500);
+
+  // Also run right after joinVoice completes
+  var origJoin = window.joinVoice;
+  if (typeof origJoin === 'function'){
+    window.joinVoice = async function(){
+      var r = await origJoin.apply(this, arguments);
+      setTimeout(relocateVoiceDock, 100);
+      setTimeout(relocateVoiceDock, 500);
+      return r;
+    };
+  }
+  var origLeave = window.leaveVoice;
+  if (typeof origLeave === 'function'){
+    window.leaveVoice = async function(){
+      var r = await origLeave.apply(this, arguments);
+      // Remove the empty slot
+      var slot = document.getElementById('voice-composer-slot');
+      if (slot) slot.remove();
+      return r;
+    };
+  }
+
+  // ============================================================
+  // 2. While in a voice channel, hide the message composer and
+  //    show the voice dock in its place. When the call ends, the
+  //    composer comes back automatically.
+  // ============================================================
+  function updateComposerVisibility(){
+    var inCall = window.vs && window.vs.channelId;
+    var wrap = document.getElementById('composer-wrap');
+    var slot = document.getElementById('voice-composer-slot');
+    if (!wrap) return;
+
+    if (inCall){
+      // Hide the actual composer (textarea), keep the space for the dock
+      wrap.style.display = 'none';
+      if (slot) slot.style.display = '';
+    } else {
+      // Show the composer
+      wrap.style.display = '';
+      if (slot) slot.style.display = 'none';
+    }
+  }
+  setInterval(updateComposerVisibility, 400);
+
+  // ============================================================
+  // 3. Restore the floating install button (was hidden by the
+  //    previous patch)
+  // ============================================================
+  function restoreInstallButton(){
+    var b = document.getElementById('oc-install-btn');
+    if (b){ b.style.display = 'flex'; }
+  }
+  setInterval(restoreInstallButton, 1000);
+
+  // Also hide the inline install bar if it exists
+  function killInlineBar(){
+    var bar = document.getElementById('install-inline-bar');
+    if (bar) bar.remove();
+  }
+  setInterval(killInlineBar, 1000);
+
+  log("swap positions ready");
+})();
+</script>
+
 </body>
 </html>
