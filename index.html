@@ -14132,5 +14132,183 @@ body{
 })();
 </script>
 
+<!-- SLEEPY_CLEAR_BANK_DM_V1 -->
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyClearBankDM) return;
+  window.__sleepyClearBankDM = true;
+  function log(){ try{console.log.apply(console,["[BankClr]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  var BANK_ID = '00000000-0000-0000-0000-0000000000ba';
+  var WELCOME_MSG =
+    "Welcome to the Bank 💰\n" +
+    "You start with 100 coins. Cast your line in the Fishing game to earn more.\n\n" +
+    "Watch out for 🐡 Pufferfish — catching one poisons you and drains 10 coins per minute " +
+    "until you pay 100 to cure.\n\n" +
+    "**Commands:** `balance` `fish` `cure` `badges` `leaderboard` `stats` `help`";
+
+  // ------------------------------------------------------------
+  // Helpers
+  // ------------------------------------------------------------
+  function isBankConv(conv){
+    if (!conv) return false;
+    if (conv.is_group) return false;
+    if (!conv.memberIds) return false;
+    return conv.memberIds.indexOf(BANK_ID) >= 0;
+  }
+  function isViewingBankDM(){
+    return window.CURRENT && window.CURRENT.type === 'dm' && isBankConv(window.CURRENT.conv);
+  }
+
+  // ------------------------------------------------------------
+  // 1. Clear Bank DM when leaving
+  // ------------------------------------------------------------
+  var clearing = false;
+  async function clearBankDM(){
+    if (clearing) return;
+    if (!window.ME) return;
+    clearing = true;
+    try {
+      var r = await sb.rpc('clear_bank_dm');
+      if (r.error) log("clear rpc error:", r.error.message);
+      else log("cleared bank dm");
+      // Clear local message cache so we don't render stale entries
+      if (window.CURRENT && window.CURRENT.type === 'dm' && isBankConv(window.CURRENT.conv)){
+        window.MESSAGES = [];
+      }
+    } catch(e){ log("clear failed:", e.message); }
+    finally {
+      setTimeout(function(){ clearing = false; }, 1500);
+    }
+  }
+
+  // Wrap navigation functions to clear BEFORE switching
+  var NAVS = ['goHome','goServer','goChannel','goConversation'];
+  NAVS.forEach(function(name){
+    var orig = window[name];
+    if (typeof orig !== 'function') return;
+    window[name] = async function(){
+      var args = arguments;
+      if (isViewingBankDM()){
+        await clearBankDM();
+      }
+      return orig.apply(this, args);
+    };
+  });
+
+  // Also clear when opening tickets / games / fishing
+  ['openTicket','openGames','openFishing'].forEach(function(name){
+    var orig = window[name];
+    if (typeof orig !== 'function') return;
+    window[name] = async function(){
+      var args = arguments;
+      if (isViewingBankDM()) await clearBankDM();
+      return orig.apply(this, args);
+    };
+  });
+
+  // ------------------------------------------------------------
+  // 2. Clear on tab close (best-effort)
+  // ------------------------------------------------------------
+  window.addEventListener('beforeunload', function(){
+    if (!isViewingBankDM()) return;
+    if (!window.ME) return;
+    try {
+      // Synchronous XHR as last resort during unload
+      var url = SUPABASE_URL + '/rest/v1/rpc/clear_bank_dm';
+      var xhr = new XMLHttpRequest();
+      xhr.open('POST', url, false);
+      xhr.setRequestHeader('apikey', SUPABASE_ANON_KEY);
+      xhr.setRequestHeader('Authorization', 'Bearer ' + (sb.auth && sb.auth.session ? sb.auth.session.access_token : SUPABASE_ANON_KEY));
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.send('{}');
+    } catch(e){}
+  });
+
+  // ------------------------------------------------------------
+  // 3. Re-send welcome when opening an empty Bank DM
+  // ------------------------------------------------------------
+  var welcomeLock = false;
+  async function ensureBankWelcome(){
+    if (welcomeLock) return;
+    welcomeLock = true;
+    try {
+      if (!isViewingBankDM()) return;
+      var convId = window.CURRENT.conv.id;
+
+      // Small delay so the message load has time to finish
+      await new Promise(function(r){ setTimeout(r, 400); });
+      if (!isViewingBankDM()) return;
+
+      var r = await sb.from('messages').select('id').eq('conversation_id', convId).limit(1);
+      if (r.data && r.data.length === 0){
+        log("empty bank DM — sending welcome");
+        try {
+          await sb.rpc('bank_say', { conv: convId, msg: WELCOME_MSG });
+        } catch(e){
+          // Fallback: direct insert (RLS might block since sender != me)
+          log("bank_say failed:", e.message);
+        }
+      }
+    } catch(e){ log("welcome check failed:", e.message); }
+    finally {
+      setTimeout(function(){ welcomeLock = false; }, 1000);
+    }
+  }
+
+  // Wrap goConversation to trigger the welcome after opening
+  var origGoConv = window.goConversation;
+  if (typeof origGoConv === 'function'){
+    window.goConversation = async function(cid){
+      var r = await origGoConv.apply(this, arguments);
+      if (isViewingBankDM()) ensureBankWelcome();
+      return r;
+    };
+  }
+  // Also hook openDMWith (used from friends list)
+  var origOpenDM = window.openDMWith;
+  if (typeof origOpenDM === 'function'){
+    window.openDMWith = async function(uid){
+      var r = await origOpenDM.apply(this, arguments);
+      if (uid === BANK_ID || isViewingBankDM()) ensureBankWelcome();
+      return r;
+    };
+  }
+
+  // ------------------------------------------------------------
+  // 4. Add a "Open Bank" shortcut in the Fishing page
+  // ------------------------------------------------------------
+  var origRenderFishing = null;
+  // The fishing patch uses a local renderFishing; we hook via the composer
+  // Add a small floating "Bank" button when on the fishing page
+  function ensureBankShortcut(){
+    var existing = document.getElementById('bank-shortcut');
+    if (window.CURRENT && window.CURRENT.type === 'fishing'){
+      if (existing) return;
+      var btn = document.createElement('button');
+      btn.id = 'bank-shortcut';
+      btn.style.cssText = 'position:fixed;bottom:24px;right:24px;z-index:400;padding:10px 16px;border-radius:12px;background:linear-gradient(135deg,#ffc857,#ff9f1c);color:#1a0f00;font-weight:700;font-size:13px;border:none;cursor:pointer;box-shadow:0 8px 24px rgba(255,200,87,.4);display:flex;align-items:center;gap:8px;font-family:Inter,sans-serif';
+      btn.innerHTML = '🏦 Open Bank';
+      btn.onclick = async function(){
+        try {
+          var r = await sb.rpc('ensure_bank_dm');
+          if (r.error) throw r.error;
+          // Refresh conversations so the DM shows up
+          if (window.loadConversations) await window.loadConversations();
+          if (window.goConversation && r.data) await window.goConversation(r.data);
+        } catch(e){ window.toast("Could not open Bank", e.message || String(e), "err"); }
+      };
+      document.body.appendChild(btn);
+    } else if (existing){
+      existing.remove();
+    }
+  }
+  setInterval(ensureBankShortcut, 800);
+
+  log("clear-bank-dm ready");
+})();
+</script>
+
 </body>
 </html>
