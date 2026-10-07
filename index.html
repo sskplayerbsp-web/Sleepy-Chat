@@ -9584,5 +9584,577 @@ html, body { overscroll-behavior: none; }
 })();
 </script>
 
+<!-- SLEEPY_TICKETS_V1 -->
+<style>
+.ticket-row{position:relative;display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:8px;cursor:pointer;color:var(--text2);font-size:13.5px;font-weight:500;transition:background .14s;width:100%;text-align:left}
+.ticket-row:hover{background:rgba(255,255,255,.045);color:var(--text)}
+.ticket-row.active{background:var(--surface2);color:#fff}
+.ticket-row.active::before{content:'';position:absolute;left:-8px;top:50%;transform:translateY(-50%);width:3px;height:60%;border-radius:0 3px 3px 0;background:var(--purple);box-shadow:0 0 12px rgba(180,74,255,.5)}
+.ticket-row .t-emoji{font-size:15px;flex:none;width:18px;text-align:center}
+.ticket-row .t-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ticket-row .t-status{font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:2px 7px;border-radius:99px;flex:none}
+.ticket-row .t-status.open{background:rgba(0,230,118,.15);color:var(--green)}
+.ticket-row .t-status.closed{background:rgba(90,90,114,.25);color:var(--text3)}
+.ticket-row .t-count{font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;flex:none}
+
+.ticket-header-bar{
+  display:flex;align-items:center;gap:10px;padding:10px 20px;
+  background:linear-gradient(90deg,rgba(180,74,255,.08),rgba(0,255,224,.03));
+  border-bottom:1px solid var(--border);
+}
+.ticket-header-bar .t-badge{
+  font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  padding:3px 9px;border-radius:99px;
+}
+.ticket-header-bar .t-badge.open{background:rgba(0,230,118,.15);color:var(--green)}
+.ticket-header-bar .t-badge.closed{background:rgba(90,90,114,.25);color:var(--text3)}
+.ticket-header-bar .t-cat{font-size:12px;color:var(--text3);margin-left:auto}
+
+.ticket-intro{padding:24px 20px 8px;text-align:center}
+.ticket-intro h2{font-family:'Space Grotesk',sans-serif;font-size:20px;margin-bottom:6px}
+.ticket-intro p{font-size:13px;color:var(--text2);max-width:460px;margin:0 auto}
+
+.ticket-msg{position:relative;display:flex;gap:13px;padding:6px 20px;animation:tIn2 .22s ease}
+@keyframes tIn2{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.ticket-msg:hover{background:rgba(255,255,255,.02)}
+.ticket-msg .body{flex:1;min-width:0}
+.ticket-msg .head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.ticket-msg .author{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px}
+.ticket-msg .staff-tag{font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:1px 6px;border-radius:99px;background:rgba(255,171,0,.16);color:var(--amber)}
+.ticket-msg .time{font-size:10.5px;color:var(--text3);font-family:monospace}
+.ticket-msg .content{font-size:14px;color:#dcdce8;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:anywhere;margin-top:2px}
+
+.ticket-closed-note{padding:20px;text-align:center;font-size:13px;color:var(--text3);border-top:1px solid var(--border);margin-top:16px}
+
+.ticket-cat-pick{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.ticket-cat-pick label{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid var(--border);cursor:pointer;transition:all .15s}
+.ticket-cat-pick label:hover{border-color:var(--border2);background:rgba(255,255,255,.05)}
+.ticket-cat-pick label.sel{border-color:var(--purple);background:rgba(180,74,255,.08);box-shadow:0 0 0 1px rgba(180,74,255,.35)}
+.ticket-cat-pick .emoji{font-size:22px;flex:none}
+.ticket-cat-pick .body{flex:1;min-width:0}
+.ticket-cat-pick .name{font-weight:600;font-size:13.5px;color:var(--text);margin-bottom:2px}
+.ticket-cat-pick .desc{font-size:11.5px;color:var(--text3);line-height:1.4}
+.ticket-cat-pick input{display:none}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyTickets) return;
+  window.__sleepyTickets = true;
+  function log(){ try{console.log.apply(console,["[Ticket]"].concat([].slice.call(arguments)));}catch(e){} }
+  function esc(s){ return window.esc(s); }
+
+  // -------- State --------
+  window.TICKET_CATEGORIES = [];
+  window.MY_TICKETS = [];        // tickets I created in this server
+  window.ALL_TICKETS = [];       // all tickets in this server (if I'm staff)
+  window.IS_STAFF = false;
+  window.TICKET_MESSAGES = [];
+  var ticketSub = null;
+
+  // -------- Helpers --------
+  function isInServer(){
+    return window.CURRENT && window.CURRENT.type === 'server' && window.CURRENT.server;
+  }
+  function myTicketIds(){ return (window.MY_TICKETS || []).map(function(t){ return t.id; }); }
+
+  // -------- Load data when entering server --------
+  async function loadTicketData(){
+    if (!isInServer()) return;
+    var srv = window.CURRENT.server;
+    try {
+      // Am I staff?
+      var staffResp = await sb.rpc('is_server_staff', { sid: srv.id, uid: window.ME.id });
+      window.IS_STAFF = !!staffResp.data;
+
+      // Categories
+      var catResp = await sb.from('ticket_categories')
+        .select('*').eq('server_id', srv.id).order('position', { ascending: true });
+      window.TICKET_CATEGORIES = catResp.data || [];
+
+      // My tickets
+      var mineResp = await sb.from('tickets')
+        .select('*').eq('server_id', srv.id).eq('creator_id', window.ME.id)
+        .order('created_at', { ascending: false });
+      window.MY_TICKETS = mineResp.data || [];
+
+      // All tickets (staff only)
+      if (window.IS_STAFF){
+        var allResp = await sb.from('tickets')
+          .select('*').eq('server_id', srv.id)
+          .order('created_at', { ascending: false });
+        window.ALL_TICKETS = allResp.data || [];
+      } else {
+        window.ALL_TICKETS = [];
+      }
+    } catch(e){
+      log("loadTicketData failed:", e.message);
+    }
+  }
+
+  // -------- Sidebar rendering --------
+  function injectTicketsIntoPanel(){
+    var body = document.getElementById('panel-body');
+    if (!body) return;
+    var existing = document.getElementById('tickets-section');
+    if (existing) existing.remove();
+
+    if (!isInServer()) return;
+
+    var visible = window.IS_STAFF ? window.ALL_TICKETS : window.MY_TICKETS;
+    var open = visible.filter(function(t){ return t.status === 'open'; });
+    var closed = visible.filter(function(t){ return t.status === 'closed'; });
+
+    var section = document.createElement('div');
+    section.className = 'panel-section';
+    section.id = 'tickets-section';
+
+    var headerHTML = '<div class="panel-label">' +
+      '<span>Tickets' + (visible.length ? ' (' + open.length + ')' : '') + '</span>' +
+      '<span class="add" data-ticket-new title="Create a ticket">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:12px;height:12px"><path d="M12 5v14M5 12h14"/></svg>' +
+      '</span>' +
+    '</div>';
+
+    var listHTML = '';
+    if (!visible.length){
+      listHTML = '<div style="padding:4px 10px 8px;font-size:12px;color:var(--text3)">No tickets yet.</div>';
+    } else {
+      var sorted = open.concat(closed);
+      listHTML = sorted.map(function(t){
+        var cat = (window.TICKET_CATEGORIES || []).filter(function(c){ return c.id === t.category_id; })[0];
+        var emoji = cat ? cat.emoji : '🎫';
+        var isActive = window.CURRENT.type === 'ticket' && window.CURRENT.ticket && window.CURRENT.ticket.id === t.id;
+        var label = cat ? cat.name : 'Ticket';
+        if (window.IS_STAFF && t.creator_id !== window.ME.id){
+          var p = window.PROFILES[t.creator_id];
+          label += ' · ' + (p ? (p.display_name || p.username) : 'user');
+        }
+        return '<button class="ticket-row ' + (isActive ? 'active' : '') + '" data-ticket-id="' + t.id + '">' +
+          '<span class="t-emoji">' + emoji + '</span>' +
+          '<span class="t-title">' + esc(label) + '</span>' +
+          '<span class="t-status ' + t.status + '">' + t.status + '</span>' +
+        '</button>';
+      }).join('');
+    }
+
+    section.innerHTML = headerHTML + listHTML;
+
+    // Insert after the last channel section, before the action buttons
+    var sections = body.querySelectorAll('.panel-section');
+    var lastChannelSection = null;
+    sections.forEach(function(s){
+      if (s.querySelector('[data-channel]')) lastChannelSection = s;
+    });
+    if (lastChannelSection) lastChannelSection.insertAdjacentElement('afterend', section);
+    else body.insertBefore(section, body.firstChild);
+
+    // Wire "create" button
+    var createBtn = section.querySelector('[data-ticket-new]');
+    if (createBtn) createBtn.onclick = function(e){
+      e.stopPropagation();
+      openCreateTicketModal();
+    };
+
+    // Wire ticket rows
+    section.querySelectorAll('[data-ticket-id]').forEach(function(b){
+      b.onclick = function(){ openTicket(b.dataset.ticketId); };
+    });
+  }
+
+  // -------- Create ticket modal --------
+  function openCreateTicketModal(){
+    if (!isInServer()) return;
+    var cats = window.TICKET_CATEGORIES || [];
+    if (!cats.length){
+      if (window.IS_STAFF){
+        window.openModal("Create Ticket", 
+          '<p style="color:var(--text2);font-size:13px">This server has no ticket categories yet. Create one first.</p>',
+          { footer: '<button class="btn" id="tc-cancel">Close</button><button class="btn primary" id="tc-newcat">Add a Category</button>',
+            onMount: function(){
+              document.getElementById('tc-cancel').onclick = window.closeModal;
+              document.getElementById('tc-newcat').onclick = function(){ window.closeModal(); openCategoryManager(); };
+            }});
+      } else {
+        window.toast("Tickets not set up", "This server hasn't configured any ticket categories yet.", "err");
+      }
+      return;
+    }
+    var selected = cats[0].id;
+
+    function catHTML(){
+      return cats.map(function(c){
+        return '<label class="' + (c.id === selected ? 'sel' : '') + '" data-cat-id="' + c.id + '">' +
+          '<span class="emoji">' + c.emoji + '</span>' +
+          '<span class="body"><span class="name">' + esc(c.name) + '</span>' +
+            (c.description ? '<span class="desc">' + esc(c.description) + '</span>' : '') +
+          '</span>' +
+        '</label>';
+      }).join('');
+    }
+
+    window.openModal("Create a Ticket",
+      '<p style="color:var(--text2);font-size:13px;margin-bottom:12px">Pick a category. Only you and the staff can see this ticket.</p>' +
+      '<div class="ticket-cat-pick" id="tc-cats">' + catHTML() + '</div>' +
+      '<div class="field" style="margin-top:16px"><label>Subject (optional)</label>' +
+        '<input id="tc-subject" placeholder="Short summary" maxlength="120"></div>',
+      { footer: '<button class="btn" id="tc-cancel">Cancel</button><button class="btn primary" id="tc-create">Create Ticket</button>',
+        onMount: function(){
+          document.getElementById('tc-cats').onclick = function(e){
+            var lab = e.target.closest('[data-cat-id]');
+            if (!lab) return;
+            selected = lab.dataset.catId;
+            document.querySelectorAll('#tc-cats label').forEach(function(x){ x.classList.remove('sel'); });
+            lab.classList.add('sel');
+          };
+          document.getElementById('tc-cancel').onclick = window.closeModal;
+          document.getElementById('tc-create').onclick = async function(){
+            try {
+              var subj = document.getElementById('tc-subject').value.trim();
+              var r = await sb.from('tickets').insert({
+                server_id: window.CURRENT.server.id,
+                category_id: selected,
+                creator_id: window.ME.id,
+                subject: subj,
+                status: 'open'
+              }).select().single();
+              if (r.error) throw r.error;
+              window.closeModal();
+              await loadTicketData();
+              if (window.IS_STAFF){
+                var ar = await sb.from('tickets').select('*').eq('server_id', window.CURRENT.server.id).order('created_at', { ascending: false });
+                window.ALL_TICKETS = ar.data || [];
+              }
+              renderPanel();
+              openTicket(r.data.id);
+              window.toast("Ticket created", "Staff will respond soon.", "ok");
+            } catch(e){
+              window.toast("Could not create ticket", e.message || String(e), "err");
+            }
+          };
+        }});
+  }
+
+  // -------- Category manager (staff only) --------
+  function openCategoryManager(){
+    if (!isInServer() || !window.IS_STAFF) return;
+    var cats = window.TICKET_CATEGORIES || [];
+
+    function listHTML(){
+      if (!cats.length) return '<div class="empty" style="padding:14px">No categories yet.</div>';
+      return cats.map(function(c){
+        return '<div style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;background:rgba(255,255,255,.03);margin-bottom:6px">' +
+          '<span style="font-size:20px">' + c.emoji + '</span>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-weight:600">' + esc(c.name) + '</div>' +
+            (c.description ? '<div style="font-size:11.5px;color:var(--text3)">' + esc(c.description) + '</div>' : '') +
+          '</div>' +
+          '<button class="btn sm danger" data-del-cat="' + c.id + '">Delete</button>' +
+        '</div>';
+      }).join('');
+    }
+
+    window.openModal("Ticket Categories",
+      '<p style="color:var(--text2);font-size:13px;margin-bottom:12px">Categories let users pick the right kind of ticket. Only staff can manage these.</p>' +
+      '<div id="cm-list">' + listHTML() + '</div>' +
+      '<hr style="border:none;border-top:1px solid var(--border);margin:16px 0">' +
+      '<div style="display:grid;grid-template-columns:70px 1fr;gap:8px;margin-bottom:10px">' +
+        '<input id="cm-emoji" placeholder="🎫" maxlength="4" style="text-align:center;padding:10px;border-radius:8px;background:var(--void);border:1px solid var(--border);font-size:20px">' +
+        '<input id="cm-name" placeholder="Category name" maxlength="40" style="padding:10px;border-radius:8px;background:var(--void);border:1px solid var(--border)">' +
+      '</div>' +
+      '<input id="cm-desc" placeholder="Short description (optional)" maxlength="100" style="width:100%;padding:10px;border-radius:8px;background:var(--void);border:1px solid var(--border);margin-bottom:10px">' +
+      '<button class="btn primary" id="cm-add">+ Add Category</button>',
+      { wide: true,
+        footer: '<button class="btn" id="cm-close">Done</button>',
+        onMount: function(){
+          document.getElementById('cm-close').onclick = window.closeModal;
+          document.getElementById('cm-add').onclick = async function(){
+            var emoji = document.getElementById('cm-emoji').value.trim() || '🎫';
+            var name = document.getElementById('cm-name').value.trim();
+            var desc = document.getElementById('cm-desc').value.trim();
+            if (!name) return window.toast("Name required", "", "err");
+            try {
+              var r = await sb.from('ticket_categories').insert({
+                server_id: window.CURRENT.server.id,
+                name: name, emoji: emoji, description: desc,
+                position: (cats.length || 0)
+              }).select().single();
+              if (r.error) throw r.error;
+              cats.push(r.data);
+              document.getElementById('cm-list').innerHTML = listHTML();
+              wireDel();
+              document.getElementById('cm-name').value = '';
+              document.getElementById('cm-desc').value = '';
+              window.toast("Added", "Category created.", "ok");
+              await loadTicketData();
+            } catch(e){ window.toast("Error", e.message || String(e), "err"); }
+          };
+          function wireDel(){
+            document.querySelectorAll('[data-del-cat]').forEach(function(b){
+              b.onclick = async function(){
+                try {
+                  await sb.from('ticket_categories').delete().eq('id', b.dataset.delCat);
+                  cats = cats.filter(function(c){ return c.id !== b.dataset.delCat; });
+                  document.getElementById('cm-list').innerHTML = listHTML();
+                  wireDel();
+                  await loadTicketData();
+                } catch(e){ window.toast("Error", e.message || String(e), "err"); }
+              };
+            });
+          }
+          wireDel();
+        }});
+  }
+
+  // -------- Open a ticket --------
+  async function openTicket(id){
+    var t = (window.ALL_TICKETS || []).concat(window.MY_TICKETS || []).filter(function(x){ return x.id === id; })[0];
+    if (!t){
+      var r = await sb.from('tickets').select('*').eq('id', id).maybeSingle();
+      if (r.data) t = r.data;
+    }
+    if (!t) return;
+
+    window.CURRENT = { type: 'ticket', ticket: t, server: window.CURRENT.server, channel: null, conv: null };
+    window.TICKET_MESSAGES = [];
+
+    // Subscribe to realtime for this ticket
+    if (ticketSub){ try { sb.removeChannel(ticketSub); } catch(e){} }
+    ticketSub = sb.channel('ticket-' + id)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ticket_messages', filter: 'ticket_id=eq.' + id },
+        async function(payload){
+          window.TICKET_MESSAGES.push(payload.new);
+          if (window.CURRENT.type === 'ticket' && window.CURRENT.ticket.id === id){
+            await renderTicketView();
+          }
+          loadTicketData().then(renderPanel);
+        })
+      .subscribe();
+
+    // Load messages
+    var m = await sb.from('ticket_messages').select('*').eq('ticket_id', id).order('id', { ascending: true }).limit(500);
+    window.TICKET_MESSAGES = m.data || [];
+
+    // Ensure sender profiles
+    var ids = window.TICKET_MESSAGES.map(function(x){ return x.sender_id; });
+    ids.push(t.creator_id);
+    await window.fetchProfiles(ids);
+
+    renderChatHead();
+    await renderTicketView();
+    renderPanel();
+  }
+
+  async function renderTicketView(){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+    var t = window.CURRENT.ticket;
+    if (!t) return;
+
+    var cat = (window.TICKET_CATEGORIES || []).filter(function(c){ return c.id === t.category_id; })[0];
+    var creator = window.PROFILES[t.creator_id];
+
+    // Header bar
+    var headerBar =
+      '<div class="ticket-header-bar">' +
+        '<span class="t-badge ' + t.status + '">' + t.status + '</span>' +
+        '<span style="font-size:12.5px;color:var(--text2)">' +
+          (cat ? (cat.emoji + ' ' + esc(cat.name)) : 'Ticket') +
+          ' · opened by ' + esc(creator ? (creator.display_name || creator.username) : 'user') +
+          ' · ' + new Date(t.created_at).toLocaleString() +
+        '</span>' +
+        (t.status === 'open' && (window.IS_STAFF || t.creator_id === window.ME.id)
+          ? '<button class="btn sm danger" id="ticket-close-btn" style="margin-left:auto">Close Ticket</button>'
+          : '') +
+      '</div>';
+
+    // Intro card
+    var intro = '<div class="ticket-intro">' +
+      '<h2>' + (cat ? (cat.emoji + ' ' + esc(cat.name)) : 'Ticket') + '</h2>' +
+      '<p>' + (cat ? esc(cat.description || '') : '') + '</p>' +
+      (t.subject ? '<div style="margin-top:10px;font-size:13px;color:var(--text2)">Subject: <b>' + esc(t.subject) + '</b></div>' : '') +
+    '</div>';
+
+    // Messages
+    var msgsHTML = '';
+    if (!window.TICKET_MESSAGES.length){
+      msgsHTML = '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px">No messages yet. Say something.</div>';
+    } else {
+      var lastAuthor = null, lastTs = 0;
+      window.TICKET_MESSAGES.forEach(function(m){
+        var p = window.PROFILES[m.sender_id] || { username: 'user', display_name: 'User' };
+        var grouped = lastAuthor === m.sender_id && (new Date(m.created_at) - lastTs) < 5*60*1000;
+        var isStaff = false; // we'd need a server-side check; simplify: show tag if they're not the creator
+        if (m.sender_id !== t.creator_id) isStaff = true;
+        var html = '<div class="ticket-msg">';
+        if (grouped){
+          html += '<div style="width:36px;flex:none"></div>';
+        } else {
+          html += '<div style="position:relative">' + window.avatarHTML(m.sender_id, 36) + '</div>';
+        }
+        html += '<div class="body">';
+        if (!grouped){
+          html += '<div class="head">' +
+            '<span class="author">' + esc(p.display_name || p.username) + '</span>' +
+            (isStaff ? '<span class="staff-tag">staff</span>' : '') +
+            '<span class="time">' + new Date(m.created_at).toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' }) + '</span>' +
+          '</div>';
+        }
+        html += '<div class="content">' + esc(m.content) + '</div>';
+        html += '</div></div>';
+        msgsHTML += html;
+        lastAuthor = m.sender_id;
+        lastTs = new Date(m.created_at).getTime();
+      });
+    }
+
+    // Closed note
+    var closedNote = '';
+    if (t.status === 'closed'){
+      closedNote = '<div class="ticket-closed-note">🔒 This ticket is closed. ' +
+        (window.IS_STAFF ? 'Reopen it from the header to reply.' : 'Only staff can reply now.') + '</div>';
+    }
+
+    body.innerHTML = headerBar + intro + '<div style="padding-bottom:20px">' + msgsHTML + '</div>' + closedNote;
+
+    // Scroll to bottom
+    requestAnimationFrame(function(){ body.scrollTop = body.scrollHeight; });
+
+    // Wire close button
+    var cb = document.getElementById('ticket-close-btn');
+    if (cb) cb.onclick = async function(){
+      try {
+        await sb.from('tickets').update({ status: 'closed', closed_at: new Date().toISOString(), closed_by: window.ME.id }).eq('id', t.id);
+        t.status = 'closed';
+        await loadTicketData();
+        await renderTicketView();
+        renderPanel();
+        window.toast("Ticket closed", "", "ok");
+      } catch(e){ window.toast("Error", e.message || String(e), "err"); }
+    };
+
+    renderComposer();
+  }
+
+  // -------- Composer for tickets --------
+  var origRenderComposer = window.renderComposer;
+  window.renderComposer = function(){
+    if (window.CURRENT && window.CURRENT.type === 'ticket'){
+      var t = window.CURRENT.ticket;
+      var wrap = document.getElementById('composer-wrap');
+      if (!wrap) return;
+      if (t.status === 'closed'){
+        wrap.innerHTML = '<div class="composer" style="opacity:.55"><span style="color:var(--text3);font-size:13px">🔒 This ticket is closed.</span></div>';
+        return;
+      }
+      wrap.innerHTML =
+        '<div class="composer">' +
+          '<textarea id="composer-input" rows="1" placeholder="Message this ticket..."></textarea>' +
+          '<button class="cbtn send" id="send-btn">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg>' +
+          '</button>' +
+        '</div>';
+      var ta = document.getElementById('composer-input');
+      if (window.autosize) window.autosize(ta);
+      ta.addEventListener('input', function(){ if (window.autosize) window.autosize(ta); });
+      ta.addEventListener('keydown', function(e){
+        if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); ticketSend(); }
+      });
+      document.getElementById('send-btn').onclick = ticketSend;
+      return;
+    }
+    return origRenderComposer();
+  };
+
+  async function ticketSend(){
+    var ta = document.getElementById('composer-input');
+    if (!ta) return;
+    var text = ta.value.trim();
+    if (!text) return;
+    var t = window.CURRENT.ticket;
+    try {
+      var r = await sb.from('ticket_messages').insert({
+        ticket_id: t.id,
+        sender_id: window.ME.id,
+        content: text.slice(0, 4000)
+      });
+      if (r.error) throw r.error;
+      ta.value = '';
+      if (window.autosize) window.autosize(ta);
+    } catch(e){ window.toast("Could not send", e.message || String(e), "err"); }
+  }
+
+  // -------- Hook into panel + chat rendering --------
+  var origRenderPanel = window.renderPanel;
+  window.renderPanel = function(){
+    var r = origRenderPanel.apply(this, arguments);
+    setTimeout(injectTicketsIntoPanel, 10);
+    return r;
+  };
+
+  var origRenderChatHead = window.renderChatHead;
+  window.renderChatHead = function(){
+    if (window.CURRENT && window.CURRENT.type === 'ticket'){
+      var el = document.getElementById('chat-head');
+      var t = window.CURRENT.ticket;
+      var cat = (window.TICKET_CATEGORIES || []).filter(function(c){ return c.id === t.category_id; })[0];
+      el.innerHTML =
+        '<button class="hbtn mobile-only" data-act="toggle-panel">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:20px;height:20px"><path d="M3 6h18M3 12h18M3 18h18"/></svg>' +
+        '</button>' +
+        '<div class="title"><span style="font-size:16px">' + (cat ? cat.emoji : '🎫') + '</span>' +
+        '<span class="txt">' + esc(cat ? cat.name : 'Ticket') + '</span></div>' +
+        '<div class="spacer"></div>' +
+        (window.IS_STAFF ? '<button class="hbtn" id="ticket-config-btn" title="Ticket categories">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:17px;height:17px"><circle cx="12" cy="12" r="3"/><path d="M12 1v6M12 17v6M4.22 4.22l4.24 4.24M15.54 15.54l4.24 4.24M1 12h6M17 12h6M4.22 19.78l4.24-4.24M15.54 8.46l4.24-4.24"/></svg>' +
+        '</button>' : '') +
+        '<button class="hbtn" data-act="settings">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:17px;height:17px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H7a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1A1.6 1.6 0 0 0 15 2.6a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V7a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>' +
+        '</button>';
+      var cfg = document.getElementById('ticket-config-btn');
+      if (cfg) cfg.onclick = openCategoryManager;
+      return;
+    }
+    return origRenderChatHead.apply(this, arguments);
+  };
+
+  var origRenderChat = window.renderChat;
+  window.renderChat = function(scroll){
+    if (window.CURRENT && window.CURRENT.type === 'ticket'){
+      renderTicketView();
+      return;
+    }
+    return origRenderChat.apply(this, arguments);
+  };
+
+  // Load tickets when entering a server
+  var origGoServer = window.goServer;
+  window.goServer = async function(sid){
+    var r = await origGoServer.apply(this, arguments);
+    await loadTicketData();
+    setTimeout(injectTicketsIntoPanel, 200);
+    return r;
+  };
+
+  // Also refresh on channel switch (panel re-renders)
+  var origGoChannel = window.goChannel;
+  window.goChannel = async function(cid){
+    var r = await origGoChannel.apply(this, arguments);
+    setTimeout(injectTicketsIntoPanel, 200);
+    return r;
+  };
+
+  // Auto-load on boot if we land in a server
+  setTimeout(async function(){
+    if (isInServer()){
+      await loadTicketData();
+      injectTicketsIntoPanel();
+    }
+  }, 3000);
+
+  log("ticket system ready");
+})();
+</script>
+
 </body>
 </html>
