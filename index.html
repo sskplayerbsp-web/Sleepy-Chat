@@ -12723,5 +12723,614 @@ html, body { overscroll-behavior: none; }
 })();
 </script>
 
+<!-- SLEEPY_BANK_THEME_V1 -->
+<style>
+/* ================================================================
+   SLEEPY-CHAT DISTINCTIVE THEME
+   Not a Discord clone. Warmer palette, glass surfaces, softer shapes.
+   ================================================================ */
+
+/* --- New palette: teal + amber + rose, glassier --- */
+:root{
+  --void:#0b0d14;
+  --surface:rgba(22,26,38,.72);
+  --surface2:rgba(30,34,48,.72);
+  --surface3:rgba(40,44,60,.9);
+  --border:rgba(90,120,150,.16);
+  --border2:rgba(120,150,180,.32);
+  --cyan:#5ee7d7;
+  --purple:#8b7cff;
+  --rose:#ff7f9f;
+  --green:#4ade80;
+  --amber:#ffc857;
+  --gold:#ffd166;
+  --text:#eef2f8;
+  --text2:#9aa8c0;
+  --text3:#5f6c85;
+  --glass:rgba(20,24,36,.7);
+  --glass-blur:16px;
+  --glow:0 0 22px rgba(94,231,215,.35);
+  --ease:cubic-bezier(.2,.9,.4,1);
+}
+
+body{
+  background:
+    radial-gradient(1100px 700px at 15% -8%, rgba(94,231,215,.11), transparent 55%),
+    radial-gradient(900px 700px at 95% 108%, rgba(139,124,255,.12), transparent 60%),
+    radial-gradient(700px 500px at 60% 40%, rgba(255,127,159,.05), transparent 65%),
+    var(--void);
+  background-attachment:fixed;
+}
+
+/* --- Glassy panels everywhere --- */
+.rail, .panel, .chat, .members, .modal, .auth-card{
+  background:var(--glass)!important;
+  backdrop-filter:blur(var(--glass-blur)) saturate(160%)!important;
+  -webkit-backdrop-filter:blur(var(--glass-blur)) saturate(160%)!important;
+}
+.rail{border-right:1px solid rgba(94,231,215,.08)}
+.panel{border-right:1px solid rgba(94,231,215,.08)}
+.members{border-left:1px solid rgba(94,231,215,.08)}
+
+/* --- Distinctive rail: taller buttons with glow arc, horizontal labels --- */
+.rail{
+  padding:16px 0!important;
+  gap:10px!important;
+  background:linear-gradient(180deg, rgba(20,24,36,.85), rgba(12,15,24,.9))!important;
+}
+.rail-btn{
+  width:52px!important;height:52px!important;
+  border-radius:18px!important;
+  background:rgba(255,255,255,.03)!important;
+  border:1px solid rgba(255,255,255,.06)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05);
+  transition:all .22s var(--ease)!important;
+  overflow:visible!important;
+}
+.rail-btn:hover{
+  border-color:rgba(94,231,215,.35)!important;
+  box-shadow:0 0 22px rgba(94,231,215,.25), inset 0 1px 0 rgba(255,255,255,.08)!important;
+  transform:translateY(-2px) scale(1.03)!important;
+}
+.rail-btn.active{
+  border-color:rgba(94,231,215,.55)!important;
+  box-shadow:0 0 26px rgba(94,231,215,.4), inset 0 1px 0 rgba(255,255,255,.12)!important;
+}
+/* active glow arc — a distinctive UI touch */
+.rail-btn.active::after{
+  content:'';position:absolute;left:50%;bottom:-9px;transform:translateX(-50%);
+  width:26px;height:3px;border-radius:99px;
+  background:linear-gradient(90deg,#5ee7d7,#8b7cff);
+  box-shadow:0 0 12px rgba(94,231,215,.9);
+  animation:arcPulse 2.6s ease-in-out infinite;
+}
+@keyframes arcPulse{0%,100%{opacity:.75}50%{opacity:1;width:34px}}
+
+.rail-btn.dashed{border-style:dashed!important;background:transparent!important}
+
+/* --- Panel headers: matching glassy look with a colored underline --- */
+.panel-head{
+  background:linear-gradient(180deg, rgba(94,231,215,.06), transparent);
+  border-bottom:1px solid rgba(94,231,215,.14)!important;
+  font-family:'Space Grotesk',sans-serif;
+  letter-spacing:.01em;
+  position:relative;
+}
+.panel-head::after{
+  content:'';position:absolute;left:14px;right:14px;bottom:-1px;height:1px;
+  background:linear-gradient(90deg,rgba(94,231,215,.6),rgba(139,124,255,.4),transparent);
+}
+
+/* --- Rows: softer radius, glow on active --- */
+.row{
+  border-radius:10px!important;
+  padding:9px 10px!important;
+}
+.row.active{
+  background:linear-gradient(90deg, rgba(94,231,215,.13), rgba(139,124,255,.06))!important;
+  border-left:none!important;
+  box-shadow:inset 0 0 0 1px rgba(94,231,215,.22);
+}
+.row.active::before{display:none!important}
+.row:hover{background:rgba(255,255,255,.045)!important}
+
+/* --- Composer: pill-style, glow on focus --- */
+.composer{
+  border-radius:18px!important;
+  background:rgba(30,34,48,.8)!important;
+  border:1px solid rgba(255,255,255,.08)!important;
+  padding:10px 14px!important;
+}
+.composer:focus-within{
+  border-color:rgba(94,231,215,.55)!important;
+  box-shadow:0 0 0 3px rgba(94,231,215,.1), 0 0 24px rgba(94,231,215,.18)!important;
+}
+
+/* --- Messages: subtle left accent bar on mentions --- */
+.msg{border-radius:10px;margin:2px 8px;padding:6px 12px!important}
+.msg:hover{background:rgba(255,255,255,.025)!important}
+.msg[style*="rgba(255,45,111"]{
+  background:linear-gradient(90deg,rgba(255,127,159,.1),transparent 60%)!important;
+  border-left:2px solid rgba(255,127,159,.55)!important;
+}
+
+/* --- User bar with money chip --- */
+.user-bar{
+  background:linear-gradient(180deg, transparent, rgba(10,12,20,.55))!important;
+  padding:8px 10px!important;
+  gap:10px!important;
+  height:auto!important;
+  min-height:60px;
+}
+.user-bar .coin-chip{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:4px 9px;border-radius:99px;
+  background:rgba(255,200,87,.12);
+  border:1px solid rgba(255,200,87,.35);
+  font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px;
+  color:var(--gold);
+  cursor:pointer;transition:all .15s;
+  white-space:nowrap;
+}
+.user-bar .coin-chip:hover{background:rgba(255,200,87,.2);transform:translateY(-1px)}
+.user-bar .coin-chip.poison{
+  background:rgba(255,45,111,.15);border-color:rgba(255,45,111,.5);
+  color:#ff8aa8;animation:coinShake 2s ease-in-out infinite;
+}
+@keyframes coinShake{0%,100%{transform:rotate(0)}25%{transform:rotate(-2deg)}75%{transform:rotate(2deg)}}
+
+/* --- Badges strip on profile + user popup --- */
+.badge-rail{
+  display:flex;flex-wrap:wrap;gap:5px;
+  margin-top:10px;padding-top:10px;
+  border-top:1px solid var(--border);
+}
+.badge-chip{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:4px 9px;border-radius:99px;
+  background:linear-gradient(135deg,rgba(255,200,87,.14),rgba(139,124,255,.1));
+  border:1px solid rgba(255,200,87,.35);
+  font-size:11px;font-weight:600;color:var(--gold);
+  transition:all .15s;
+}
+.badge-chip:hover{transform:translateY(-1px);box-shadow:0 0 12px rgba(255,200,87,.35)}
+
+/* --- Bank bot message flavor --- */
+.msg.bank-msg{
+  background:linear-gradient(90deg, rgba(255,200,87,.06), transparent 70%);
+  border-left:2px solid rgba(255,200,87,.5);
+  border-radius:10px;
+}
+.msg .author.bank-author{color:var(--gold)!important}
+
+/* --- Bank quick actions row (rendered under Bank's messages) --- */
+.bank-actions{
+  display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;
+}
+.bank-actions button{
+  padding:5px 11px;border-radius:99px;
+  background:rgba(255,200,87,.1);
+  border:1px solid rgba(255,200,87,.35);
+  color:var(--gold);font-size:11.5px;font-weight:600;
+  cursor:pointer;transition:all .15s;font-family:inherit;
+  display:inline-flex;align-items:center;gap:5px;
+}
+.bank-actions button:hover{background:rgba(255,200,87,.2);transform:translateY(-1px);box-shadow:0 0 14px rgba(255,200,87,.3)}
+.bank-actions button.primary{background:linear-gradient(135deg,#ffc857,#ff9f1c);color:#1a0f00;border-color:transparent}
+.bank-actions button.primary:hover{box-shadow:0 4px 18px rgba(255,200,87,.5)}
+
+/* --- Bank balance card inline --- */
+.bank-card{
+  padding:14px;border-radius:12px;margin-top:8px;
+  background:linear-gradient(135deg, rgba(255,200,87,.1), rgba(255,159,28,.06));
+  border:1px solid rgba(255,200,87,.35);
+}
+.bank-card .big{font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:700;color:var(--gold);line-height:1;margin-bottom:4px}
+.bank-card .sub{font-size:11.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+
+/* --- Modal upgrade --- */
+.modal{
+  background:linear-gradient(180deg, rgba(30,34,48,.9), rgba(22,26,38,.9))!important;
+  border:1px solid rgba(94,231,215,.2)!important;
+  box-shadow:0 30px 90px rgba(0,0,0,.7), 0 0 60px rgba(94,231,215,.08)!important;
+}
+.modal-head{border-bottom:1px solid rgba(94,231,215,.14)!important}
+
+/* --- Small font polish --- */
+.panel-label{
+  font-family:'JetBrains Mono',monospace!important;
+  font-size:10px!important;
+  letter-spacing:.14em!important;
+  color:var(--text3)!important;
+}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyBankTheme) return;
+  window.__sleepyBankTheme = true;
+  function log(){ try{console.log.apply(console,["[Bank2]"].concat([].slice.call(arguments)));}catch(e){} }
+  function esc(s){ return window.esc(s); }
+
+  var BANK_ID = '00000000-0000-0000-0000-0000000000ba';
+
+  // ------------------------------------------------------------
+  // 1. BANK BOT RESPONDS to messages in its DM
+  // ------------------------------------------------------------
+  // Watch for messages sent in any DM where the other user is BANK_ID.
+  // On insert, run a bot reply after a beat.
+
+  var BOT_RESPONSES = {
+    balance:  null,   // filled in dynamically
+    cure:     null,
+    fish:     null,
+    help:     null,
+    hi:       null,
+    hello:    null,
+    hey:      null,
+    streak:   null,
+    badges:   null,
+    leaderboard: null,
+    top:      null,
+  };
+
+  async function myAccount(){
+    try {
+      var r = await sb.from('bank_accounts').select('*').eq('user_id', window.ME.id).maybeSingle();
+      if (r.data) return r.data;
+      var ins = await sb.from('bank_accounts').insert({ user_id: window.ME.id, balance: 100 }).select().single();
+      return ins.data;
+    } catch(e){ return null; }
+  }
+
+  async function myCatches(){
+    var r = await sb.from('fishing_catches').select('*').eq('user_id', window.ME.id);
+    return r.data || [];
+  }
+  async function myBadges(){
+    var r = await sb.from('user_badges').select('badge_id').eq('user_id', window.ME.id);
+    return (r.data || []).map(function(x){ return x.badge_id; });
+  }
+
+  async function buildReply(text){
+    var t = String(text || "").trim().toLowerCase();
+
+    if (/^(hi|hello|hey|yo|sup)/.test(t)) {
+      return "Hello! 👋\nI'm the Bank. I manage your coins.\n\nTry:\n• `balance` — check your coins\n• `fish` — opens the fishing game\n• `cure` — heal from pufferfish poison\n• `badges` — see what you've unlocked\n• `leaderboard` — top richest players";
+    }
+    if (t === 'balance' || t === 'bal' || t === 'coins' || t === 'money' || t === 'wallet') {
+      var acc = await myAccount();
+      if (!acc) return "Hmm, I couldn't find your account. Try reloading.";
+      return "💰 **Your balance: " + acc.balance.toLocaleString() + " coins**\n" +
+             "Total earned: " + acc.total_earned.toLocaleString() + "\n" +
+             "Total spent: " + acc.total_spent.toLocaleString() +
+             (acc.poisoned ? "\n\n⚠️ **You're poisoned** — losing 10 coins/min. Type `cure` to heal." : "");
+    }
+    if (t === 'cure' || t === 'heal') {
+      var acc2 = await myAccount();
+      if (!acc2) return "Account not found.";
+      if (!acc2.poisoned) return "You're not poisoned. Nothing to cure.";
+      if (acc2.balance < 100) return "You need 100 coins to cure, but you only have " + acc2.balance + ". Catch more fish (once you're not poisoned).";
+      var r = await sb.rpc('cure_poison');
+      if (r.error) return "Cure failed: " + r.error.message;
+      var acc3 = await myAccount();
+      return "✨ **Poison cured!** -100 coins.\nNew balance: **" + acc3.balance + " coins**";
+    }
+    if (t === 'fish' || t === 'fishing' || t === 'cast') {
+      setTimeout(function(){
+        if (typeof window.openFishing === 'function') window.openFishing();
+      }, 400);
+      return "🎣 Opening the fishing game for you...\nCast your line to catch fish and earn coins. Watch out for 🐡 pufferfish!";
+    }
+    if (t === 'badges' || t === 'badge') {
+      var badges = await myBadges();
+      if (!badges.length) return "You haven't unlocked any badges yet. Keep playing to earn some! 🏅\n\nEarn badges by:\n• Catching your first fish\n• Catching 10, 50, 100 fish total\n• Catching legendary fish\n• Getting poisoned by a pufferfish\n• Reaching 1,000 or 10,000 coins";
+      return "🏅 **You've unlocked " + badges.length + " badge" + (badges.length === 1 ? "" : "s") + "!**\n\n" + badges.join(", ");
+    }
+    if (t === 'leaderboard' || t === 'top' || t === 'rich') {
+      var r = await sb.from('bank_accounts').select('*').order('balance', { ascending: false }).limit(5);
+      var rows = r.data || [];
+      if (!rows.length) return "No one has an account yet.";
+      var ids = rows.map(function(x){ return x.user_id; });
+      await window.fetchProfiles(ids);
+      var out = "🏆 **Top 5 richest players:**\n\n";
+      rows.forEach(function(row, i){
+        var p = window.PROFILES[row.user_id] || { username: 'user' };
+        var medal = i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : "  ";
+        out += medal + " **" + (p.display_name || p.username) + "** — " + row.balance.toLocaleString() + " 🪙\n";
+      });
+      return out;
+    }
+    if (t === 'help' || t === 'commands') {
+      return "**Bank commands:**\n" +
+             "• `balance` — check your coins\n" +
+             "• `fish` — open the fishing game\n" +
+             "• `cure` — heal from poison (-100 coins)\n" +
+             "• `badges` — see your unlocks\n" +
+             "• `leaderboard` — top richest players\n" +
+             "• `stats` — your full stats";
+    }
+    if (t === 'stats' || t === 'profile') {
+      var acc4 = await myAccount();
+      var catches = await myCatches();
+      var badges = await myBadges();
+      var legendary = catches.filter(function(c){ return c.fish_tier === 'legendary'; }).length;
+      var puffer = catches.filter(function(c){ return c.fish_tier === 'puffer'; }).length;
+      return "📊 **Your fishing stats:**\n" +
+             "💰 Balance: " + (acc4 ? acc4.balance : 0) + " coins\n" +
+             "🐟 Total catches: " + catches.length + "\n" +
+             "⭐ Legendary catches: " + legendary + "\n" +
+             "🐡 Pufferfish: " + puffer + "\n" +
+             "🏅 Badges: " + badges.length;
+    }
+    // Fallback
+    return "I didn't understand that. Type `help` to see what I can do.";
+  }
+
+  // Intercept send to Bank: whenever a message is inserted into a Bank DM,
+  // reply after a short delay.
+  async function handleBankIncoming(msg){
+    try {
+      var conv = (window.CONVERSATIONS || []).filter(function(c){ return c.id === msg.conversation_id; })[0];
+      if (!conv) return;
+      if (conv.memberIds.indexOf(BANK_ID) < 0) return;
+      if (msg.sender_id === BANK_ID) return;   // it's already the bot
+      if (msg.sender_id !== window.ME.id) return; // ignore other users' messages
+
+      // Wait a moment for realism
+      setTimeout(async function(){
+        var reply = await buildReply(msg.content);
+        var convId = msg.conversation_id;
+        try {
+          await sb.rpc('bank_say', { conv: convId, msg: reply });
+        } catch(e){
+          log("bank_say failed:", e.message);
+          // Fallback: insert directly if RPC missing
+          await sb.from('messages').insert({
+            conversation_id: convId,
+            sender_id: BANK_ID,
+            content: reply
+          });
+        }
+      }, 700);
+    } catch(e){ log("handleBankIncoming failed:", e.message); }
+  }
+
+  // Hook into the global message subscription by wrapping it.
+  // The global subscription lives in a Supabase channel created by the core app.
+  // Easier: poll the messages table for new bank DMs every 3 seconds.
+  // (Polling avoids having to find and rewire the existing channel.)
+  var lastSeen = {};
+  async function pollBankIncoming(){
+    if (!window.ME) return;
+    try {
+      // Find all my DM conversations with Bank
+      var { data: cms } = await sb.from('conversation_members').select('conversation_id').eq('user_id', window.ME.id);
+      var myIds = (cms || []).map(function(c){ return c.conversation_id; });
+      if (!myIds.length) return;
+      var { data: bankConvs } = await sb.from('conversation_members').select('conversation_id').eq('user_id', BANK_ID).in('conversation_id', myIds);
+      if (!bankConvs || !bankConvs.length) return;
+      var convIds = bankConvs.map(function(c){ return c.conversation_id; });
+
+      for (var i = 0; i < convIds.length; i++){
+        var cid = convIds[i];
+        var { data: recent } = await sb.from('messages')
+          .select('*')
+          .eq('conversation_id', cid)
+          .order('id', { ascending: false })
+          .limit(5);
+        (recent || []).forEach(function(m){
+          var key = cid + ':' + m.id;
+          if (lastSeen[key]) return;
+          lastSeen[key] = 1;
+          // Only respond to my own messages (avoid loops)
+          if (m.sender_id === window.ME.id){
+            // Wait — check this message hasn't already been answered
+            // Actually just call handleBankIncoming; it filters by sender
+            handleBankIncoming(m);
+          }
+        });
+      }
+    } catch(e){ log("poll failed:", e.message); }
+  }
+
+  // Seed lastSeen with existing messages so we don't spam-reply on boot
+  async function seedSeen(){
+    if (!window.ME) return;
+    try {
+      var { data: cms } = await sb.from('conversation_members').select('conversation_id').eq('user_id', window.ME.id);
+      var myIds = (cms || []).map(function(c){ return c.conversation_id; });
+      if (!myIds.length) return;
+      var { data: bankConvs } = await sb.from('conversation_members').select('conversation_id').eq('user_id', BANK_ID).in('conversation_id', myIds);
+      if (!bankConvs || !bankConvs.length) return;
+      for (var i = 0; i < bankConvs.length; i++){
+        var cid = bankConvs[i].conversation_id;
+        var { data: recent } = await sb.from('messages').select('id').eq('conversation_id', cid).order('id', { ascending: false }).limit(10);
+        (recent || []).forEach(function(m){ lastSeen[cid + ':' + m.id] = 1; });
+      }
+    } catch(e){}
+  }
+
+  // ------------------------------------------------------------
+  // 2. COINS IN USER BAR
+  // ------------------------------------------------------------
+  var cachedAccount = null;
+  async function refreshAccount(){
+    if (!window.ME) return;
+    try {
+      var r = await sb.from('bank_accounts').select('*').eq('user_id', window.ME.id).maybeSingle();
+      cachedAccount = r.data;
+      paintCoinChip();
+    } catch(e){}
+  }
+
+  function paintCoinChip(){
+    var bar = document.getElementById('user-bar');
+    if (!bar) return;
+    var existing = bar.querySelector('.coin-chip');
+    if (existing) existing.remove();
+    if (!cachedAccount){
+      // Create default look
+      var chip = document.createElement('span');
+      chip.className = 'coin-chip';
+      chip.innerHTML = '🪙 ...';
+      chip.onclick = function(){ if (window.openFishing) window.openFishing(); };
+      bar.appendChild(chip);
+      return;
+    }
+    var chip2 = document.createElement('span');
+    chip2.className = 'coin-chip' + (cachedAccount.poisoned ? ' poison' : '');
+    chip2.innerHTML = cachedAccount.poisoned
+      ? '☠️ ' + cachedAccount.balance
+      : '🪙 ' + cachedAccount.balance.toLocaleString();
+    chip2.title = cachedAccount.poisoned ? 'Poisoned! Click to cure' : 'Click to open Fishing';
+    chip2.onclick = async function(){
+      if (cachedAccount.poisoned){
+        if (confirm("You're poisoned and losing 10 coins/min. Cure for 100 coins?")){
+          var r = await sb.rpc('cure_poison');
+          if (r.error) window.toast("Could not cure", r.error.message, "err");
+          else { window.toast("Cured", "You feel better.", "ok"); await refreshAccount(); }
+        }
+      } else {
+        if (window.openFishing) window.openFishing();
+      }
+    };
+    bar.appendChild(chip2);
+  }
+
+  // Re-paint on every user bar render
+  var origRenderUserBar = window.renderUserBar;
+  if (typeof origRenderUserBar === 'function'){
+    window.renderUserBar = function(){
+      var r = origRenderUserBar.apply(this, arguments);
+      setTimeout(paintCoinChip, 10);
+      return r;
+    };
+  }
+  // Also poll periodically (safe and light)
+  setInterval(refreshAccount, 15000);
+
+  // ------------------------------------------------------------
+  // 3. BADGE STRIP IN PROFILE
+  // ------------------------------------------------------------
+  async function loadBadgesFor(uid){
+    var r = await sb.from('user_badges').select('badge_id').eq('user_id', uid);
+    return (r.data || []).map(function(x){ return x.badge_id; });
+  }
+
+  var BADGE_DEFS = {
+    first_catch:  { emoji:'🎣', name:'First Catch' },
+    catch_10:     { emoji:'🐟', name:'Getting Started' },
+    catch_50:     { emoji:'🎏', name:'Avid Angler' },
+    catch_100:    { emoji:'🏆', name:'Master Angler' },
+    legendary_1:  { emoji:'⭐', name:'Legend Hunter' },
+    legendary_5:  { emoji:'🌟', name:'Legend Master' },
+    puffer_1:     { emoji:'☠️', name:'Poisoned' },
+    puffer_5:     { emoji:'💀', name:'Cursed' },
+    rich_1000:    { emoji:'💰', name:'Thousandaire' },
+    rich_10000:   { emoji:'💎', name:'Ten Thousand' },
+  };
+
+  var origOpenProfile = window.openProfile;
+  if (typeof origOpenProfile === 'function'){
+    window.openProfile = function(uid){
+      origOpenProfile.apply(this, arguments);
+      setTimeout(async function(){
+        var body = document.getElementById('modal-body');
+        if (!body) return;
+        if (body.querySelector('.badge-rail')) return;
+        var card = body.querySelector('.profile-card') || body;
+        // Fetch their badges + account
+        var badges = await loadBadgesFor(uid);
+        var accR = await sb.from('bank_accounts').select('*').eq('user_id', uid).maybeSingle();
+        var acc = accR.data;
+
+        var strip = document.createElement('div');
+        strip.className = 'badge-rail';
+        var html = '';
+
+        if (acc){
+          html += '<span class="badge-chip" style="background:linear-gradient(135deg,rgba(255,200,87,.22),rgba(255,159,28,.14));color:#ffd166">🪙 ' + acc.balance.toLocaleString() + '</span>';
+        }
+        badges.forEach(function(b){
+          var d = BADGE_DEFS[b];
+          if (!d) return;
+          html += '<span class="badge-chip">' + d.emoji + ' ' + esc(d.name) + '</span>';
+        });
+        if (!html){
+          html = '<span style="font-size:11.5px;color:var(--text3)">No badges yet.</span>';
+        }
+        strip.innerHTML = html;
+        card.appendChild(strip);
+      }, 350);
+    };
+  }
+
+  // ------------------------------------------------------------
+  // 4. BANK MESSAGE STYLING
+  // ------------------------------------------------------------
+  var origMessageHTML = window.messageHTML;
+  if (typeof origMessageHTML === 'function'){
+    window.messageHTML = function(m, grouped){
+      var html = origMessageHTML.apply(this, arguments);
+      // Only touch bank messages
+      if (m.sender_id !== BANK_ID) return html;
+      // Wrap in a class
+      html = html.replace('class="msg"', 'class="msg bank-msg"');
+      // Author color
+      html = html.replace(/(<span class="author"[^>]*>)/, function(open){
+        if (open.indexOf('bank-author') >= 0) return open;
+        return open.replace('class="author', 'class="author bank-author');
+      });
+      // Add quick action buttons under the message
+      var actions = '<div class="bank-actions">' +
+        '<button data-bank-quick="balance">💰 Balance</button>' +
+        '<button data-bank-quick="fish" class="primary">🎣 Fish</button>' +
+        '<button data-bank-quick="badges">🏅 Badges</button>' +
+        '<button data-bank-quick="leaderboard">🏆 Top</button>' +
+        '<button data-bank-quick="help">❓ Help</button>' +
+      '</div>';
+      // Insert actions right before the closing body div
+      html = html.replace('</div><div class="toolbar">', actions + '</div><div class="toolbar">');
+      return html;
+    };
+  }
+
+  // Handle quick action clicks in bank messages
+  document.addEventListener('click', async function(e){
+    var btn = e.target.closest('[data-bank-quick]');
+    if (!btn) return;
+    e.preventDefault(); e.stopPropagation();
+    var action = btn.dataset.bankQuick;
+    // Find the conversation id from the DOM
+    var msgEl = btn.closest('[data-msg]');
+    var convId = window.CURRENT && window.CURRENT.conv ? window.CURRENT.conv.id : null;
+    if (!convId) return;
+
+    // Send the action as if the user typed it
+    try {
+      await sb.from('messages').insert({
+        conversation_id: convId,
+        sender_id: window.ME.id,
+        content: action
+      });
+    } catch(err){ log("send failed:", err.message); }
+  }, true);
+
+  // ------------------------------------------------------------
+  // 5. BOOT
+  // ------------------------------------------------------------
+  setTimeout(async function(){
+    if (!window.ME) return;
+    await seedSeen();
+    await refreshAccount();
+    setInterval(pollBankIncoming, 3000);
+    log("bank bot online");
+  }, 4000);
+
+  log("bank theme ready");
+})();
+</script>
+
 </body>
 </html>
