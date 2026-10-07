@@ -10156,5 +10156,656 @@ html, body { overscroll-behavior: none; }
 })();
 </script>
 
+<!-- SLEEPY_TICKETS_V2 -->
+<style>
+.ticket-hub{padding:36px 24px;max-width:780px;margin:0 auto}
+.ticket-hub .hero{text-align:center;margin-bottom:32px}
+.ticket-hub .hero .ico{width:76px;height:76px;margin:0 auto 16px;border-radius:22px;background:linear-gradient(135deg,rgba(180,74,255,.18),rgba(0,255,224,.14));border:1px solid rgba(180,74,255,.4);display:flex;align-items:center;justify-content:center;font-size:34px}
+.ticket-hub .hero h2{font-family:'Space Grotesk',sans-serif;font-size:24px;color:var(--text);margin-bottom:8px}
+.ticket-hub .hero p{font-size:13.5px;color:var(--text2);max-width:480px;margin:0 auto;line-height:1.55}
+.ticket-hub h3{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--text3);margin-bottom:12px}
+.ticket-hub .cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin-bottom:34px}
+.ticket-hub .cat-btn{display:flex;align-items:flex-start;gap:12px;padding:15px 16px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid var(--border);cursor:pointer;text-align:left;transition:all .16s}
+.ticket-hub .cat-btn:hover{border-color:rgba(180,74,255,.6);background:rgba(180,74,255,.08);transform:translateY(-2px)}
+.ticket-hub .cat-btn .emoji{font-size:24px;flex:none;line-height:1}
+.ticket-hub .cat-btn .name{display:block;font-weight:600;font-size:14px;color:var(--text);margin-bottom:3px}
+.ticket-hub .cat-btn .desc{display:block;font-size:11.5px;color:var(--text3);line-height:1.45}
+.ticket-hub .tkt-item{display:flex;align-items:center;gap:12px;padding:13px 15px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid var(--border);cursor:pointer;width:100%;text-align:left;margin-bottom:7px;transition:all .15s}
+.ticket-hub .tkt-item:hover{border-color:var(--border2);background:rgba(255,255,255,.05)}
+.ticket-hub .tkt-item .emoji{font-size:19px;flex:none;width:26px;text-align:center}
+.ticket-hub .tkt-item .info{flex:1;min-width:0}
+.ticket-hub .tkt-item .name{display:block;font-weight:600;font-size:13.5px;color:var(--text);margin-bottom:2px}
+.ticket-hub .tkt-item .meta{display:block;font-size:11.5px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ticket-hub .tkt-item .badge{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border-radius:99px;flex:none}
+.ticket-hub .tkt-item .badge.open{background:rgba(0,230,118,.15);color:var(--green)}
+.ticket-hub .empty-hint{padding:22px;text-align:center;color:var(--text3);font-size:13px;border:1px dashed var(--border);border-radius:10px;margin-bottom:34px;line-height:1.55}
+
+.ticket-strip{display:flex;align-items:center;gap:10px;padding:9px 20px;background:linear-gradient(90deg,rgba(180,74,255,.08),transparent 70%);border-bottom:1px solid var(--border);font-size:12px;color:var(--text2);flex-wrap:wrap}
+.ticket-strip .badge{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:99px}
+.ticket-strip .badge.open{background:rgba(0,230,118,.15);color:var(--green)}
+.ticket-strip .badge.closed{background:rgba(90,90,114,.25);color:var(--text3)}
+.ticket-strip .sep{color:var(--text3);opacity:.5}
+
+.ticket-actions{padding:24px 20px;text-align:center;border-top:1px solid var(--border);margin-top:20px}
+.ticket-actions .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.ticket-actions .export-btn{padding:10px 18px;border-radius:10px;background:rgba(0,255,224,.1);border:1px solid rgba(0,255,224,.35);color:var(--cyan);font-weight:600;font-size:13px;cursor:pointer;transition:all .15s}
+.ticket-actions .export-btn:hover{background:rgba(0,255,224,.2)}
+.ticket-actions .close-btn{padding:10px 18px;border-radius:10px;background:rgba(255,45,111,.12);border:1px solid rgba(255,45,111,.35);color:#ff7aa2;font-weight:600;font-size:13px;cursor:pointer;transition:all .15s}
+.ticket-actions .close-btn:hover{background:rgba(255,45,111,.22)}
+
+.export-preview{padding:12px;background:var(--void);border:1px solid var(--border);border-radius:8px;font-family:'JetBrains Mono',monospace;font-size:11.5px;color:var(--text2);max-height:180px;overflow-y:auto;white-space:pre-wrap;line-height:1.6;margin-bottom:12px;text-align:left}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyTicketsV2) return;
+  window.__sleepyTicketsV2 = true;
+  function log(){ try{console.log.apply(console,["[TicketV2]"].concat([].slice.call(arguments)));}catch(e){} }
+  function esc(s){ return window.esc(s); }
+
+  // ---------- State ----------
+  var cats = [], myTickets = [], allTickets = [], isStaff = false;
+  var messages = [];
+  var serverSub = null, msgSub = null;
+  var currentServerId = null;
+
+  function inServer(){ return window.CURRENT && window.CURRENT.type !== 'dm' && window.CURRENT.server; }
+
+  // ---------- Load ----------
+  async function loadAll(){
+    if (!inServer()) return;
+    var sid = window.CURRENT.server.id;
+    try {
+      var sr = await sb.rpc('is_server_staff', { sid: sid, uid: window.ME.id });
+      isStaff = !!sr.data;
+
+      var cr = await sb.from('ticket_categories').select('*').eq('server_id', sid).order('position');
+      cats = cr.data || [];
+
+      var mr = await sb.from('tickets').select('*').eq('server_id', sid).eq('creator_id', window.ME.id).order('created_at', { ascending: false });
+      myTickets = mr.data || [];
+
+      if (isStaff){
+        var ar = await sb.from('tickets').select('*').eq('server_id', sid).order('created_at', { ascending: false });
+        allTickets = ar.data || [];
+        var ids = allTickets.map(function(t){ return t.creator_id; }).filter(function(v,i,a){ return a.indexOf(v) === i; });
+        if (ids.length) await window.fetchProfiles(ids);
+      } else {
+        allTickets = [];
+      }
+
+      if (currentServerId !== sid || !serverSub){
+        currentServerId = sid;
+        subscribeServer();
+      }
+    } catch(e){ log("loadAll:", e.message); }
+  }
+
+  async function refreshLists(){
+    if (!inServer()) return;
+    var sid = window.CURRENT.server.id;
+    var mr = await sb.from('tickets').select('*').eq('server_id', sid).eq('creator_id', window.ME.id).order('created_at', { ascending: false });
+    myTickets = mr.data || [];
+    if (isStaff){
+      var ar = await sb.from('tickets').select('*').eq('server_id', sid).order('created_at', { ascending: false });
+      allTickets = ar.data || [];
+      var ids = allTickets.map(function(t){ return t.creator_id; }).filter(function(v,i,a){ return a.indexOf(v) === i; });
+      if (ids.length) await window.fetchProfiles(ids);
+    }
+  }
+
+  function subscribeServer(){
+    if (serverSub){ try { sb.removeChannel(serverSub); } catch(e){} }
+    if (!inServer()) return;
+    var sid = window.CURRENT.server.id;
+    serverSub = sb.channel('srv-tickets-' + sid)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets', filter: 'server_id=eq.' + sid }, function(){
+        log("ticket list change");
+        refreshLists().then(function(){
+          injectChannel();
+          if (window.CURRENT && window.CURRENT.type === 'tickets_hub') renderHub();
+        });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ticket_categories', filter: 'server_id=eq.' + sid }, function(){
+        sb.from('ticket_categories').select('*').eq('server_id', sid).order('position').then(function(r){
+          cats = r.data || [];
+          if (window.CURRENT && window.CURRENT.type === 'tickets_hub') renderHub();
+        });
+      })
+      .subscribe(function(s){ log("server sub:", s); });
+  }
+
+  // ---------- Sidebar: tickets as a channel entry ----------
+  function injectChannel(){
+    var body = document.getElementById('panel-body');
+    if (!body || !inServer()) return;
+    var oldSection = document.getElementById('tickets-section');
+    if (oldSection) oldSection.remove();
+    var existing = document.getElementById('tickets-channel-entry');
+    if (existing) existing.remove();
+
+    // Find last section that has a real channel
+    var sections = body.querySelectorAll('.panel-section');
+    var lastChannelSection = null;
+    sections.forEach(function(s){
+      if (s.querySelector('[data-channel]')) lastChannelSection = s;
+    });
+
+    var wrap = document.createElement('div');
+    wrap.id = 'tickets-channel-entry';
+    wrap.className = 'panel-section';
+    wrap.style.marginTop = '-8px';
+
+    var isActive = window.CURRENT && window.CURRENT.type === 'tickets_hub';
+    var count = isStaff ? allTickets.length : myTickets.length;
+
+    wrap.innerHTML =
+      '<button class="row ' + (isActive ? 'active' : '') + '" data-tickets-hub>' +
+        '<span style="font-size:15px;flex:none;width:16px;text-align:center;line-height:1;opacity:.9">🎫</span>' +
+        '<span class="txt">tickets</span>' +
+        (count > 0 ? '<span class="badge" style="background:var(--purple);min-width:18px">' + count + '</span>' : '') +
+      '</button>';
+
+    if (lastChannelSection) lastChannelSection.insertAdjacentElement('afterend', wrap);
+    else body.insertBefore(wrap, body.firstChild);
+
+    var btn = wrap.querySelector('[data-tickets-hub]');
+    if (btn) btn.onclick = openHub;
+  }
+
+  // ---------- Hub ----------
+  function openHub(){
+    window.CURRENT = { type: 'tickets_hub', server: window.CURRENT.server, channel: null, conv: null, ticket: null };
+    injectChannel();
+    window.renderChatHead();
+    renderHub();
+    var cw = document.getElementById('composer-wrap');
+    if (cw) cw.innerHTML = '';
+    var tb = document.getElementById('typing-bar');
+    if (tb) tb.innerHTML = '';
+  }
+
+  function timeAgo(ts){
+    var d = Date.now() - new Date(ts).getTime();
+    if (d < 60000) return 'just now';
+    if (d < 3600000) return Math.floor(d/60000) + 'm ago';
+    if (d < 86400000) return Math.floor(d/3600000) + 'h ago';
+    return Math.floor(d/86400000) + 'd ago';
+  }
+
+  function renderHub(){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+
+    var html = '<div class="ticket-hub">';
+    html += '<div class="hero">' +
+      '<div class="ico">🎫</div>' +
+      '<h2>Tickets</h2>' +
+      '<p>Open a private conversation with the staff. Only you and the staff can read your tickets.</p>' +
+    '</div>';
+
+    // Categories
+    if (cats.length){
+      html += '<h3>Open a new ticket</h3><div class="cat-grid">';
+      cats.forEach(function(c){
+        html += '<button class="cat-btn" data-create="' + c.id + '">' +
+          '<span class="emoji">' + c.emoji + '</span>' +
+          '<span style="flex:1;min-width:0">' +
+            '<span class="name">' + esc(c.name) + '</span>' +
+            (c.description ? '<span class="desc">' + esc(c.description) + '</span>' : '') +
+          '</span>' +
+        '</button>';
+      });
+      html += '</div>';
+    } else {
+      html += '<div class="empty-hint">' +
+        (isStaff
+          ? 'No categories yet. Click <b>Manage Categories</b> at the bottom.'
+          : 'The staff hasn\'t set up ticket categories yet.') +
+      '</div>';
+    }
+
+    // My open tickets
+    var myOpen = myTickets.filter(function(t){ return t.status === 'open'; });
+    if (myOpen.length){
+      html += '<h3>Your open tickets — ' + myOpen.length + '</h3>';
+      myOpen.forEach(function(t){
+        var c = cats.find(function(x){ return x.id === t.category_id; }) || { emoji: '🎫', name: 'Ticket' };
+        html += '<button class="tkt-item" data-open="' + t.id + '">' +
+          '<span class="emoji">' + c.emoji + '</span>' +
+          '<span class="info"><span class="name">' + esc(c.name) + '</span>' +
+            '<span class="meta">' + timeAgo(t.created_at) + (t.subject ? ' · ' + esc(t.subject) : '') + '</span>' +
+          '</span>' +
+          '<span class="badge open">open</span>' +
+        '</button>';
+      });
+      html += '<div style="height:24px"></div>';
+    }
+
+    // All open (staff)
+    if (isStaff){
+      var staffOpen = allTickets.filter(function(t){ return t.status === 'open'; });
+      if (staffOpen.length){
+        html += '<h3>All open tickets — ' + staffOpen.length + ' <span style="color:var(--amber);text-transform:none;letter-spacing:0;font-weight:400;margin-left:6px">staff only</span></h3>';
+        staffOpen.forEach(function(t){
+          var c = cats.find(function(x){ return x.id === t.category_id; }) || { emoji: '🎫', name: 'Ticket' };
+          var p = window.PROFILES[t.creator_id] || { username: 'user', display_name: 'User' };
+          html += '<button class="tkt-item" data-open="' + t.id + '">' +
+            '<span class="emoji">' + c.emoji + '</span>' +
+            '<span class="info"><span class="name">' + esc(c.name) + '</span>' +
+              '<span class="meta">' + esc(p.display_name || p.username) + ' · ' + timeAgo(t.created_at) + (t.subject ? ' · ' + esc(t.subject) : '') + '</span>' +
+            '</span>' +
+            '<span class="badge open">open</span>' +
+          '</button>';
+        });
+      }
+    }
+
+    // Staff controls
+    if (isStaff){
+      html += '<div style="text-align:center;padding:24px 0 0;border-top:1px solid var(--border);margin-top:24px">' +
+        '<button class="btn" id="manage-cats-btn">Manage Categories</button>' +
+      '</div>';
+    }
+
+    html += '</div>';
+    body.innerHTML = html;
+
+    body.querySelectorAll('[data-create]').forEach(function(b){
+      b.onclick = function(){ createTicket(b.dataset.create); };
+    });
+    body.querySelectorAll('[data-open]').forEach(function(b){
+      b.onclick = function(){ openTicket(b.dataset.open); };
+    });
+    var mc = document.getElementById('manage-cats-btn');
+    if (mc) mc.onclick = openCategoryManager;
+  }
+
+  // ---------- Create ----------
+  async function createTicket(categoryId){
+    try {
+      var r = await sb.from('tickets').insert({
+        server_id: window.CURRENT.server.id,
+        category_id: categoryId,
+        creator_id: window.ME.id,
+        status: 'open'
+      }).select().single();
+      if (r.error) throw r.error;
+      await refreshLists();
+      window.toast("Ticket created", "Opening your ticket.", "ok");
+      openTicket(r.data.id);
+    } catch(e){ window.toast("Could not create ticket", e.message || String(e), "err"); }
+  }
+
+  // ---------- Open ----------
+  async function openTicket(id){
+    var t = allTickets.concat(myTickets).find(function(x){ return x.id === id; });
+    if (!t){
+      var r = await sb.from('tickets').select('*').eq('id', id).maybeSingle();
+      if (r.data) t = r.data;
+    }
+    if (!t) return;
+
+    window.CURRENT = { type: 'ticket', ticket: t, server: window.CURRENT.server, channel: null, conv: null };
+
+    var m = await sb.from('ticket_messages').select('*').eq('ticket_id', id).order('id', { ascending: true }).limit(500);
+    messages = m.data || [];
+
+    var ids = messages.map(function(x){ return x.sender_id; });
+    ids.push(t.creator_id);
+    await window.fetchProfiles(ids);
+
+    if (msgSub){ try { sb.removeChannel(msgSub); } catch(e){} }
+    msgSub = sb.channel('tkt-' + id)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ticket_messages', filter: 'ticket_id=eq.' + id }, function(payload){
+        messages.push(payload.new);
+        if (window.CURRENT && window.CURRENT.type === 'ticket' && window.CURRENT.ticket.id === id) renderChat();
+      })
+      .subscribe();
+
+    injectChannel();
+    window.renderChatHead();
+    renderChat();
+    window.renderComposer();
+  }
+
+  // ---------- Render chat ----------
+  function renderChat(){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+    var t = window.CURRENT.ticket;
+    if (!t) return;
+
+    var c = cats.find(function(x){ return x.id === t.category_id; }) || { emoji: '🎫', name: 'Ticket' };
+    var creator = window.PROFILES[t.creator_id] || { username: 'user', display_name: 'User' };
+
+    var html = '<div class="ticket-strip">' +
+      '<span class="badge ' + t.status + '">' + t.status + '</span>' +
+      '<span>' + esc(c.name) + '</span>' +
+      '<span class="sep">·</span>' +
+      '<span>opened by ' + esc(creator.display_name || creator.username) + '</span>' +
+      '<span class="sep">·</span>' +
+      '<span>' + new Date(t.created_at).toLocaleString() + '</span>' +
+    '</div>';
+
+    html += '<div style="padding:18px 0 4px">';
+    if (!messages.length){
+      html += '<div style="text-align:center;padding:48px 20px;color:var(--text3);font-size:13px">No messages yet. Start the conversation below.</div>';
+    } else {
+      var lastAuthor = null, lastTs = 0;
+      messages.forEach(function(m){
+        var p = window.PROFILES[m.sender_id] || { username: 'user', display_name: 'User' };
+        var grouped = lastAuthor === m.sender_id && (new Date(m.created_at) - lastTs) < 5 * 60000;
+        var staff = m.sender_id !== t.creator_id;
+        var mine = m.sender_id === window.ME.id;
+
+        var h = '<div class="msg" style="padding:4px 20px">';
+        if (grouped) h += '<div style="width:36px;flex:none"></div>';
+        else h += '<div style="position:relative">' + window.avatarHTML(m.sender_id, 36) + '</div>';
+        h += '<div style="flex:1;min-width:0">';
+        if (!grouped){
+          h += '<div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">' +
+            '<span style="font-family:\'Space Grotesk\',sans-serif;font-weight:600;font-size:14px">' + esc(p.display_name || p.username) + '</span>' +
+            (staff ? '<span style="font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:1px 6px;border-radius:99px;background:rgba(255,171,0,.16);color:var(--amber)">staff</span>' : '') +
+            (mine ? '<span style="font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:1px 6px;border-radius:99px;background:rgba(0,255,224,.14);color:var(--cyan)">you</span>' : '') +
+            '<span style="font-size:10.5px;color:var(--text3);font-family:monospace">' + new Date(m.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) + '</span>' +
+          '</div>';
+        }
+        h += '<div style="font-size:14px;color:#dcdce8;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:anywhere;margin-top:1px">' + esc(m.content) + '</div>';
+        h += '</div></div>';
+        html += h;
+        lastAuthor = m.sender_id;
+        lastTs = new Date(m.created_at).getTime();
+      });
+    }
+    html += '</div>';
+
+    if (t.status === 'open'){
+      html += '<div class="ticket-actions"><div class="row">' +
+        '<button class="export-btn" id="tk-export">Export transcript</button>' +
+        (isStaff || t.creator_id === window.ME.id ? '<button class="close-btn" id="tk-close">Close & Delete</button>' : '') +
+      '</div></div>';
+    } else {
+      html += '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px;border-top:1px solid var(--border)">This ticket is closed.</div>';
+    }
+
+    body.innerHTML = html;
+    requestAnimationFrame(function(){ body.scrollTop = body.scrollHeight; });
+
+    var ex = document.getElementById('tk-export');
+    if (ex) ex.onclick = function(){ exportTranscript(t); };
+    var cl = document.getElementById('tk-close');
+    if (cl) cl.onclick = function(){ closeFlow(t); };
+  }
+
+  // ---------- Composer ----------
+  function renderComposerTicket(){
+    var wrap = document.getElementById('composer-wrap');
+    if (!wrap) return;
+    var t = window.CURRENT.ticket;
+    if (!t || t.status === 'closed'){
+      wrap.innerHTML = t ? '<div class="composer" style="opacity:.55"><span style="color:var(--text3);font-size:13px">🔒 This ticket is closed.</span></div>' : '';
+      return;
+    }
+    var c = cats.find(function(x){ return x.id === t.category_id; }) || { name: 'ticket' };
+    wrap.innerHTML =
+      '<div class="composer">' +
+        '<textarea id="composer-input" rows="1" placeholder="Message #' + esc(c.name.toLowerCase().replace(/\s+/g, '-')) + '"></textarea>' +
+        '<button class="cbtn send" id="send-btn" title="Send">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg>' +
+        '</button>' +
+      '</div>';
+    var ta = document.getElementById('composer-input');
+    if (ta){
+      if (window.autosize) window.autosize(ta);
+      ta.addEventListener('input', function(){ if (window.autosize) window.autosize(ta); });
+      ta.addEventListener('keydown', function(e){
+        if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendTicketMessage(); }
+      });
+    }
+    var sb2 = document.getElementById('send-btn');
+    if (sb2) sb2.onclick = sendTicketMessage;
+  }
+
+  async function sendTicketMessage(){
+    var ta = document.getElementById('composer-input');
+    if (!ta) return;
+    var text = ta.value.trim();
+    if (!text) return;
+    var t = window.CURRENT.ticket;
+    try {
+      var r = await sb.from('ticket_messages').insert({ ticket_id: t.id, sender_id: window.ME.id, content: text.slice(0, 4000) });
+      if (r.error) throw r.error;
+      ta.value = '';
+      if (window.autosize) window.autosize(ta);
+    } catch(e){ window.toast("Could not send", e.message || String(e), "err"); }
+  }
+
+  // ---------- Export ----------
+  function buildTranscript(t){
+    var c = cats.find(function(x){ return x.id === t.category_id; }) || { name: 'Ticket' };
+    var lines = [];
+    var bar = '═══════════════════════════════════════════════';
+    lines.push(bar);
+    lines.push('  SLEEPY-CHAT — TICKET TRANSCRIPT');
+    lines.push(bar);
+    lines.push('  Category: ' + c.name);
+    lines.push('  Server:   ' + (window.CURRENT.server ? window.CURRENT.server.name : ''));
+    lines.push('  Opened:   ' + new Date(t.created_at).toLocaleString());
+    lines.push('  Ticket:   ' + t.id);
+    lines.push(bar);
+    lines.push('');
+    messages.forEach(function(m){
+      var p = window.PROFILES[m.sender_id] || { username: 'user', display_name: 'User' };
+      var staff = m.sender_id !== t.creator_id ? ' (staff)' : '';
+      lines.push('[' + new Date(m.created_at).toLocaleString() + '] ' + (p.display_name || p.username) + staff + ':');
+      lines.push('  ' + m.content);
+      lines.push('');
+    });
+    lines.push(bar);
+    lines.push('  Exported: ' + new Date().toLocaleString());
+    lines.push(bar);
+    return lines.join('\n');
+  }
+
+  function exportTranscript(t){
+    var text = buildTranscript(t);
+    var c = cats.find(function(x){ return x.id === t.category_id; }) || { name: 'ticket' };
+    var fname = 'ticket-' + c.name.replace(/\s+/g, '-').toLowerCase() + '-' + t.id.slice(0, 8) + '.txt';
+    var blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    window.toast("Transcript saved", fname, "ok");
+  }
+
+  // ---------- Close & Delete ----------
+  function closeFlow(t){
+    var preview = messages.slice(-3).map(function(m){
+      var p = window.PROFILES[m.sender_id] || { username: 'user' };
+      return '[' + new Date(m.created_at).toLocaleString() + '] ' + (p.display_name || p.username) + ': ' + m.content;
+    }).join('\n');
+    if (messages.length > 3) preview = '...(' + (messages.length - 3) + ' earlier)\n' + preview;
+
+    window.openModal("Close this ticket?",
+      '<p style="font-size:13px;color:var(--text2);line-height:1.55;margin-bottom:14px">' +
+        'This will permanently delete the ticket and all ' + messages.length + ' message' + (messages.length === 1 ? '' : 's') + '. You can export the transcript first if you want to keep a copy.' +
+      '</p>' +
+      '<div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);margin-bottom:6px">Preview</div>' +
+      '<div class="export-preview">' + esc(preview || '(no messages)') + '</div>',
+      { footer: '<button class="btn" id="tk-cancel">Cancel</button>' +
+                '<button class="btn" id="tk-export-first">Export & Delete</button>' +
+                '<button class="btn danger" id="tk-delete">Delete</button>',
+        onMount: function(){
+          document.getElementById('tk-cancel').onclick = window.closeModal;
+          document.getElementById('tk-export-first').onclick = function(){
+            exportTranscript(t);
+            setTimeout(function(){ deleteTicket(t); }, 400);
+          };
+          document.getElementById('tk-delete').onclick = function(){ deleteTicket(t); };
+        }
+      });
+  }
+
+  async function deleteTicket(t){
+    try {
+      var r = await sb.from('tickets').delete().eq('id', t.id);
+      if (r.error) throw r.error;
+      window.closeModal();
+      await refreshLists();
+      window.toast("Ticket closed", "Transcript has been deleted.", "ok");
+      openHub();
+    } catch(e){ window.toast("Could not close", e.message || String(e), "err"); }
+  }
+
+  // ---------- Category manager ----------
+  function openCategoryManager(){
+    if (!isStaff) return;
+    function list(){
+      if (!cats.length) return '<div style="padding:16px;text-align:center;color:var(--text3);font-size:13px">No categories yet.</div>';
+      return cats.map(function(c){
+        return '<div style="display:flex;align-items:center;gap:10px;padding:11px;border-radius:9px;background:rgba(255,255,255,.03);margin-bottom:6px">' +
+          '<span style="font-size:20px;width:28px;text-align:center">' + c.emoji + '</span>' +
+          '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13.5px">' + esc(c.name) + '</div>' +
+            (c.description ? '<div style="font-size:11.5px;color:var(--text3);margin-top:2px">' + esc(c.description) + '</div>' : '') +
+          '</div>' +
+          '<button class="btn sm danger" data-del="' + c.id + '">Delete</button>' +
+        '</div>';
+      }).join('');
+    }
+    window.openModal("Manage Ticket Categories",
+      '<p style="font-size:13px;color:var(--text2);margin-bottom:14px">Categories become buttons on the Tickets page. Users pick one when opening a ticket.</p>' +
+      '<div id="cat-list">' + list() + '</div>' +
+      '<hr style="border:none;border-top:1px solid var(--border);margin:16px 0">' +
+      '<div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);margin-bottom:8px">Add a category</div>' +
+      '<div style="display:grid;grid-template-columns:60px 1fr;gap:8px;margin-bottom:8px">' +
+        '<input id="cn-emoji" placeholder="🎫" maxlength="4" style="text-align:center;padding:10px;border-radius:8px;background:var(--void);border:1px solid var(--border);font-size:20px">' +
+        '<input id="cn-name" placeholder="Category name" maxlength="40" style="padding:10px;border-radius:8px;background:var(--void);border:1px solid var(--border)">' +
+      '</div>' +
+      '<input id="cn-desc" placeholder="Short description" maxlength="100" style="width:100%;padding:10px;border-radius:8px;background:var(--void);border:1px solid var(--border);margin-bottom:10px">' +
+      '<button class="btn primary" id="cn-add">+ Add Category</button>',
+      { wide: true,
+        footer: '<button class="btn" id="cn-close">Done</button>',
+        onMount: function(){
+          document.getElementById('cn-close').onclick = window.closeModal;
+          document.getElementById('cn-add').onclick = async function(){
+            var emoji = document.getElementById('cn-emoji').value.trim() || '🎫';
+            var name = document.getElementById('cn-name').value.trim();
+            var desc = document.getElementById('cn-desc').value.trim();
+            if (!name) return window.toast("Name required", "", "err");
+            try {
+              var r = await sb.from('ticket_categories').insert({
+                server_id: window.CURRENT.server.id, name: name, emoji: emoji, description: desc, position: cats.length
+              }).select().single();
+              if (r.error) throw r.error;
+              cats.push(r.data);
+              document.getElementById('cat-list').innerHTML = list();
+              wireDel();
+              document.getElementById('cn-name').value = '';
+              document.getElementById('cn-desc').value = '';
+              window.toast("Category added", "", "ok");
+              injectChannel();
+              if (window.CURRENT.type === 'tickets_hub') renderHub();
+            } catch(e){ window.toast("Error", e.message || String(e), "err"); }
+          };
+          function wireDel(){
+            document.querySelectorAll('[data-del]').forEach(function(b){
+              b.onclick = async function(){
+                try {
+                  await sb.from('ticket_categories').delete().eq('id', b.dataset.del);
+                  cats = cats.filter(function(x){ return x.id !== b.dataset.del; });
+                  document.getElementById('cat-list').innerHTML = list();
+                  wireDel();
+                  if (window.CURRENT.type === 'tickets_hub') renderHub();
+                } catch(e){ window.toast("Error", e.message || String(e), "err"); }
+              };
+            });
+          }
+          wireDel();
+        }
+      });
+  }
+
+  // ---------- Overrides ----------
+  var origRenderChat = window.renderChat;
+  window.renderChat = function(scroll){
+    if (window.CURRENT && window.CURRENT.type === 'tickets_hub'){ renderHub(); return; }
+    if (window.CURRENT && window.CURRENT.type === 'ticket'){ renderChat(); return; }
+    return origRenderChat.apply(this, arguments);
+  };
+
+  var origRenderChatHead = window.renderChatHead;
+  window.renderChatHead = function(){
+    if (window.CURRENT && (window.CURRENT.type === 'tickets_hub' || window.CURRENT.type === 'ticket')){
+      var el = document.getElementById('chat-head');
+      var t = window.CURRENT.type === 'ticket' ? window.CURRENT.ticket : null;
+      var c = t ? cats.find(function(x){ return x.id === t.category_id; }) : null;
+      var emoji = window.CURRENT.type === 'tickets_hub' ? '🎫' : (c ? c.emoji : '🎫');
+      var label = window.CURRENT.type === 'tickets_hub' ? 'tickets' : (c ? c.name.toLowerCase().replace(/\s+/g, '-') : 'ticket');
+      el.innerHTML =
+        '<button class="hbtn mobile-only" data-act="toggle-panel">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:20px;height:20px"><path d="M3 6h18M3 12h18M3 18h18"/></svg>' +
+        '</button>' +
+        '<div class="title"><span style="font-size:16px;flex:none">' + emoji + '</span><span class="txt">' + esc(label) + '</span></div>' +
+        '<div class="spacer"></div>' +
+        (isStaff && window.CURRENT.type === 'tickets_hub'
+          ? '<button class="hbtn" id="hdr-cats" title="Manage categories"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:17px;height:17px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H7a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1A1.6 1.6 0 0 0 15 2.6a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V7a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg></button>'
+          : '') +
+        '<button class="hbtn" data-act="toggle-members" title="Members"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:17px;height:17px"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></button>';
+      var hc = document.getElementById('hdr-cats');
+      if (hc) hc.onclick = openCategoryManager;
+      return;
+    }
+    return origRenderChatHead.apply(this, arguments);
+  };
+
+  var origRenderComposer = window.renderComposer;
+  window.renderComposer = function(){
+    if (window.CURRENT && window.CURRENT.type === 'tickets_hub'){
+      var w = document.getElementById('composer-wrap'); if (w) w.innerHTML = '';
+      var tb = document.getElementById('typing-bar'); if (tb) tb.innerHTML = '';
+      return;
+    }
+    if (window.CURRENT && window.CURRENT.type === 'ticket'){ renderComposerTicket(); return; }
+    return origRenderComposer.apply(this, arguments);
+  };
+
+  var origRenderPanel = window.renderPanel;
+  window.renderPanel = function(){
+    var r = origRenderPanel.apply(this, arguments);
+    setTimeout(injectChannel, 10);
+    return r;
+  };
+
+  // ---------- Bootstrap ----------
+  var origGoServer = window.goServer;
+  window.goServer = async function(sid){
+    var r = await origGoServer.apply(this, arguments);
+    serverSub = null; currentServerId = null;
+    await loadAll();
+    setTimeout(injectChannel, 200);
+    return r;
+  };
+
+  var origGoChannel = window.goChannel;
+  window.goChannel = async function(cid){
+    var r = await origGoChannel.apply(this, arguments);
+    setTimeout(injectChannel, 200);
+    return r;
+  };
+
+  setTimeout(async function(){
+    if (inServer()){
+      await loadAll();
+      setTimeout(injectChannel, 300);
+    }
+  }, 3000);
+
+  log("tickets v2 ready");
+})();
+</script>
+
 </body>
 </html>
