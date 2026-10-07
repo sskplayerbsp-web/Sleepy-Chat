@@ -10807,5 +10807,126 @@ html, body { overscroll-behavior: none; }
 })();
 </script>
 
+<!-- SLEEPY_TICKETS_CLEANUP_V1 -->
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyTicketsCleanup) return;
+  window.__sleepyTicketsCleanup = true;
+  function log(){ try{console.log.apply(console,["[TicketFix]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  // ------------------------------------------------------------
+  // 1. Remove v1's tickets-section the moment it appears
+  // ------------------------------------------------------------
+  function killV1(){
+    var v1 = document.getElementById('tickets-section');
+    if (v1){ v1.remove(); return true; }
+    return false;
+  }
+
+  // ------------------------------------------------------------
+  // 2. Remove v2's channel entry when not in server view
+  // ------------------------------------------------------------
+  function inServerView(){
+    var c = window.CURRENT;
+    if (!c || !c.server) return false;
+    if (c.type === 'dm' || c.type === 'home' || c.type === 'dms') return false;
+    return true;
+  }
+  function killV2IfNotServer(){
+    if (inServerView()) return;
+    var v2 = document.getElementById('tickets-channel-entry');
+    if (v2) v2.remove();
+  }
+
+  // ------------------------------------------------------------
+  // 3. Also nuke any stray duplicate entries (in case both
+  //    v1 and v2 injected at once)
+  // ------------------------------------------------------------
+  function dedupeEntries(){
+    var body = document.getElementById('panel-body');
+    if (!body) return;
+    // Only one tickets-channel-entry allowed
+    var entries = body.querySelectorAll('#tickets-channel-entry');
+    for (var i = 1; i < entries.length; i++) entries[i].remove();
+    // v1 sections: none allowed
+    body.querySelectorAll('#tickets-section').forEach(function(el){ el.remove(); });
+  }
+
+  function cleanupAll(){
+    killV1();
+    killV2IfNotServer();
+    dedupeEntries();
+  }
+
+  // ------------------------------------------------------------
+  // 4. Override renderPanel to run cleanup AFTER v1 and v2 have
+  //    had their turn (both use 10ms setTimeouts)
+  // ------------------------------------------------------------
+  var origRenderPanel = window.renderPanel;
+  if (typeof origRenderPanel === 'function'){
+    window.renderPanel = function(){
+      var r = origRenderPanel.apply(this, arguments);
+      setTimeout(cleanupAll, 60);
+      return r;
+    };
+  }
+
+  // Safety net — periodic cleanup in case something slips through
+  setInterval(cleanupAll, 600);
+
+  // Also run whenever the channel/panel changes
+  var origGoChannel = window.goChannel;
+  if (typeof origGoChannel === 'function'){
+    window.goChannel = async function(cid){
+      var r = await origGoChannel.apply(this, arguments);
+      setTimeout(cleanupAll, 150);
+      return r;
+    };
+  }
+  var origGoHome = window.goHome;
+  if (typeof origGoHome === 'function'){
+    window.goHome = async function(){
+      var r = await origGoHome.apply(this, arguments);
+      setTimeout(cleanupAll, 150);
+      return r;
+    };
+  }
+
+  // ------------------------------------------------------------
+  // 5. One-time purge of closed tickets left over from v1's UI
+  //    (v1's "close" only set status='closed'; v2's design is
+  //    "close = delete")
+  // ------------------------------------------------------------
+  var purged = false;
+  async function purgeClosed(){
+    if (purged) return;
+    if (!window.ME || !window.sb) return;
+    purged = true;
+    try {
+      var r = await sb.from('tickets').select('id').eq('status', 'closed');
+      if (r.data && r.data.length){
+        for (var i = 0; i < r.data.length; i++){
+          await sb.from('tickets').delete().eq('id', r.data[i].id);
+        }
+        if (window.toast) window.toast("Cleaned up", "Removed " + r.data.length + " old closed ticket" + (r.data.length === 1 ? "" : "s") + ".", "ok");
+        log("purged", r.data.length, "closed tickets");
+      }
+    } catch(e){ log("purge failed:", e.message); }
+  }
+
+  setTimeout(purgeClosed, 6000);
+
+  // ------------------------------------------------------------
+  // 6. Throttle v2's injectChannel by watching for a storm of
+  //    renderPanel calls. If we see more than 5 in 1 second,
+  //    disable v1's inject indirectly by... actually we can't.
+  //    Just absorb the cost with the cleanup above.
+  // ------------------------------------------------------------
+
+  log("tickets cleanup ready");
+})();
+</script>
+
 </body>
 </html>
