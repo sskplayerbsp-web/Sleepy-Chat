@@ -15572,5 +15572,1091 @@ body.in-game-room .panel-head{
 })();
 </script>
 
+<!-- SLEEPY_FISH_IN_MENU_V1 -->
+<style>
+/* Hide the standalone fishing rail button — fishing now lives inside the game menu */
+.rail-btn.fishing-btn{display:none!important}
+
+/* Sub-navigation inside the Game Room */
+.gr-tabs{display:flex;gap:4px;background:var(--void);padding:5px;border-radius:12px;
+  border:1px solid var(--border);margin:0 auto 22px;max-width:560px}
+.gr-tabs button{flex:1;padding:11px 14px;border-radius:9px;font-size:13px;font-weight:700;
+  color:var(--text3);cursor:pointer;transition:all .15s;font-family:inherit;background:none;border:none;
+  display:flex;align-items:center;justify-content:center;gap:8px;letter-spacing:.02em}
+.gr-tabs button:hover{color:var(--text2)}
+.gr-tabs button.active{background:linear-gradient(135deg, rgba(139,124,255,.22), rgba(94,231,215,.1));
+  color:#fff;box-shadow:0 0 16px rgba(139,124,255,.28), inset 0 0 0 1px rgba(139,124,255,.4)}
+.gr-tabs button .em{font-size:16px;line-height:1}
+
+/* Make sure the fishing stage isn't a "channel" — no header sub text */
+body.in-game-room .chat-head .topic{display:none!important}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyFishInMenu) return;
+  window.__sleepyFishInMenu = true;
+  function log(){ try{console.log.apply(console,["[FishMenu]"].concat([].slice.call(arguments)));}catch(e){} }
+  function esc(s){ return window.esc(s); }
+
+  var BANK_ID = '00000000-0000-0000-0000-0000000000ba';
+  var GAME_TAB = 'play';   // 'play' | 'fishing' | 'shop'
+
+  // ----------------------------------------------------------------
+  // State for the fishing minigame
+  // ----------------------------------------------------------------
+  var fish = {
+    phase: 'idle',   // idle | casting | bite | timing | result
+    biteTimer: null,
+    missTimer: null,
+    raf: null,
+    pos: 0,
+    start: 0,
+    window: 2600,   // ms for marker to cross from 0 to 100
+    quality: null,
+    caught: null,
+    mult: 1
+  };
+
+  function clearTimers(){
+    if (fish.biteTimer){ clearTimeout(fish.biteTimer); fish.biteTimer = null; }
+    if (fish.missTimer){ clearTimeout(fish.missTimer); fish.missTimer = null; }
+    if (fish.raf){ cancelAnimationFrame(fish.raf); fish.raf = null; }
+  }
+
+  // ----------------------------------------------------------------
+  // Ensure account is loaded
+  // ----------------------------------------------------------------
+  var ACCOUNT = null;
+  async function loadAccount(){
+    if (!window.ME) return null;
+    try {
+      var r = await sb.from('bank_accounts').select('*').eq('user_id', window.ME.id).maybeSingle();
+      if (r.data){ ACCOUNT = r.data; return ACCOUNT; }
+      var ins = await sb.from('bank_accounts').insert({ user_id: window.ME.id, balance: 100 }).select().single();
+      ACCOUNT = ins.data;
+    } catch(e){ log("account load failed:", e.message); }
+    return ACCOUNT;
+  }
+
+  // ----------------------------------------------------------------
+  // Open the game room (from anywhere)
+  // ----------------------------------------------------------------
+  async function openGameRoom(tab){
+    window.CURRENT = { type: 'games', server: null, channel: null, conv: null, ticket: null };
+    GAME_TAB = tab || GAME_TAB || 'play';
+    clearTimers();
+    fish.phase = 'idle';
+    fish.caught = null;
+    await loadAccount();
+    window.renderChatHead && window.renderChatHead();
+    renderGameRoom();
+    setTimeout(renderGamePanel, 30);
+  }
+  window.openGameRoom = openGameRoom;
+
+  // ----------------------------------------------------------------
+  // Render the current tab
+  // ----------------------------------------------------------------
+  function renderGameRoom(){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+
+    // Build the tab bar
+    var tabs = '<div class="gr-tabs">' +
+      '<button class="' + (GAME_TAB==='play'?'active':'') + '" data-gr="play"><span class="em">🎮</span>Play</button>' +
+      '<button class="' + (GAME_TAB==='fishing'?'active':'') + '" data-gr="fishing"><span class="em">🎣</span>Fishing</button>' +
+      '<button class="' + (GAME_TAB==='shop'?'active':'') + '" data-gr="shop"><span class="em">🛒</span>Shop</button>' +
+    '</div>';
+
+    var content = '';
+    if (GAME_TAB === 'fishing') content = renderFishingTab();
+    else if (GAME_TAB === 'shop') content = renderShopTab();
+    else content = renderPlayTab();
+
+    body.innerHTML = tabs + content;
+    wireBody();
+  }
+
+  // ----------------------------------------------------------------
+  // PLAY TAB (delegates to the existing lobby renderer if present)
+  // ----------------------------------------------------------------
+  function renderPlayTab(){
+    // The join-game fix patch renders its own lobby. Just trigger it.
+    if (typeof window.openGameRoomFixed === 'function'){
+      // We already set CURRENT.type = 'games'
+      // Call the underlying render after this tick
+      setTimeout(function(){
+        // Tell the other patch to render into our chat body
+        if (window.__sleepyFixJoinGame && typeof window.renderFixed === 'function'){
+          // renderFixed is private, call via the exposed method
+        }
+      }, 0);
+    }
+    // Fallback: simple message
+    return '<div style="padding:40px 20px;text-align:center;color:var(--text3);font-size:13px">' +
+      'Loading Play tab...' +
+    '</div>';
+  }
+
+  // ----------------------------------------------------------------
+  // SHOP TAB
+  // ----------------------------------------------------------------
+  function renderShopTab(){
+    // Delegate to whatever shop renderer the gaming_area patch installed
+    return '<div style="padding:40px 20px;text-align:center;color:var(--text3);font-size:13px">' +
+      'Loading Shop...' +
+    '</div>';
+  }
+
+  // ----------------------------------------------------------------
+  // FISHING TAB — the minigame, self-contained
+  // ----------------------------------------------------------------
+  var FISH_TABLE = [
+    { name:'Minnow',         emoji:'🐟', tier:'common',    value:10,   weight:25 },
+    { name:'Sardine',        emoji:'🐟', tier:'common',    value:15,   weight:20 },
+    { name:'Bass',           emoji:'🐟', tier:'common',    value:25,   weight:15 },
+    { name:'Trout',          emoji:'🐠', tier:'uncommon',  value:50,   weight:10 },
+    { name:'Salmon',         emoji:'🐠', tier:'uncommon',  value:75,   weight:8 },
+    { name:'Tuna',           emoji:'🐟', tier:'uncommon',  value:100,  weight:7 },
+    { name:'Clownfish',      emoji:'🐠', tier:'rare',      value:150,  weight:4 },
+    { name:'Swordfish',      emoji:'🐟', tier:'rare',      value:250,  weight:3 },
+    { name:'Golden Koi',     emoji:'🐠', tier:'legendary', value:500,  weight:1 },
+    { name:'Mythic Arowana', emoji:'🐉', tier:'legendary', value:1000, weight:0.5 },
+    { name:'Pufferfish',     emoji:'🐡', tier:'puffer',    value:0,    weight:6.5 }
+  ];
+
+  function rollFish(){
+    var total = FISH_TABLE.reduce(function(s,f){ return s + f.weight; }, 0);
+    var r = Math.random() * total, acc = 0;
+    for (var i = 0; i < FISH_TABLE.length; i++){
+      acc += FISH_TABLE[i].weight;
+      if (r < acc) return FISH_TABLE[i];
+    }
+    return FISH_TABLE[0];
+  }
+
+  function renderFishingTab(){
+    var bal = ACCOUNT ? ACCOUNT.balance : 0;
+    var poisoned = ACCOUNT && ACCOUNT.poisoned;
+
+    var h = '<div style="max-width:560px;margin:0 auto;padding:0 20px 60px">';
+
+    // Balance strip
+    h += '<div style="text-align:center;padding:14px;border-radius:14px;' +
+      'background:linear-gradient(135deg,rgba(255,200,87,.1),rgba(0,230,118,.06));' +
+      'border:1px solid rgba(255,200,87,.3);margin-bottom:20px">' +
+      '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:32px;font-weight:700;' +
+      'color:#ffd166;line-height:1;text-shadow:0 0 24px rgba(255,200,87,.4)">🪙 ' + bal.toLocaleString() + '</div>' +
+      '<div style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin-top:5px">Balance</div>' +
+    '</div>';
+
+    // Poison warning
+    if (poisoned){
+      h += '<div style="display:flex;align-items:center;gap:12px;padding:14px;border-radius:12px;' +
+        'background:rgba(255,45,111,.08);border:1px solid rgba(255,45,111,.4);margin-bottom:16px">' +
+        '<span style="font-size:24px">🐡</span>' +
+        '<div style="flex:1"><div style="font-weight:700;font-size:13px;color:#ff8aa8">POISONED</div>' +
+          '<div style="font-size:11.5px;color:var(--text3)">Losing 10 coins/min</div></div>' +
+        '<button id="fish-cure-btn" style="padding:8px 14px;border-radius:8px;' +
+          'background:linear-gradient(135deg,#ff2d6f,#c41d54);color:#fff;border:none;' +
+          'font-weight:700;font-size:12px;cursor:pointer' +
+          (bal < 100 ? ';opacity:.5;cursor:not-allowed' : '') + '"' +
+          (bal < 100 ? ' disabled' : '') + '>Cure -100</button>' +
+      '</div>';
+    }
+
+    // Water stage
+    h += '<div id="fish-stage" style="position:relative;height:280px;border-radius:16px;' +
+      'background:linear-gradient(180deg, rgba(0,80,140,.5), rgba(0,40,90,.7));' +
+      'border:1px solid rgba(0,200,255,.3);overflow:hidden;margin-bottom:16px">';
+
+    // Water lines
+    h += '<div style="position:absolute;inset:0;' +
+      'background:repeating-linear-gradient(90deg,transparent 0 40px,rgba(0,255,224,.05) 40px 42px);' +
+      'animation:waterMove 8s linear infinite"></div>';
+
+    // Swimmers
+    var swimmers = ['🐟','🐠','🐟','🐡','🐠','🐟'];
+    swimmers.forEach(function(e, i){
+      var positions = [{t:'20%',l:'10%'},{t:'50%',l:'70%'},{t:'75%',l:'25%'},{t:'35%',l:'50%'},{t:'65%',l:'80%'},{t:'15%',l:'45%'}][i];
+      h += '<div style="position:absolute;top:' + positions.t + ';left:' + positions.l + ';font-size:24px;' +
+        'filter:drop-shadow(0 0 6px rgba(0,200,255,.5));opacity:.75;' +
+        'animation:swimFloat ' + (4 + i * .3) + 's ease-in-out infinite">' + e + '</div>';
+    });
+
+    // Overlay per phase
+    if (fish.phase === 'casting'){
+      h += '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;' +
+        'justify-content:center;background:rgba(10,10,15,.5);backdrop-filter:blur(4px)">' +
+        '<div style="font-family:\'Space Grotesk\';font-size:16px;font-weight:700;color:var(--cyan);' +
+          'letter-spacing:.06em;text-transform:uppercase">Casting...</div>' +
+        '<div style="font-size:12px;color:var(--text3);margin-top:6px">Wait for a bite...</div>' +
+      '</div>';
+    }
+    if (fish.phase === 'bite'){
+      h += '<div id="fish-bite" style="position:absolute;inset:0;display:flex;flex-direction:column;' +
+        'align-items:center;justify-content:center;background:rgba(10,10,15,.6);backdrop-filter:blur(4px);cursor:pointer">' +
+        '<div style="font-size:64px;animation:fishBite .3s ease">❗</div>' +
+        '<div style="font-family:\'Space Grotesk\';font-size:18px;font-weight:700;color:var(--cyan);' +
+          'margin-top:8px;text-shadow:0 0 12px rgba(94,231,215,.6)">CLICK NOW!</div>' +
+        '<div style="font-size:11.5px;color:var(--text3);margin-top:4px">Hook the fish fast</div>' +
+      '</div>';
+    }
+    if (fish.phase === 'timing'){
+      h += '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;' +
+        'justify-content:center;background:rgba(10,10,15,.55);backdrop-filter:blur(4px)">' +
+        '<div style="font-family:\'Space Grotesk\';font-size:16px;font-weight:700;color:var(--cyan)">Reel it in!</div>' +
+        '<div style="font-size:11.5px;color:var(--text3);margin-top:4px">Click the stage when the marker is centered</div>' +
+      '</div>';
+    }
+    if (fish.phase === 'result' && fish.caught){
+      var c = fish.caught;
+      var rarity = c.tier === 'legendary' ? 'linear-gradient(135deg, rgba(255,200,87,.22), rgba(255,45,111,.14))' :
+                    c.tier === 'rare' ? 'linear-gradient(135deg, rgba(94,231,215,.22), rgba(139,124,255,.12))' :
+                    c.tier === 'puffer' ? 'linear-gradient(135deg, rgba(255,45,111,.24), rgba(255,45,111,.1))' :
+                    'linear-gradient(135deg, rgba(139,124,255,.18), rgba(94,231,215,.1))';
+      var valueLine = c.tier === 'puffer'
+        ? '<div style="font-family:\'Space Grotesk\';font-size:22px;font-weight:700;color:#ff8aa8;margin-top:6px">+ POISON</div>'
+        : '<div style="font-family:\'Space Grotesk\';font-size:26px;font-weight:700;color:#ffd166;margin-top:6px">+' + Math.round(c.value * fish.mult) + ' 🪙' + (fish.mult > 1 ? ' (x' + fish.mult + ')' : '') + '</div>';
+      h += '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;' +
+        'background:rgba(10,10,15,.88);z-index:6;animation:fishPop .35s ease">' +
+        '<div style="text-align:center;padding:28px;border-radius:16px;' +
+          'background:' + rarity + ';border:1px solid rgba(255,200,87,.4)">' +
+          '<div style="font-size:72px;line-height:1;margin-bottom:10px;' +
+            'animation:fishBounce .6s ease">' + c.emoji + '</div>' +
+          '<div style="font-family:\'Space Grotesk\';font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px">' + esc(c.name) + '</div>' +
+          '<div style="font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;' +
+            'color:var(--text3);padding:2px 10px;border-radius:99px;background:rgba(0,0,0,.3);display:inline-block">' +
+            esc(c.tier === 'puffer' ? 'HAZARD' : c.tier) + '</div>' +
+          valueLine +
+          (fish.quality ? '<div style="margin-top:12px;font-size:13px;font-weight:700;' +
+            (fish.quality === 'perfect' ? 'color:#ffd166' : fish.quality === 'great' ? 'color:#4ade80' : 'color:#ffc857') + '">' +
+            (fish.quality === 'perfect' ? '🌟 PERFECT!' : fish.quality === 'great' ? '✨ Great!' : '👍 Nice') + '</div>' : '') +
+        '</div>' +
+      '</div>';
+    }
+
+    h += '</div>';
+
+    // Timing bar (only in timing phase)
+    if (fish.phase === 'timing'){
+      h += '<div style="margin-top:6px">' +
+        '<div style="position:relative;height:36px;border-radius:10px;overflow:hidden;' +
+          'background:linear-gradient(90deg, ' +
+            'rgba(255,45,111,.4) 0%, rgba(255,171,0,.4) 20%, rgba(74,222,128,.5) 40%, ' +
+            'rgba(94,231,215,.75) 48%, rgba(94,231,215,.75) 52%, ' +
+            'rgba(74,222,128,.5) 60%, rgba(255,171,0,.4) 80%, rgba(255,45,111,.4) 100%);' +
+          'border:1px solid rgba(94,231,215,.4)">' +
+          '<div id="fish-marker" style="position:absolute;top:-3px;bottom:-3px;left:0;width:4px;' +
+            'background:#fff;border-radius:2px;box-shadow:0 0 12px #fff,0 0 24px rgba(94,231,215,.9)"></div>' +
+        '</div>' +
+        '<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:10.5px;color:var(--text3);font-family:monospace">' +
+          '<span>Miss</span><span>OK</span><span style="color:var(--cyan);font-weight:700">PERFECT</span><span>OK</span><span>Miss</span>' +
+        '</div>' +
+      '</div>';
+    }
+
+    // Cast button
+    if (fish.phase === 'idle'){
+      h += '<button id="fish-cast-btn"' + (poisoned ? ' disabled' : '') + ' style="width:100%;margin-top:16px;' +
+        'padding:16px;border-radius:14px;background:linear-gradient(135deg,#5ee7d7,#0096ff);' +
+        'color:#04120f;font-weight:800;font-size:15px;letter-spacing:.04em;border:none;cursor:pointer;' +
+        'display:flex;align-items:center;justify-content:center;gap:10px;font-family:inherit' +
+        (poisoned ? ';opacity:.5;cursor:not-allowed' : '') + '">' +
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M4 20 12 12M12 12l8-8M12 12H4M12 12v8"/></svg>' +
+        (poisoned ? 'Cure first to fish' : 'Cast Line') +
+      '</button>';
+    }
+
+    // Recent catches
+    h += '<div style="margin-top:24px"><h3 style="font-size:10.5px;font-weight:700;letter-spacing:.14em;' +
+      'text-transform:uppercase;color:var(--text3);margin-bottom:10px;font-family:\'JetBrains Mono\',monospace">' +
+      'Recent catches</h3><div id="fish-recent" style="display:flex;flex-direction:column;gap:5px">' +
+      '<div style="color:var(--text3);font-size:12.5px">Loading...</div></div></div>';
+
+    h += '</div>';
+    return h;
+  }
+
+  // ----------------------------------------------------------------
+  // Fishing actions
+  // ----------------------------------------------------------------
+  async function doCast(){
+    if (fish.phase !== 'idle') return;
+    if (!ACCOUNT) await loadAccount();
+    if (ACCOUNT && ACCOUNT.poisoned){
+      window.toast("You're poisoned", "Cure first.", "err");
+      return;
+    }
+    fish.phase = 'casting';
+    fish.caught = null;
+    fish.quality = null;
+    fish.mult = 1;
+    renderGameRoom();
+
+    var wait = 1400 + Math.random() * 2400;
+    fish.biteTimer = setTimeout(function(){
+      if (fish.phase !== 'casting') return;
+      fish.phase = 'bite';
+      renderGameRoom();
+      if (navigator.vibrate) try { navigator.vibrate(60); } catch(e){}
+
+      fish.missTimer = setTimeout(function(){
+        if (fish.phase === 'bite') finishCast('miss');
+      }, 1600);
+    }, wait);
+  }
+
+  function startTiming(){
+    fish.phase = 'timing';
+    fish.start = Date.now();
+    fish.pos = 0;
+    renderGameRoom();
+
+    var tick = function(){
+      var elapsed = Date.now() - fish.start;
+      var t = (elapsed % (fish.window * 2)) / fish.window;
+      fish.pos = t <= 1 ? t * 100 : (2 - t) * 100;
+      var m = document.getElementById('fish-marker');
+      if (m) m.style.left = 'calc(' + fish.pos + '% - 2px)';
+      fish.raf = requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  function hookTiming(){
+    if (fish.phase !== 'timing') return;
+    clearTimers();
+    var d = Math.abs(fish.pos - 50);
+    var quality = d <= 6 ? 'perfect' : d <= 14 ? 'great' : d <= 28 ? 'ok' : 'miss';
+    finishCast(quality);
+  }
+
+  async function finishCast(quality){
+    fish.phase = 'result';
+    fish.quality = quality;
+    if (quality === 'miss'){
+      fish.caught = null;
+      renderGameRoom();
+      window.toast("Missed", "The fish got away.", "err");
+      setTimeout(function(){ fish.phase = 'idle'; renderGameRoom(); loadRecent(); }, 1500);
+      return;
+    }
+
+    // Roll a fish
+    var caught = rollFish();
+
+    // Hidden puffer cycle: force after 10 non-puffer
+    try {
+      var pr = await sb.from('fishing_catches').select('fish_tier')
+        .eq('user_id', window.ME.id).order('caught_at', { ascending: false }).limit(20);
+      var rows = pr.data || [];
+      var lastIdx = -1;
+      for (var i = 0; i < rows.length; i++) if (rows[i].fish_tier === 'puffer'){ lastIdx = i; break; }
+      var nonPuff = lastIdx < 0 ? rows.length : lastIdx;
+      if (nonPuff >= 10 && caught.tier !== 'puffer'){
+        caught = { name:'Pufferfish', emoji:'🐡', tier:'puffer', value:0 };
+      }
+    } catch(e){}
+
+    var mult = quality === 'perfect' ? 2 : quality === 'great' ? 1.5 : 1;
+    fish.mult = mult;
+    fish.caught = caught;
+
+    try {
+      var r = await sb.rpc('record_catch', {
+        fish_name: caught.name,
+        fish_emoji: caught.emoji,
+        fish_tier: caught.tier,
+        fish_value: Math.round(caught.value * mult)
+      });
+      if (r.error) throw r.error;
+      await loadAccount();
+      renderGameRoom();
+      loadRecent();
+      setTimeout(function(){
+        if (fish.phase === 'result'){ fish.phase = 'idle'; renderGameRoom(); }
+      }, 2800);
+    } catch(e){
+      log("catch failed:", e.message);
+      window.toast("Error", e.message || String(e), "err");
+      fish.phase = 'idle';
+      renderGameRoom();
+    }
+  }
+
+  async function loadRecent(){
+    var el = document.getElementById('fish-recent');
+    if (!el || !window.ME) return;
+    try {
+      var r = await sb.from('fishing_catches').select('*')
+        .eq('user_id', window.ME.id).order('caught_at', { ascending: false }).limit(6);
+      var rows = r.data || [];
+      if (!rows.length){
+        el.innerHTML = '<div style="color:var(--text3);font-size:12.5px">No catches yet. Cast your line!</div>';
+        return;
+      }
+      el.innerHTML = rows.map(function(c){
+        var v = c.fish_tier === 'puffer'
+          ? '<span style="font-family:monospace;font-weight:700;color:#ff8aa8">POISON</span>'
+          : '<span style="font-family:monospace;font-weight:700;color:#ffd166">+' + c.value + '</span>';
+        return '<div style="display:flex;align-items:center;gap:12px;padding:9px 12px;' +
+          'border-radius:9px;background:rgba(255,255,255,.03);font-size:13px">' +
+          '<span style="font-size:20px">' + c.fish_emoji + '</span>' +
+          '<span style="flex:1;font-weight:600;color:var(--text)">' + esc(c.fish_name) + '</span>' +
+          '<span style="font-size:10.5px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase">' + esc(c.fish_tier) + '</span>' +
+          v +
+        '</div>';
+      }).join('');
+    } catch(e){}
+  }
+
+  async function doCure(){
+    try {
+      var r = await sb.rpc('cure_poison');
+      if (r.error) throw r.error;
+      await loadAccount();
+      window.toast("Cured", "You're healthy.", "ok");
+      renderGameRoom();
+    } catch(e){ window.toast("Error", e.message || String(e), "err"); }
+  }
+
+  // ----------------------------------------------------------------
+  // Wire the rendered body
+  // ----------------------------------------------------------------
+  function wireBody(){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+
+    body.querySelectorAll('[data-gr]').forEach(function(b){
+      b.onclick = function(){
+        GAME_TAB = b.dataset.gr;
+        if (GAME_TAB === 'fishing'){ loadAccount().then(renderGameRoom).then(loadRecent); }
+        else renderGameRoom();
+        setTimeout(renderGamePanel, 10);
+      };
+    });
+
+    var cast = document.getElementById('fish-cast-btn');
+    if (cast) cast.onclick = doCast;
+
+    var bite = document.getElementById('fish-bite');
+    if (bite) bite.onclick = startTiming;
+
+    var stage = document.getElementById('fish-stage');
+    if (stage && fish.phase === 'timing'){
+      stage.style.cursor = 'pointer';
+      stage.onclick = hookTiming;
+    }
+
+    var cure = document.getElementById('fish-cure-btn');
+    if (cure && !cure.disabled) cure.onclick = doCure;
+
+    if (GAME_TAB === 'fishing') loadRecent();
+  }
+
+  // ----------------------------------------------------------------
+  // Left panel nav
+  // ----------------------------------------------------------------
+  function renderGamePanel(){
+    if (!window.CURRENT || window.CURRENT.type !== 'games') return;
+    var body = document.getElementById('panel-body');
+    if (!body) return;
+    if (!window.__savedPanelHTML && !body.querySelector('.game-nav')){
+      window.__savedPanelHTML = body.innerHTML;
+    }
+    var head = document.getElementById('panel-head');
+    if (head) head.innerHTML = '<div class="ttl">🎮 Game Room</div>';
+
+    var h = '<div class="game-nav">' +
+      '<h3>Games</h3>' +
+      '<button class="gbtn ' + (GAME_TAB==='play'?'active':'') + '" data-gpanel="play">' +
+        '<span class="emoji">🎮</span><span class="lbl">Play<span class="sub">Tic-Tac-Toe matches</span></span></button>' +
+      '<button class="gbtn ' + (GAME_TAB==='fishing'?'active':'') + '" data-gpanel="fishing">' +
+        '<span class="emoji">🎣</span><span class="lbl">Fishing<span class="sub">Cast & earn coins</span></span></button>' +
+      '<button class="gbtn ' + (GAME_TAB==='shop'?'active':'') + '" data-gpanel="shop">' +
+        '<span class="emoji">🛒</span><span class="lbl">Shop<span class="sub">Spend your coins</span></span></button>' +
+    '</div>';
+    body.innerHTML = h;
+    body.querySelectorAll('[data-gpanel]').forEach(function(b){
+      b.onclick = function(){
+        GAME_TAB = b.dataset.gpanel;
+        if (GAME_TAB === 'fishing'){ loadAccount().then(renderGameRoom).then(loadRecent); }
+        else renderGameRoom();
+        renderGamePanel();
+      };
+    });
+  }
+
+  // ----------------------------------------------------------------
+  // Override renderChat for the games page
+  // ----------------------------------------------------------------
+  var origRC = window.renderChat;
+  window.renderChat = function(){
+    if (window.CURRENT && window.CURRENT.type === 'games'){
+      document.body.classList.add('in-game-room');
+      renderGameRoom();
+      renderGamePanel();
+      return;
+    }
+    document.body.classList.remove('in-game-room');
+    return origRC.apply(this, arguments);
+  };
+
+  var origRCH = window.renderChatHead;
+  window.renderChatHead = function(){
+    if (window.CURRENT && window.CURRENT.type === 'games'){
+      var el = document.getElementById('chat-head');
+      if (el){
+        var label = GAME_TAB === 'fishing' ? 'Fishing' : GAME_TAB === 'shop' ? 'Shop' : 'Game Room';
+        var emoji = GAME_TAB === 'fishing' ? '🎣' : GAME_TAB === 'shop' ? '🛒' : '🎮';
+        el.innerHTML =
+          '<button class="hbtn mobile-only" data-act="toggle-panel">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:20px;height:20px"><path d="M3 6h18M3 12h18M3 18h18"/></svg>' +
+          '</button>' +
+          '<div class="title"><span style="font-size:16px">' + emoji + '</span><span class="txt">' + label + '</span></div>' +
+          '<div class="spacer"></div>';
+      }
+      return;
+    }
+    return origRCH.apply(this, arguments);
+  };
+
+  var origRComp = window.renderComposer;
+  window.renderComposer = function(){
+    if (window.CURRENT && window.CURRENT.type === 'games'){
+      var w = document.getElementById('composer-wrap'); if (w) w.innerHTML = '';
+      var t = document.getElementById('typing-bar'); if (t) t.innerHTML = '';
+      return;
+    }
+    return origRComp.apply(this, arguments);
+  };
+
+  // ----------------------------------------------------------------
+  // Wire the RAIL button
+  // ----------------------------------------------------------------
+  function wireRail(){
+    var btn = document.querySelector('.rail-btn.games-btn');
+    if (!btn || btn.__wiredFishMenu) return;
+    btn.__wiredFishMenu = true;
+    btn.onclick = function(){ openGameRoom('play'); };
+  }
+  setInterval(wireRail, 2000);
+
+  // ----------------------------------------------------------------
+  // Override any old openFishing/openGames to route through ours
+  // ----------------------------------------------------------------
+  window.openFishing = function(){ openGameRoom('fishing'); };
+  window.openGames = function(){ openGameRoom('play'); };
+
+  // ----------------------------------------------------------------
+  // BOOT
+  // ----------------------------------------------------------------
+  setTimeout(async function(){
+    if (!window.ME) return;
+    await loadAccount();
+    wireRail();
+    log("fishing in menu ready");
+  }, 6000);
+
+  log("loaded");
+})();
+</script>
+
+<!-- SLEEPY_GUARD_RENDER_V1 -->
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyGuardRender) return;
+  window.__sleepyGuardRender = true;
+  function log(){ try{console.log.apply(console,["[Guard]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  // ------------------------------------------------------------
+  // 1. Guard renderMembers
+  // ------------------------------------------------------------
+  // The base code (and several patches) call renderMembers()
+  // unconditionally. It crashes whenever CURRENT.server is null.
+  // We wrap every reference to renderMembers so it always runs
+  // through our safe version.
+
+  function safeRenderMembers(){
+    try {
+      // Only render when we're actually viewing a server
+      var c = window.CURRENT;
+      if (!c || !c.server) {
+        var el = document.getElementById('members');
+        if (el) el.innerHTML = '';
+        return;
+      }
+      // Not in server-view types (game room, fishing, tickets hub, ticket, dm)
+      if (c.type === 'games' || c.type === 'fishing' || c.type === 'tickets_hub' || c.type === 'ticket' || c.type === 'dm' || c.type === 'home' || c.type === 'dms') {
+        var el2 = document.getElementById('members');
+        if (el2) el2.innerHTML = '';
+        return;
+      }
+      // Call the underlying render, whatever it is now
+      var orig = window.__origRenderMembers;
+      if (typeof orig === 'function') return orig.call(window);
+    } catch (e) {
+      log("renderMembers error (caught):", e && e.message);
+    }
+  }
+
+  // Capture the current renderMembers, then install the safe wrapper
+  if (typeof window.renderMembers === 'function' && !window.__origRenderMembers){
+    window.__origRenderMembers = window.renderMembers;
+  }
+  window.renderMembers = safeRenderMembers;
+
+  // Also patch document.body so any other code that pokes the members panel
+  // doesn't crash. Some patches call renderMembers via setters.
+  setInterval(function(){
+    if (window.renderMembers !== safeRenderMembers){
+      // Someone re-wrapped it — recapture and re-install
+      if (!window.__origRenderMembers){
+        window.__origRenderMembers = window.renderMembers;
+      } else if (window.renderMembers !== window.__origRenderMembers){
+        // Another wrapper replaced ours; keep theirs as inner
+        var theirs = window.renderMembers;
+        window.__origRenderMembers = function(){
+          try { return theirs.call(window); } catch(e){ log("inner renderMembers error:", e && e.message); }
+        };
+      }
+      window.renderMembers = safeRenderMembers;
+    }
+  }, 2000);
+
+  // ------------------------------------------------------------
+  // 2. Guard loadServerMembers too (used by renderMembers)
+  // ------------------------------------------------------------
+  if (typeof window.loadServerMembers === 'function' && !window.__origLoadServerMembers){
+    window.__origLoadServerMembers = window.loadServerMembers;
+  }
+  var origLSM = window.__origLoadServerMembers;
+  if (typeof origLSM === 'function'){
+    window.loadServerMembers = async function(sid){
+      if (!sid) return [];
+      try { return await origLSM.call(this, sid); } catch(e){ log("loadServerMembers error:", e && e.message); return []; }
+    };
+  }
+
+  // ------------------------------------------------------------
+  // 3. Harden game-create and game-accept
+  // ------------------------------------------------------------
+  // The rpc calls can fail for various reasons. Wrap them so we
+  // always get a clear toast and don't leave the UI stuck.
+
+  // Patch create_game_challenge
+  var origCreate = sb.rpc.bind(sb);
+  sb.rpc = async function(fn, params, options){
+    try {
+      var r = await origCreate(fn, params, options);
+      // If RPC returned error, log the message but don't throw
+      if (r && r.error){
+        log("RPC error on " + fn + ":", r.error.message);
+      }
+      return r;
+    } catch(e){
+      log("RPC threw on " + fn + ":", e.message);
+      throw e;
+    }
+  };
+
+  // ------------------------------------------------------------
+  // 4. Wire the game-room create button with clearer feedback
+  // ------------------------------------------------------------
+  document.addEventListener('click', async function(e){
+    var cc = e.target.closest('#create-challenge');
+    if (!cc) return;
+    // Skip if disabled or already being processed
+    if (cc.disabled) return;
+    cc.disabled = true;
+    var origText = cc.textContent;
+    cc.textContent = 'Creating...';
+
+    try {
+      // Find bet amount
+      var body = cc.closest('.games-wrap') || cc.parentElement;
+      var sel = body.querySelector('[data-bet].sel');
+      var custom = document.getElementById('custom-bet');
+      var bet = 100;
+      if (custom && custom.value !== '' && !isNaN(parseInt(custom.value, 10))){
+        bet = parseInt(custom.value, 10);
+      } else if (sel){
+        bet = parseInt(sel.dataset.bet, 10);
+      }
+      if (isNaN(bet) || bet < 0 || bet > 100000){
+        throw new Error('Bet must be between 0 and 100000');
+      }
+
+      // Check we have enough coins first (client-side pre-check)
+      var acc = null;
+      try {
+        var ar = await sb.from('bank_accounts').select('balance').eq('user_id', window.ME.id).maybeSingle();
+        acc = ar.data;
+      } catch(e){}
+
+      if (!acc){
+        // Create one
+        var ins = await sb.from('bank_accounts').insert({ user_id: window.ME.id, balance: 100 }).select().single();
+        acc = ins.data;
+      }
+      if (acc && acc.balance < bet){
+        throw new Error('Insufficient balance (you have ' + acc.balance + ', need ' + bet + ')');
+      }
+
+      var r = await sb.rpc('create_game_challenge', { p_bet: bet });
+      if (r.error) throw new Error(r.error.message || String(r.error));
+
+      window.toast("Challenge created", "Waiting for an opponent.", "ok");
+
+      // Refresh whatever game view is active
+      if (window.CURRENT && window.CURRENT.type === 'games'){
+        // Give the wrappers a chance to refresh
+        if (typeof window.openGameRoomFixed === 'function'){
+          window.openGameRoomFixed();
+        } else if (typeof window.openGameRoom === 'function'){
+          window.openGameRoom('play');
+        }
+      }
+    } catch(err){
+      log("create challenge failed:", err.message);
+      window.toast("Could not create challenge", err.message || String(err), "err");
+    } finally {
+      cc.disabled = false;
+      cc.textContent = origText;
+    }
+  }, true);
+
+  // Same for accept
+  document.addEventListener('click', async function(e){
+    var ab = e.target.closest('[data-accept]');
+    if (!ab || ab.disabled) return;
+    var cid = ab.dataset.accept;
+    if (!cid) return;
+    // Let the other handler do its thing; we just prevent double-click chaos
+    ab.disabled = true;
+    var orig = ab.textContent;
+    ab.textContent = '...';
+    setTimeout(function(){
+      if (ab.parentElement){
+        ab.disabled = false;
+        ab.textContent = orig;
+      }
+    }, 3000);
+  }, false); // bubble phase so underlying handler runs first
+
+  // ------------------------------------------------------------
+  // 5. Kill any lingering renderAll loops that crash on null server
+  // ------------------------------------------------------------
+  var origRenderAll = window.renderAll;
+  if (typeof origRenderAll === 'function'){
+    window.renderAll = function(){
+      try {
+        return origRenderAll.apply(this, arguments);
+      } catch(e){
+        log("renderAll error (caught):", e && e.message);
+        // Continue — try to render what we can
+        try { if (window.renderChat) window.renderChat(); } catch(_){}
+        try { if (window.renderPanel) window.renderPanel(); } catch(_){}
+      }
+    };
+  }
+
+  log("guards installed");
+})();
+</script>
+
+<!-- SLEEPY_SLASH_CMD_V1 -->
+<style>
+.msg.pay-msg{
+  background:linear-gradient(90deg, rgba(255,200,87,.08), transparent 70%);
+  border-left:3px solid rgba(255,200,87,.6);
+  border-radius:10px;
+}
+.msg.pay-msg .content{
+  font-family:'Space Grotesk',sans-serif;
+  font-weight:600;
+  color:#ffd166;
+}
+.msg.pay-msg .content .amt{
+  font-family:'JetBrains Mono',monospace;
+  background:linear-gradient(90deg,#ffc857,#ff9f1c);
+  -webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;
+  font-weight:800;font-size:15px;
+}
+.cmd-help-card{padding:14px;border-radius:12px;background:rgba(0,0,0,.3);border:1px solid var(--border);font-size:13px;line-height:1.7;color:var(--text2)}
+.cmd-help-card .c{display:inline-block;font-family:'JetBrains Mono',monospace;background:rgba(94,231,215,.1);border:1px solid rgba(94,231,215,.3);color:var(--cyan);padding:1px 7px;border-radius:5px;font-size:12px;font-weight:600;margin-right:6px}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepySlashCmd) return;
+  window.__sleepySlashCmd = true;
+  function log(){ try{console.log.apply(console,["[Cmd]"].concat([].slice.call(arguments)));}catch(e){} }
+  function esc(s){ return window.esc(s); }
+
+  // ----------------------------------------------------------------
+  // Parse helpers
+  // ----------------------------------------------------------------
+  function parseAmount(s){
+    if (!s) return null;
+    s = String(s).replace(/[,_]/g, '').toLowerCase();
+    var m = s.match(/^(\d+(?:\.\d+)?)([km])?$/);
+    if (!m) return null;
+    var n = parseFloat(m[1]);
+    if (m[2] === 'k') n *= 1000;
+    if (m[2] === 'm') n *= 1000000;
+    n = Math.floor(n);
+    if (n <= 0) return null;
+    return n;
+  }
+
+  // Parse "/pay @user 100", "/pay user 100", "/pay 100 user"
+  function parsePay(args){
+    var username = null, amount = null;
+    args.forEach(function(p){
+      if (!p) return;
+      if (p.startsWith('@')){
+        if (username === null) username = p.slice(1).toLowerCase();
+        return;
+      }
+      var n = parseAmount(p);
+      if (n !== null && amount === null){ amount = n; return; }
+      if (username === null && /^[a-z0-9_]{3,24}$/i.test(p)) username = p.toLowerCase();
+    });
+    return { username: username, amount: amount };
+  }
+
+  // ----------------------------------------------------------------
+  // Post a styled message to current chat
+  // ----------------------------------------------------------------
+  async function postMessage(content){
+    if (!window.CURRENT) return;
+    try {
+      if (window.CURRENT.type === 'dm' && window.CURRENT.conv){
+        await sb.from('messages').insert({
+          conversation_id: window.CURRENT.conv.id,
+          sender_id: window.ME.id,
+          content: content
+        });
+      } else if (window.CURRENT.type === 'server' && window.CURRENT.channel){
+        await sb.from('messages').insert({
+          channel_id: window.CURRENT.channel.id,
+          sender_id: window.ME.id,
+          content: content
+        });
+      } else if (window.CURRENT.type === 'ticket' && window.CURRENT.ticket){
+        await sb.from('ticket_messages').insert({
+          ticket_id: window.CURRENT.ticket.id,
+          sender_id: window.ME.id,
+          content: content
+        });
+      }
+    } catch(e){ log("post failed:", e.message); }
+  }
+
+  // ----------------------------------------------------------------
+  // Commands
+  // ----------------------------------------------------------------
+  async function cmdPay(args){
+    var parsed = parsePay(args);
+    if (!parsed.username){
+      return { error: 'Missing username. Usage: `/pay @user 100`' };
+    }
+    if (!parsed.amount){
+      return { error: 'Missing or invalid amount. Usage: `/pay @user 100` (also accepts 1k, 1m)' };
+    }
+    try {
+      var r = await sb.rpc('transfer_coins', { p_to_username: parsed.username, p_amount: parsed.amount });
+      if (r.error) throw new Error(r.error.message || String(r.error));
+      var d = r.data;
+      if (!d || !d.ok) throw new Error('Transfer failed');
+
+      // Post a styled message in the current chat
+      var line = '💸 ' + esc(d.sender_display || d.sender) + ' → @' + esc(d.to) + ' · ' + d.amount + ' coins';
+      await postMessage(line);
+
+      // Refresh balance chip if present
+      if (typeof window.refreshAccount === 'function') window.refreshAccount();
+      if (typeof window.loadAccount === 'function') window.loadAccount();
+
+      return { ok: true, data: d };
+    } catch(e){
+      return { error: e.message || String(e) };
+    }
+  }
+
+  async function cmdBalance(){
+    try {
+      var r = await sb.from('bank_accounts').select('*').eq('user_id', window.ME.id).maybeSingle();
+      if (!r.data){
+        await sb.from('bank_accounts').insert({ user_id: window.ME.id, balance: 100 });
+        return { toast: { title: 'Balance', body: '100 coins (new account)', kind: 'ok' } };
+      }
+      return { toast: {
+        title: 'Balance',
+        body: r.data.balance.toLocaleString() + ' coins' + (r.data.poisoned ? ' · POISONED' : ''),
+        kind: r.data.poisoned ? 'err' : 'ok'
+      }};
+    } catch(e){ return { error: e.message || String(e) }; }
+  }
+
+  async function cmdFish(){
+    setTimeout(function(){
+      if (typeof window.openGameRoom === 'function') window.openGameRoom('fishing');
+      else if (typeof window.openFishing === 'function') window.openFishing();
+    }, 200);
+    return { toast: { title: 'Opening fishing', body: 'Cast your line...', kind: 'ok' } };
+  }
+
+  async function cmdGames(){
+    setTimeout(function(){
+      if (typeof window.openGameRoom === 'function') window.openGameRoom('play');
+      else if (typeof window.openGames === 'function') window.openGames();
+    }, 200);
+    return { toast: { title: 'Opening game room', body: '', kind: 'ok' } };
+  }
+
+  function cmdHelp(){
+    var html = '<div class="cmd-help-card">' +
+      '<div style="margin-bottom:10px"><span class="c">/pay @user 100</span>Transfer coins to another user</div>' +
+      '<div style="margin-bottom:10px"><span class="c">/bal</span>Check your coin balance</div>' +
+      '<div style="margin-bottom:10px"><span class="c">/fish</span>Open the fishing minigame</div>' +
+      '<div style="margin-bottom:10px"><span class="c">/games</span>Open the game room</div>' +
+      '<div><span class="c">/help</span>Show this list</div>' +
+      '<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:11.5px;color:var(--text3)">' +
+        'Amounts accept <b>1k</b> = 1000, <b>1m</b> = 1000000. Username @ is optional.' +
+      '</div>' +
+    '</div>';
+    window.openModal("Commands", html);
+    return { handled: true };
+  }
+
+  // ----------------------------------------------------------------
+  // Dispatcher
+  // ----------------------------------------------------------------
+  async function runCommand(text){
+    var trimmed = text.trim();
+    if (!trimmed.startsWith('/')) return { handled: false };
+    var parts = trimmed.slice(1).split(/\s+/);
+    var name = (parts.shift() || '').toLowerCase();
+    var args = parts;
+
+    if (name === 'pay' || name === 'give') return await cmdPay(args);
+    if (name === 'bal' || name === 'balance') return await cmdBalance();
+    if (name === 'fish' || name === 'fishing') return await cmdFish();
+    if (name === 'games' || name === 'game' || name === 'play') return await cmdGames();
+    if (name === 'help' || name === 'commands' || name === '?') return cmdHelp();
+
+    return { error: 'Unknown command: /' + name + '. Type /help' };
+  }
+
+  // ----------------------------------------------------------------
+  // Intercept keydown on any composer textarea
+  // ----------------------------------------------------------------
+  var inFlight = false;
+
+  document.addEventListener('keydown', async function(e){
+    if (e.key !== 'Enter' || e.shiftKey) return;
+    var ta = e.target;
+    if (!ta || ta.tagName !== 'TEXTAREA') return;
+    // Composer id is 'composer-input' in every build
+    if (ta.id !== 'composer-input') return;
+    var text = ta.value.trim();
+    if (!text.startsWith('/')) return;
+
+    // Prevent the default send behavior
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    if (inFlight) return;
+    inFlight = true;
+    var originalText = ta.value;
+    ta.value = '';
+    if (window.autosize) window.autosize(ta);
+
+    try {
+      var result = await runCommand(text);
+      if (result && result.error){
+        window.toast("Command failed", result.error, "err");
+        // Restore what they typed so they can fix it
+        ta.value = originalText;
+        if (window.autosize) window.autosize(ta);
+      } else if (result && result.toast){
+        window.toast(result.toast.title, result.toast.body, result.toast.kind);
+      }
+    } catch(err){
+      log("command error:", err.message);
+      window.toast("Command error", err.message || String(err), "err");
+    } finally {
+      inFlight = false;
+      // Keep focus in composer
+      setTimeout(function(){ try { ta.focus(); } catch(_){} }, 30);
+    }
+  }, true);
+
+  // ----------------------------------------------------------------
+  // Also intercept the send button click
+  // ----------------------------------------------------------------
+  document.addEventListener('click', async function(e){
+    var btn = e.target.closest('#send-btn');
+    if (!btn) return;
+    var ta = document.getElementById('composer-input');
+    if (!ta) return;
+    var text = ta.value.trim();
+    if (!text.startsWith('/')) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    if (inFlight) return;
+    inFlight = true;
+    var originalText = ta.value;
+    ta.value = '';
+    if (window.autosize) window.autosize(ta);
+
+    try {
+      var result = await runCommand(text);
+      if (result && result.error){
+        window.toast("Command failed", result.error, "err");
+        ta.value = originalText;
+        if (window.autosize) window.autosize(ta);
+      } else if (result && result.toast){
+        window.toast(result.toast.title, result.toast.body, result.toast.kind);
+      }
+    } catch(err){
+      window.toast("Command error", err.message || String(err), "err");
+    } finally {
+      inFlight = false;
+    }
+  }, true);
+
+  // ----------------------------------------------------------------
+  // Style pay messages nicely
+  // ----------------------------------------------------------------
+  var origMessageHTML = window.messageHTML;
+  if (typeof origMessageHTML === 'function'){
+    window.messageHTML = function(m, grouped){
+      var html = origMessageHTML.apply(this, arguments);
+      if (!m.content) return html;
+      if (m.content.startsWith('💸 ') && m.content.indexOf('→') >= 0 && m.content.indexOf('coins') >= 0){
+        html = html.replace('class="msg', 'class="msg pay-msg');
+        // Highlight the amount
+        html = html.replace(/(\d[\d,]*)\s*coins/, '<span class="amt">$1 coins</span>');
+      }
+      return html;
+    };
+  }
+
+  log("slash commands ready");
+})();
+</script>
+
 </body>
 </html>
