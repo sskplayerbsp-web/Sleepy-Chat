@@ -11503,5 +11503,1225 @@ html, body { overscroll-behavior: none; }
 })();
 </script>
 
+<!-- SLEEPY_DAILY_GAME_V1 -->
+<style>
+/* Rail game button */
+.rail-btn.game-btn{background:linear-gradient(135deg,rgba(180,74,255,.18),rgba(0,255,224,.1));border:1px solid rgba(180,74,255,.4)}
+.rail-btn.game-btn:hover{box-shadow:0 0 18px rgba(180,74,255,.55);transform:translateY(-2px)}
+.rail-btn.game-btn .streak-badge{position:absolute;bottom:-4px;right:-4px;background:var(--amber);color:#0a0a0f;font-size:9px;font-weight:800;padding:2px 6px;border-radius:99px;border:2px solid var(--void);font-family:monospace;line-height:1}
+
+/* Game area */
+.dg-wrap{padding:24px 20px 60px;max-width:520px;margin:0 auto;font-family:'Inter',sans-serif}
+.dg-head{text-align:center;margin-bottom:22px}
+.dg-head .ico{width:68px;height:68px;margin:0 auto 12px;border-radius:20px;background:linear-gradient(135deg,rgba(180,74,255,.18),rgba(0,255,224,.14));border:1px solid rgba(180,74,255,.4);display:flex;align-items:center;justify-content:center;font-size:32px}
+.dg-head h2{font-family:'Space Grotesk',sans-serif;font-size:24px;margin-bottom:4px;color:var(--text)}
+.dg-head .sub{font-size:12.5px;color:var(--text3)}
+.dg-head .date{font-size:11px;color:var(--cyan);letter-spacing:.08em;text-transform:uppercase;font-weight:700;margin-top:6px;font-family:monospace}
+
+.dg-streak-row{display:flex;gap:10px;justify-content:center;margin-bottom:22px}
+.dg-stat{flex:1;max-width:120px;padding:12px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid var(--border);text-align:center}
+.dg-stat .v{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;color:var(--cyan);line-height:1}
+.dg-stat .l{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);margin-top:5px}
+.dg-stat.hot .v{color:var(--amber);text-shadow:0 0 14px rgba(255,171,0,.5)}
+
+.dg-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:16px;max-width:320px;margin-left:auto;margin-right:auto}
+.dg-row{display:contents}
+.dg-cell{aspect-ratio:1;background:var(--surface2);border:1.5px solid var(--border);border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:20px;color:var(--text);text-transform:uppercase;transition:all .25s;user-select:none}
+.dg-cell.filled{border-color:var(--border2);animation:dgPop .15s ease}
+@keyframes dgPop{from{transform:scale(.92)}to{transform:scale(1)}}
+.dg-cell.correct{background:linear-gradient(135deg,#00e676,#00a552);border-color:#00e676;color:#04120f}
+.dg-cell.present{background:linear-gradient(135deg,#ffab00,#e07800);border-color:#ffab00;color:#1a0e00}
+.dg-cell.absent{background:#1a1a26;border-color:#1a1a26;color:var(--text3)}
+.dg-cell.flip{animation:dgFlip .5s ease}
+@keyframes dgFlip{0%{transform:rotateX(0)}50%{transform:rotateX(90deg)}100%{transform:rotateX(0)}}
+
+.dg-keyboard{display:flex;flex-direction:column;gap:6px;align-items:center;margin:18px auto 0;max-width:460px}
+.dg-krow{display:flex;gap:5px}
+.dg-key{min-width:32px;height:44px;padding:0 8px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;transition:all .12s;text-transform:uppercase;font-family:inherit}
+.dg-key:hover{background:var(--surface3);color:var(--text)}
+.dg-key.wide{min-width:56px;font-size:11px}
+.dg-key.correct{background:linear-gradient(135deg,#00e676,#00a552);color:#04120f;border-color:#00e676}
+.dg-key.present{background:linear-gradient(135deg,#ffab00,#e07800);color:#1a0e00;border-color:#ffab00}
+.dg-key.absent{background:#12121a;color:var(--text3);border-color:#12121a}
+
+.dg-msg{text-align:center;font-size:14px;font-weight:600;padding:14px;border-radius:12px;margin-top:18px;animation:dgPop .25s ease}
+.dg-msg.win{background:rgba(0,230,118,.1);border:1px solid rgba(0,230,118,.4);color:var(--green)}
+.dg-msg.lose{background:rgba(255,45,111,.1);border:1px solid rgba(255,45,111,.4);color:#ff8aa8}
+.dg-msg .word{font-family:monospace;font-size:16px;letter-spacing:.15em;text-transform:uppercase;margin-top:6px;font-weight:800}
+
+.dg-timer{text-align:center;font-size:12px;color:var(--text3);margin-top:20px;font-family:monospace}
+
+.dg-actions{display:flex;gap:8px;justify-content:center;margin-top:22px;flex-wrap:wrap}
+.dg-actions button{padding:9px 16px;border-radius:9px;font-size:12.5px;font-weight:600;border:1px solid var(--border);background:var(--surface2);color:var(--text2);cursor:pointer;transition:all .15s;font-family:inherit}
+.dg-actions button:hover{color:var(--text);border-color:var(--border2);transform:translateY(-1px)}
+.dg-actions button.primary{background:linear-gradient(135deg,var(--purple),#7c2fd6);color:#fff;border-color:transparent}
+.dg-actions button.primary:hover{box-shadow:0 0 14px rgba(180,74,255,.5)}
+
+/* Leaderboard */
+.lb-list{display:flex;flex-direction:column;gap:6px}
+.lb-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;background:rgba(255,255,255,.03)}
+.lb-row.me{border:1px solid var(--cyan);background:rgba(0,255,224,.06)}
+.lb-row .rank{width:28px;text-align:center;font-family:monospace;font-weight:700;font-size:14px;color:var(--text3)}
+.lb-row .rank.gold{color:#ffd700}
+.lb-row .rank.silver{color:#c0c0c0}
+.lb-row .rank.bronze{color:#cd7f32}
+.lb-row .info{flex:1;min-width:0}
+.lb-row .info .nm{font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb-row .info .un{font-size:11px;color:var(--text3)}
+.lb-row .val{font-family:monospace;font-weight:700;font-size:15px;color:var(--amber)}
+
+/* Streak badge next to username */
+.streak-pill{display:inline-flex;align-items:center;gap:3px;font-size:9.5px;font-weight:800;font-family:monospace;padding:1px 6px;border-radius:99px;background:rgba(255,171,0,.18);color:var(--amber);text-transform:uppercase;letter-spacing:.02em}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyDailyGame) return;
+  window.__sleepyDailyGame = true;
+  function log(){ try{console.log.apply(console,["[Daily]"].concat([].slice.call(arguments)));}catch(e){} }
+  function esc(s){ return window.esc(s); }
+
+  var WORDS = ["about", "above", "abuse", "actor", "acute", "admit", "adopt", "adult", "after", "again", "agent", "agree", "ahead", "alarm", "album", "alert", "alike", "alive", "allow", "alone", "along", "alter", "among", "anger", "angle", "angry", "apart", "apple", "apply", "arena", "argue", "arise", "array", "aside", "asset", "audio", "audit", "avoid", "awake", "award", "aware", "badly", "baker", "bases", "basic", "basis", "beach", "began", "begin", "begun", "being", "below", "bench", "birth", "black", "blame", "blank", "blast", "blind", "block", "blood", "board", "boast", "bonus", "boost", "booth", "bound", "brain", "brand", "bread", "break", "breed", "brick", "bride", "brief", "bring", "broad", "broke", "brown", "build", "built", "buyer", "catch", "cause", "chain", "chair", "chaos", "charm", "chart", "chase", "cheap", "check", "chest", "chief", "child", "china", "chose", "civil", "claim", "class", "clean", "clear", "click", "climb", "clock", "close", "cloud", "coach", "coast", "could", "count", "court", "cover", "crack", "craft", "crash", "crazy", "cream", "crime", "cross", "crowd", "crown", "curve", "cycle", "daily", "dance", "dated", "dealt", "death", "debut", "delay", "depth", "doing", "doubt", "dozen", "draft", "drama", "drank", "drawn", "dream", "dress", "drill", "drink", "drive", "drove", "dying", "eager", "early", "earth", "eight", "elite", "empty", "enemy", "enjoy", "enter", "entry", "equal", "error", "essay", "event", "every", "exact", "exist", "extra", "faith", "false", "fault", "favor", "fiber", "field", "fifth", "fifty", "fight", "final", "first", "fixed", "flash", "fleet", "floor", "fluid", "focus", "force", "forth", "forty", "forum", "found", "frame", "frank", "fraud", "fresh", "front", "fruit", "fully", "funny", "giant", "given", "glass", "globe", "glory", "going", "grace", "grade", "grand", "grant", "grass", "grave", "great", "green", "greet", "grief", "gross", "group", "grown", "guard", "guess", "guest", "guide", "happy", "harsh", "heart", "heavy", "hence", "hired", "horse", "hotel", "house", "human", "ideal", "image", "index", "inner", "input", "issue", "joint", "judge", "known", "label", "large", "laser", "later", "laugh", "layer", "learn", "lease", "least", "leave", "legal", "level", "light", "limit", "links", "lives", "local", "logic", "loose", "lower", "lucky", "lunch", "lying", "magic", "major", "maker", "March", "match", "maybe", "mayor", "meant", "medal", "media", "metal", "might", "minor", "minus", "mixed", "model", "money", "month", "moral", "motor", "mount", "mouse", "mouth", "movie", "music", "needs", "never", "newly", "night", "noise", "north", "noted", "novel", "nurse", "occur", "ocean", "offer", "often", "order", "other", "ought", "paint", "panel", "paper", "party", "peace", "phase", "phone", "photo", "piece", "pilot", "pitch", "place", "plain", "plane", "plant", "plate", "point", "pound", "power", "press", "price", "pride", "prime", "print", "prior", "prize", "proof", "proud", "prove", "queen", "quick", "quiet", "quite", "radio", "raise", "range", "rapid", "ratio", "reach", "ready", "realm", "rebel", "refer", "relax", "reply", "right", "rival", "river", "robot", "roman", "rough", "round", "route", "royal", "rural", "sadly", "saint", "salad", "sales", "saving", "scale", "scene", "scope", "score", "sense", "serve", "seven", "shade", "shake", "shall", "shape", "share", "sharp", "sheet", "shelf", "shell", "shift", "shine", "shirt", "shock", "shoot", "short", "shown", "sight", "since", "sixth", "sixty", "skill", "sleep", "small", "smart", "smile", "smoke", "solid", "solve", "sorry", "sound", "south", "space", "spare", "speak", "speed", "spend", "spent", "split", "spoke", "sport", "staff", "stage", "stake", "stand", "start", "state", "steam", "steel", "stick", "still", "stock", "stone", "stood", "store", "storm", "story", "strip", "stuck", "study", "stuff", "style", "sugar", "suite", "super", "sweet", "table", "taken", "taste", "taxes", "teach", "teeth", "thank", "theft", "their", "theme", "there", "these", "thick", "thing", "think", "third", "those", "three", "threw", "throw", "tight", "times", "tired", "title", "today", "topic", "total", "touch", "tough", "tower", "track", "trade", "train", "treat", "trend", "trial", "tribe", "trick", "tried", "tries", "truck", "truly", "trust", "truth", "twice", "uncle", "under", "union", "unity", "until", "upper", "urban", "usage", "usual", "valid", "value", "video", "virus", "visit", "vital", "voice", "waste", "watch", "water", "wheel", "where", "which", "while", "white", "whole", "whose", "woman", "world", "worry", "worse", "worst", "worth", "would", "wound", "write", "wrong", "wrote", "yield", "young", "yours", "youth", "zebra"];
+  var MAX_GUESSES = 6;
+  var ROWS = MAX_GUESSES;
+
+  // Deterministic daily word — everyone sees the same on the same day
+  function todayStr(){
+    var d = new Date();
+    var y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), dd = String(d.getDate()).padStart(2,'0');
+    return y + '-' + m + '-' + dd;
+  }
+  function dayNumber(s){
+    var d = new Date(s + 'T00:00:00Z');
+    return Math.floor(d.getTime() / 86400000);
+  }
+  function todayIndex(){
+    return dayNumber(todayStr()) % WORDS.length;
+  }
+  function todayWord(){
+    return WORDS[todayIndex()];
+  }
+  function tomorrowIn(){
+    var now = new Date();
+    var t = new Date(now.getFullYear(), now.getMonth(), now.getDate()+1, 0, 0, 0);
+    var diff = t - now;
+    var h = Math.floor(diff/3600000);
+    var m = Math.floor((diff%3600000)/60000);
+    var s = Math.floor((diff%60000)/1000);
+    return h + 'h ' + m + 'm ' + s + 's';
+  }
+
+  // Game state
+  var game = {
+    row: 0,
+    col: 0,
+    guesses: [],       // array of strings
+    results: [],       // array of arrays: 'correct'|'present'|'absent'
+    solved: false,
+    over: false,
+    keyState: {},      // letter -> 'correct'|'present'|'absent'
+  };
+
+  function scoreGuess(guess, answer){
+    var res = new Array(5).fill('absent');
+    var ansArr = answer.split('');
+    var used = new Array(5).fill(false);
+    // First pass: exact matches
+    for (var i = 0; i < 5; i++){
+      if (guess[i] === ansArr[i]){ res[i] = 'correct'; used[i] = true; }
+    }
+    // Second pass: present but wrong spot
+    for (var i = 0; i < 5; i++){
+      if (res[i] === 'correct') continue;
+      for (var j = 0; j < 5; j++){
+        if (!used[j] && guess[i] === ansArr[j]){
+          res[i] = 'present';
+          used[j] = true;
+          break;
+        }
+      }
+    }
+    return res;
+  }
+
+  // ---------- Persistence ----------
+  async function loadTodayResult(){
+    if (!window.ME) return;
+    var r = await sb.from('daily_game_results').select('*').eq('user_id', window.ME.id).eq('game_date', todayStr()).maybeSingle();
+    if (!r.data) return;
+    game.guesses = (r.data.guesses || []).map(function(g){ return typeof g === 'string' ? g : g.word; });
+    game.results = [];
+    game.solved = r.data.solved;
+    game.over = r.data.solved;
+    game.row = game.guesses.length;
+    game.col = 0;
+    var ans = todayWord();
+    game.guesses.forEach(function(g, i){
+      var res = scoreGuess(g, ans);
+      game.results[i] = res;
+      if (game.guesses[i] === ans) game.solved = true;
+      res.forEach(function(st, idx){
+        var L = g[idx];
+        var cur = game.keyState[L];
+        if (cur === 'correct') return;
+        if (st === 'correct') game.keyState[L] = 'correct';
+        else if (st === 'present' && cur !== 'correct') game.keyState[L] = 'present';
+        else if (st === 'absent' && !cur) game.keyState[L] = 'absent';
+      });
+    });
+    if (!game.solved && game.row >= MAX_GUESSES) game.over = true;
+  }
+
+  async function saveTodayResult(){
+    if (!window.ME) return;
+    var payload = {
+      user_id: window.ME.id,
+      game_date: todayStr(),
+      guesses: game.guesses,
+      solved: game.solved,
+      attempts: game.guesses.length,
+      updated_at: new Date().toISOString(),
+    };
+    var r = await sb.from('daily_game_results').upsert(payload);
+    if (r.error) log("save failed:", r.error.message);
+  }
+
+  async function loadStreak(){
+    if (!window.ME) return null;
+    var r = await sb.from('user_streaks').select('*').eq('user_id', window.ME.id).maybeSingle();
+    return r.data;
+  }
+  async function updateStreak(won){
+    if (!window.ME) return;
+    var today = todayStr();
+    var cur = await loadStreak();
+    if (!cur){
+      // First game ever
+      await sb.from('user_streaks').insert({
+        user_id: window.ME.id,
+        current_streak: won ? 1 : 0,
+        longest_streak: won ? 1 : 0,
+        last_played: today,
+        total_games: 1,
+        total_wins: won ? 1 : 0,
+      });
+      return;
+    }
+    if (cur.last_played === today) return; // already counted
+    var yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
+    var yStr = yesterday.getFullYear() + '-' + String(yesterday.getMonth()+1).padStart(2,'0') + '-' + String(yesterday.getDate()).padStart(2,'0');
+    var newCurrent;
+    if (won){
+      newCurrent = cur.last_played === yStr ? (cur.current_streak + 1) : 1;
+    } else {
+      newCurrent = 0;
+    }
+    var newLongest = Math.max(cur.longest_streak, newCurrent);
+    await sb.from('user_streaks').update({
+      current_streak: newCurrent,
+      longest_streak: newLongest,
+      last_played: today,
+      total_games: (cur.total_games || 0) + 1,
+      total_wins: (cur.total_wins || 0) + (won ? 1 : 0),
+      updated_at: new Date().toISOString(),
+    }).eq('user_id', window.ME.id);
+  }
+
+  // ---------- UI ----------
+  function renderGame(){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+    var ans = todayWord();
+    var streak = window.__myStreak || { current_streak: 0, longest_streak: 0, total_wins: 0 };
+
+    var html = '<div class="dg-wrap">';
+
+    // Header
+    html += '<div class="dg-head">' +
+      '<div class="ico">🎯</div>' +
+      '<h2>Daily Word</h2>' +
+      '<div class="sub">Guess the 5-letter word in 6 tries</div>' +
+      '<div class="date">' + todayStr() + '</div>' +
+    '</div>';
+
+    // Streak stats
+    html += '<div class="dg-streak-row">' +
+      '<div class="dg-stat' + (streak.current_streak > 0 ? ' hot' : '') + '">' +
+        '<div class="v">' + (streak.current_streak || 0) + '</div>' +
+        '<div class="l">Streak</div>' +
+      '</div>' +
+      '<div class="dg-stat">' +
+        '<div class="v">' + (streak.longest_streak || 0) + '</div>' +
+        '<div class="l">Best</div>' +
+      '</div>' +
+      '<div class="dg-stat">' +
+        '<div class="v">' + (streak.total_wins || 0) + '</div>' +
+        '<div class="l">Wins</div>' +
+      '</div>' +
+    '</div>';
+
+    // Grid
+    html += '<div class="dg-grid">';
+    for (var r = 0; r < ROWS; r++){
+      var guess = game.guesses[r] || '';
+      var res = game.results[r];
+      for (var c = 0; c < 5; c++){
+        var letter = guess[c] ? guess[c].toUpperCase() : '';
+        var cls = 'dg-cell';
+        if (letter) cls += ' filled';
+        if (res && res[c]) cls += ' ' + res[c];
+        // Current typing row
+        if (r === game.row && !game.over){
+          if (c < game.col) cls += ' filled';
+        }
+        html += '<div class="' + cls + '" data-cell="' + r + '-' + c + '">' + esc(letter) + '</div>';
+      }
+    }
+    html += '</div>';
+
+    // Win/lose message
+    if (game.solved){
+      var solvedOn = game.guesses.length;
+      html += '<div class="dg-msg win">' +
+        '🎉 Solved in ' + solvedOn + ' ' + (solvedOn === 1 ? 'try' : 'tries') + '!' +
+        '<div class="word">' + esc(ans) + '</div>' +
+      '</div>';
+    } else if (game.over){
+      html += '<div class="dg-msg lose">' +
+        '😵 Out of tries. The word was:' +
+        '<div class="word">' + esc(ans) + '</div>' +
+      '</div>';
+    }
+
+    // Keyboard
+    if (!game.over){
+      var kRows = ['QWERTYUIOP','ASDFGHJKL','ZXCVBNM'];
+      html += '<div class="dg-keyboard">';
+      kRows.forEach(function(kr, ki){
+        html += '<div class="dg-krow">';
+        if (ki === 2) html += '<button class="dg-key wide" data-key="ENTER">Enter</button>';
+        kr.split('').forEach(function(ch){
+          var st = game.keyState[ch] || '';
+          html += '<button class="dg-key ' + st + '" data-key="' + ch + '">' + ch + '</button>';
+        });
+        if (ki === 2) html += '<button class="dg-key wide" data-key="BACK">⌫</button>';
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+
+    // Actions
+    html += '<div class="dg-actions">' +
+      '<button class="primary" id="dg-leaderboard">🏆 Leaderboard</button>' +
+      '<button id="dg-how">How to play</button>' +
+    '</div>';
+
+    // Timer
+    html += '<div class="dg-timer" id="dg-timer">Next word in ' + tomorrowIn() + '</div>';
+
+    html += '</div>';
+    body.innerHTML = html;
+
+    // Wire keyboard
+    body.querySelectorAll('[data-key]').forEach(function(k){
+      k.onclick = function(){
+        var key = k.dataset.key;
+        if (key === 'ENTER') submitGuess();
+        else if (key === 'BACK') backspace();
+        else typeLetter(key);
+      };
+    });
+
+    var lb = document.getElementById('dg-leaderboard');
+    if (lb) lb.onclick = openLeaderboard;
+    var how = document.getElementById('dg-how');
+    if (how) how.onclick = openHowTo;
+  }
+
+  function updateTimer(){
+    var t = document.getElementById('dg-timer');
+    if (t) t.textContent = 'Next word in ' + tomorrowIn();
+  }
+  setInterval(updateTimer, 1000);
+
+  function typeLetter(L){
+    if (game.over || game.row >= MAX_GUESSES || game.col >= 5) return;
+    var row = game.row;
+    if (!game.guesses[row]) game.guesses[row] = '';
+    if (game.guesses[row].length >= 5) return;
+    game.guesses[row] += L.toLowerCase();
+    game.col = game.guesses[row].length;
+    redrawCurrentRow();
+  }
+  function backspace(){
+    if (game.over) return;
+    var row = game.row;
+    if (!game.guesses[row] || !game.guesses[row].length) return;
+    game.guesses[row] = game.guesses[row].slice(0, -1);
+    game.col = game.guesses[row].length;
+    redrawCurrentRow();
+  }
+  function redrawCurrentRow(){
+    var row = game.row;
+    var guess = game.guesses[row] || '';
+    for (var c = 0; c < 5; c++){
+      var cell = document.querySelector('[data-cell="' + row + '-' + c + '"]');
+      if (!cell) continue;
+      var L = guess[c] ? guess[c].toUpperCase() : '';
+      cell.textContent = L;
+      cell.classList.toggle('filled', !!L);
+    }
+  }
+
+  async function submitGuess(){
+    if (game.over) return;
+    var row = game.row;
+    var guess = (game.guesses[row] || '').toLowerCase();
+    if (guess.length !== 5) {
+      window.toast("Not enough letters", "Guess must be 5 letters.", "err");
+      return;
+    }
+    if (WORDS.indexOf(guess) < 0){
+      window.toast("Not a word", guess.toUpperCase() + " isn't in the list.", "err");
+      return;
+    }
+
+    var ans = todayWord();
+    var res = scoreGuess(guess, ans);
+    game.results[row] = res;
+
+    // Update key states
+    res.forEach(function(st, idx){
+      var L = guess[idx].toUpperCase();
+      var cur = game.keyState[L];
+      if (cur === 'correct') return;
+      if (st === 'correct') game.keyState[L] = 'correct';
+      else if (st === 'present' && cur !== 'correct') game.keyState[L] = 'present';
+      else if (st === 'absent' && !cur) game.keyState[L] = 'absent';
+    });
+
+    // Flip animation on the row
+    for (var c = 0; c < 5; c++){
+      var cell = document.querySelector('[data-cell="' + row + '-' + c + '"]');
+      if (cell){
+        cell.classList.add('flip');
+        (function(cell, st){
+          setTimeout(function(){
+            cell.classList.remove('flip');
+            cell.classList.remove('filled');
+            cell.classList.add(st);
+          }, 250);
+        })(cell, res[c]);
+      }
+    }
+
+    if (guess === ans){
+      game.solved = true;
+      game.over = true;
+      await saveTodayResult();
+      await updateStreak(true);
+      window.__myStreak = await loadStreak();
+      setTimeout(renderGame, 700);
+      setTimeout(function(){ window.toast("You won!", "Solved in " + game.guesses.length + " tries.", "ok"); }, 800);
+      return;
+    }
+
+    game.row++;
+    game.col = 0;
+
+    if (game.row >= MAX_GUESSES){
+      game.over = true;
+      await saveTodayResult();
+      await updateStreak(false);
+      window.__myStreak = await loadStreak();
+      setTimeout(renderGame, 700);
+      return;
+    }
+
+    await saveTodayResult();
+    setTimeout(renderGame, 550);
+  }
+
+  // ---------- Leaderboard ----------
+  async function openLeaderboard(){
+    var r = await sb.from('user_streaks').select('*').order('current_streak', { ascending: false }).limit(20);
+    var rows = r.data || [];
+    var ids = rows.map(function(x){ return x.user_id; });
+    await window.fetchProfiles(ids);
+
+    var html = '<div class="lb-list">';
+    if (!rows.length){
+      html += '<div class="empty" style="padding:20px">No one has played yet. Be the first!</div>';
+    } else {
+      rows.forEach(function(row, i){
+        var p = window.PROFILES[row.user_id] || { username: 'user', display_name: 'User' };
+        var rank = i + 1;
+        var rankCls = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
+        var me = row.user_id === window.ME.id;
+        html += '<div class="lb-row' + (me ? ' me' : '') + '">' +
+          '<div class="rank ' + rankCls + '">' + rank + '</div>' +
+          '<div style="position:relative">' + window.avatarHTML(row.user_id, 34) + '</div>' +
+          '<div class="info"><div class="nm">' + esc(p.display_name || p.username) + (me ? ' (you)' : '') + '</div>' +
+            '<div class="un">longest ' + row.longest_streak + ' · ' + row.total_wins + ' wins</div></div>' +
+          '<div class="val">🔥' + row.current_streak + '</div>' +
+        '</div>';
+      });
+    }
+    html += '</div>';
+    window.openModal("Streak Leaderboard", html, { wide: true });
+  }
+
+  function openHowTo(){
+    window.openModal("How to Play",
+      '<div style="font-size:13.5px;color:var(--text2);line-height:1.7">' +
+        '<p style="margin-bottom:12px">Guess the <b>5-letter word</b> in 6 tries.</p>' +
+        '<p style="margin-bottom:12px">Type with your keyboard or tap the on-screen keys, then press <b>Enter</b>.</p>' +
+        '<p style="margin-bottom:12px">After each guess, the tiles change color:</p>' +
+        '<div style="display:flex;flex-direction:column;gap:6px;margin:14px 0 18px">' +
+          '<div style="display:flex;align-items:center;gap:10px"><div style="width:34px;height:34px;border-radius:7px;background:linear-gradient(135deg,#00e676,#00a552);display:flex;align-items:center;justify-content:center;font-weight:700;color:#04120f;font-family:Space Grotesk">A</div><span>Correct letter, correct spot</span></div>' +
+          '<div style="display:flex;align-items:center;gap:10px"><div style="width:34px;height:34px;border-radius:7px;background:linear-gradient(135deg,#ffab00,#e07800);display:flex;align-items:center;justify-content:center;font-weight:700;color:#1a0e00;font-family:Space Grotesk">B</div><span>In the word, wrong spot</span></div>' +
+          '<div style="display:flex;align-items:center;gap:10px"><div style="width:34px;height:34px;border-radius:7px;background:#1a1a26;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--text3);font-family:Space Grotesk">C</div><span>Not in the word</span></div>' +
+        '</div>' +
+        '<p style="margin-bottom:12px"><b>🔥 Streaks</b> — play every day to build your streak. Skip a day and it resets.</p>' +
+        '<p>Everyone sees the same word each day. New word at midnight.</p>' +
+      '</div>',
+      { footer: '<button class="btn primary" id="dg-how-close">Got it</button>',
+        onMount: function(){
+          document.getElementById('dg-how-close').onclick = window.closeModal;
+        }
+      });
+  }
+
+  // ---------- Open game ----------
+  async function openGame(){
+    window.CURRENT = { type: 'daily_game', server: null, channel: null, conv: null, ticket: null };
+    // Load today's result if saved
+    await loadTodayResult();
+    // Load my streak
+    window.__myStreak = await loadStreak() || { current_streak: 0, longest_streak: 0, total_wins: 0 };
+    window.renderChatHead();
+    renderGame();
+    updateStreakBadgeOnRail();
+  }
+
+  // ---------- Rail button ----------
+  function updateStreakBadgeOnRail(){
+    var btn = document.querySelector('.rail-btn.game-btn');
+    if (!btn) return;
+    var s = window.__myStreak ? window.__myStreak.current_streak : 0;
+    var badge = btn.querySelector('.streak-badge');
+    if (s > 0){
+      if (badge) badge.textContent = s;
+      else btn.insertAdjacentHTML('beforeend', '<span class="streak-badge">' + s + '</span>');
+    } else if (badge){
+      badge.remove();
+    }
+  }
+
+  function injectRailButton(){
+    var rail = document.getElementById('rail');
+    if (!rail) return;
+    if (rail.querySelector('.game-btn')) { updateStreakBadgeOnRail(); return; }
+    var btn = document.createElement('button');
+    btn.className = 'rail-btn game-btn';
+    btn.title = 'Daily Word';
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+    btn.onclick = openGame;
+    // Insert after the create-community button
+    var anchor = rail.querySelector('[data-rail="create-community"]');
+    if (anchor) rail.insertBefore(btn, anchor.nextSibling);
+    else rail.appendChild(btn);
+  }
+
+  // ---------- Hook into render loop ----------
+  var origRenderRail = window.renderRail;
+  if (typeof origRenderRail === 'function'){
+    window.renderRail = function(){
+      var r = origRenderRail.apply(this, arguments);
+      setTimeout(injectRailButton, 10);
+      return r;
+    };
+  }
+
+  var origRenderChat = window.renderChat;
+  if (typeof origRenderChat === 'function'){
+    window.renderChat = function(){
+      if (window.CURRENT && window.CURRENT.type === 'daily_game'){ renderGame(); return; }
+      return origRenderChat.apply(this, arguments);
+    };
+  }
+
+  var origRenderChatHead = window.renderChatHead;
+  if (typeof origRenderChatHead === 'function'){
+    window.renderChatHead = function(){
+      if (window.CURRENT && window.CURRENT.type === 'daily_game'){
+        var el = document.getElementById('chat-head');
+        if (el){
+          el.innerHTML =
+            '<button class="hbtn mobile-only" data-act="toggle-panel">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:20px;height:20px"><path d="M3 6h18M3 12h18M3 18h18"/></svg>' +
+            '</button>' +
+            '<div class="title"><span style="font-size:16px">🎯</span><span class="txt">Daily Word</span></div>' +
+            '<div class="spacer"></div>' +
+            '<button class="hbtn" id="dg-lb-head" title="Leaderboard">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:17px;height:17px"><path d="M6 4v7a6 6 0 0 0 12 0V4M4 4h16M9 21h6M12 14v7"/></svg>' +
+            '</button>';
+          var lbh = document.getElementById('dg-lb-head');
+          if (lbh) lbh.onclick = openLeaderboard;
+        }
+        return;
+      }
+      return origRenderChatHead.apply(this, arguments);
+    };
+  }
+
+  var origRenderComposer = window.renderComposer;
+  if (typeof origRenderComposer === 'function'){
+    window.renderComposer = function(){
+      if (window.CURRENT && window.CURRENT.type === 'daily_game'){
+        var w = document.getElementById('composer-wrap'); if (w) w.innerHTML = '';
+        var t = document.getElementById('typing-bar'); if (t) t.innerHTML = '';
+        return;
+      }
+      return origRenderComposer.apply(this, arguments);
+    };
+  }
+
+  // ---------- Physical keyboard ----------
+  document.addEventListener('keydown', function(e){
+    if (!window.CURRENT || window.CURRENT.type !== 'daily_game') return;
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+    if (game.over) return;
+    if (e.key === 'Enter'){ e.preventDefault(); submitGuess(); return; }
+    if (e.key === 'Backspace'){ e.preventDefault(); backspace(); return; }
+    if (/^[a-zA-Z]$/.test(e.key)) typeLetter(e.key.toUpperCase());
+  });
+
+  // ---------- Boot ----------
+  setTimeout(async function(){
+    if (!window.ME) return;
+    injectRailButton();
+    // Prime the streak for the badge
+    window.__myStreak = await loadStreak() || { current_streak: 0, longest_streak: 0, total_wins: 0 };
+    updateStreakBadgeOnRail();
+  }, 3500);
+
+  setInterval(injectRailButton, 3000);
+
+  log("daily game ready");
+})();
+</script>
+
+<!-- SLEEPY_FISHING_V1 -->
+<style>
+.rail-btn.fishing-btn{background:linear-gradient(135deg,rgba(0,255,224,.14),rgba(0,120,255,.14));border:1px solid rgba(0,255,224,.4)}
+.rail-btn.fishing-btn:hover{box-shadow:0 0 18px rgba(0,200,255,.55);transform:translateY(-2px)}
+.fish-pill{position:absolute;bottom:-4px;right:-4px;background:var(--green);color:#0a0a0f;font-size:9px;font-weight:800;padding:2px 5px;border-radius:99px;border:2px solid var(--void);font-family:monospace;line-height:1;max-width:52px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fish-pill.poison{background:var(--rose);color:#fff}
+
+.fish-wrap{padding:24px 20px 60px;max-width:560px;margin:0 auto;font-family:'Inter',sans-serif}
+.fish-head{text-align:center;margin-bottom:20px}
+.fish-head .ico{width:68px;height:68px;margin:0 auto 12px;border-radius:20px;background:linear-gradient(135deg,rgba(0,150,255,.2),rgba(0,255,224,.14));border:1px solid rgba(0,200,255,.45);display:flex;align-items:center;justify-content:center;font-size:32px}
+.fish-head h2{font-family:'Space Grotesk',sans-serif;font-size:24px;margin-bottom:4px;color:var(--text)}
+.fish-head .sub{font-size:12.5px;color:var(--text3)}
+
+.bank-balance{text-align:center;padding:16px;border-radius:14px;background:linear-gradient(135deg,rgba(255,171,0,.1),rgba(0,230,118,.06));border:1px solid rgba(255,171,0,.3);margin-bottom:20px}
+.bank-balance .amt{font-family:'Space Grotesk',sans-serif;font-size:36px;font-weight:700;color:#ffd54f;letter-spacing:-.02em;line-height:1;text-shadow:0 0 24px rgba(255,171,0,.4)}
+.bank-balance .amt .coin{font-size:22px;vertical-align:middle;margin-right:6px;filter:drop-shadow(0 0 8px rgba(255,171,0,.7))}
+.bank-balance .lbl{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin-top:6px}
+
+.poison-bar{display:flex;align-items:center;gap:12px;padding:14px;border-radius:12px;background:rgba(255,45,111,.08);border:1px solid rgba(255,45,111,.4);margin-bottom:20px;animation:poisonPulse 2s ease-in-out infinite}
+@keyframes poisonPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,45,111,.3)}50%{box-shadow:0 0 0 10px rgba(255,45,111,0)}}
+.poison-bar .icon{font-size:24px;flex:none;animation:poisonShake 1.5s ease-in-out infinite}
+@keyframes poisonShake{0%,100%{transform:rotate(0)}25%{transform:rotate(-10deg)}75%{transform:rotate(10deg)}}
+.poison-bar .info{flex:1;min-width:0}
+.poison-bar .info .t{font-weight:700;font-size:13px;color:#ff8aa8;margin-bottom:3px}
+.poison-bar .info .d{font-size:11.5px;color:var(--text3)}
+.poison-bar button{padding:8px 14px;border-radius:8px;background:linear-gradient(135deg,#ff2d6f,#c41d54);color:#fff;border:none;font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap}
+.poison-bar button:disabled{opacity:.5;cursor:not-allowed}
+
+.water-scene{position:relative;height:220px;border-radius:16px;background:linear-gradient(180deg,rgba(0,80,140,.5),rgba(0,40,90,.7));border:1px solid rgba(0,200,255,.3);overflow:hidden;margin-bottom:18px}
+.water-scene::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 40px,rgba(0,255,224,.04) 40px 42px);animation:waterMove 8s linear infinite}
+@keyframes waterMove{from{background-position:0 0}to{background-position:80px 0}}
+.swimmer{position:absolute;font-size:26px;filter:drop-shadow(0 0 6px rgba(0,200,255,.5));animation:swimFloat 4s ease-in-out infinite}
+.swimmer:nth-child(1){top:20%;left:10%;animation-delay:0s;animation-duration:5s}
+.swimmer:nth-child(2){top:50%;left:70%;animation-delay:.5s;animation-duration:4.5s;font-size:32px}
+.swimmer:nth-child(3){top:75%;left:25%;animation-delay:1s;animation-duration:5.5s}
+.swimmer:nth-child(4){top:35%;left:50%;animation-delay:1.5s;animation-duration:4.8s;font-size:22px}
+.swimmer:nth-child(5){top:65%;left:80%;animation-delay:2s;animation-duration:5.2s}
+.swimmer:nth-child(6){top:15%;left:45%;animation-delay:2.5s;animation-duration:6s;font-size:20px}
+@keyframes swimFloat{0%,100%{transform:translate(0,0) rotate(-5deg)}25%{transform:translate(20px,-8px) rotate(5deg)}50%{transform:translate(-10px,10px) rotate(-3deg)}75%{transform:translate(-20px,-5px) rotate(3deg)}}
+.cast-overlay{position:absolute;inset:0;background:rgba(10,10,15,.85);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;z-index:5;font-family:'Space Grotesk',sans-serif}
+.cast-overlay .lbl{font-size:14px;color:var(--cyan);letter-spacing:.1em;text-transform:uppercase;animation:castPulse 1.2s ease-in-out infinite}
+@keyframes castPulse{0%,100%{opacity:.5}50%{opacity:1}}
+.cast-overlay .bar{width:200px;height:4px;background:var(--surface2);border-radius:99px;overflow:hidden}
+.cast-overlay .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--cyan),var(--purple));width:0;animation:castFill 3s ease-out forwards}
+@keyframes castFill{from{width:0}to{width:100%}}
+
+.catch-result{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,10,15,.92);z-index:6;animation:catchIn .4s ease}
+@keyframes catchIn{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}
+.catch-card{text-align:center;padding:24px;font-family:'Space Grotesk',sans-serif}
+.catch-card .emoji{font-size:72px;line-height:1;margin-bottom:8px;animation:catchBounce .6s ease}
+@keyframes catchBounce{0%{transform:scale(0) rotate(-30deg)}60%{transform:scale(1.2) rotate(10deg)}100%{transform:scale(1) rotate(0)}}
+.catch-card .name{font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px}
+.catch-card .tier{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;padding:2px 10px;border-radius:99px;display:inline-block;margin-bottom:10px}
+.catch-card .tier.common{background:rgba(90,90,114,.3);color:#b0b0c5}
+.catch-card .tier.uncommon{background:rgba(0,230,118,.18);color:var(--green)}
+.catch-card .tier.rare{background:rgba(0,150,255,.2);color:#5eb9ff}
+.catch-card .tier.legendary{background:linear-gradient(90deg,rgba(255,171,0,.25),rgba(255,45,111,.25));color:#ffd54f}
+.catch-card .tier.puffer{background:rgba(255,45,111,.2);color:#ff8aa8}
+.catch-card .value{font-size:26px;font-weight:700;color:#ffd54f;margin-top:6px;font-family:monospace}
+.catch-card .value.bad{color:#ff8aa8}
+.catch-card .close{margin-top:18px;padding:9px 22px;border-radius:9px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-weight:600;font-size:13px;cursor:pointer}
+
+.cast-btn{width:100%;padding:16px;border-radius:14px;background:linear-gradient(135deg,#00ffe0,#0096ff);color:#04120f;font-weight:800;font-size:15px;letter-spacing:.04em;border:none;cursor:pointer;transition:transform .15s;display:flex;align-items:center;justify-content:center;gap:10px;font-family:inherit}
+.cast-btn:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,200,255,.5)}
+.cast-btn:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
+.cast-btn svg{width:20px;height:20px}
+
+.fish-recent{margin-top:22px}
+.fish-recent h3{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--text3);margin-bottom:10px}
+.fish-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;background:rgba(255,255,255,.03);margin-bottom:6px;font-size:13px}
+.fish-item .emoji{font-size:20px;flex:none}
+.fish-item .name{flex:1;min-width:0;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fish-item .val{font-family:monospace;font-weight:700;color:#ffd54f}
+.fish-item .val.bad{color:#ff8aa8}
+
+.fish-actions{display:flex;gap:8px;justify-content:center;margin-top:24px;flex-wrap:wrap}
+.fish-actions button{padding:9px 16px;border-radius:9px;font-size:12.5px;font-weight:600;border:1px solid var(--border);background:var(--surface2);color:var(--text2);cursor:pointer;transition:all .15s;font-family:inherit}
+.fish-actions button:hover{color:var(--text);border-color:var(--border2);transform:translateY(-1px)}
+
+.lb-list{display:flex;flex-direction:column;gap:6px}
+.lb-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:9px;background:rgba(255,255,255,.03)}
+.lb-row.me{border:1px solid var(--cyan);background:rgba(0,255,224,.06)}
+.lb-row .rank{width:28px;text-align:center;font-family:monospace;font-weight:700;font-size:14px;color:var(--text3)}
+.lb-row .rank.gold{color:#ffd700}
+.lb-row .rank.silver{color:#c0c0c0}
+.lb-row .rank.bronze{color:#cd7f32}
+.lb-row .info{flex:1;min-width:0}
+.lb-row .info .nm{font-size:13.5px;font-weight:600}
+.lb-row .info .un{font-size:11px;color:var(--text3)}
+.lb-row .val{font-family:monospace;font-weight:700;font-size:15px;color:#ffd54f}
+
+.badge-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}
+.badge-card{padding:14px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid var(--border);text-align:center;transition:all .15s}
+.badge-card.locked{opacity:.35;filter:grayscale(1)}
+.badge-card.unlocked{border-color:rgba(255,215,0,.5);box-shadow:0 0 14px rgba(255,215,0,.15)}
+.badge-card .be{font-size:32px;line-height:1;margin-bottom:6px}
+.badge-card .bn{font-size:12.5px;font-weight:700;color:var(--text);margin-bottom:3px}
+.badge-card .bd{font-size:10.5px;color:var(--text3);line-height:1.4}
+
+/* Bank bot DMs */
+.msg .author.bank-author{color:#ffd54f!important}
+.msg[data-bank="1"]{background:linear-gradient(90deg,rgba(255,215,0,.05),transparent 60%);border-left:2px solid rgba(255,215,0,.4)}
+
+/* Badge strip on profile */
+.profile-badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.profile-badge-chip{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:4px 9px;border-radius:99px;background:rgba(255,215,0,.1);border:1px solid rgba(255,215,0,.35);color:#ffd54f;font-weight:600}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyFishing) return;
+  window.__sleepyFishing = true;
+  function log(){ try{console.log.apply(console,["[Fish]"].concat([].slice.call(arguments)));}catch(e){} }
+  function esc(s){ return window.esc(s); }
+
+  var BANK_ID = '00000000-0000-0000-0000-0000000000ba';
+  var CURE_COST = 100;
+  var POISON_DRAIN_PER_MIN = 10;
+
+  var FISH = [
+    { name: 'Minnow',         emoji: '🐟', tier: 'common',    value: 10,   weight: 25 },
+    { name: 'Sardine',        emoji: '🐟', tier: 'common',    value: 15,   weight: 20 },
+    { name: 'Bass',           emoji: '🐟', tier: 'common',    value: 25,   weight: 15 },
+    { name: 'Trout',          emoji: '🐟', tier: 'uncommon',  value: 50,   weight: 10 },
+    { name: 'Salmon',         emoji: '🐠', tier: 'uncommon',  value: 75,   weight: 8 },
+    { name: 'Tuna',           emoji: '🐟', tier: 'uncommon',  value: 100,  weight: 7 },
+    { name: 'Clownfish',      emoji: '🐠', tier: 'rare',      value: 150,  weight: 4 },
+    { name: 'Swordfish',      emoji: '🐟', tier: 'rare',      value: 250,  weight: 3 },
+    { name: 'Golden Koi',     emoji: '🐠', tier: 'legendary', value: 500,  weight: 1 },
+    { name: 'Mythic Arowana', emoji: '🐉', tier: 'legendary', value: 1000, weight: 0.5 },
+    { name: 'Pufferfish',     emoji: '🐡', tier: 'puffer',    value: 0,    weight: 6.5 }
+  ];
+
+  var BADGES = [
+    { id:'first_catch',  emoji:'🎣', name:'First Catch',    desc:'Caught your first fish' },
+    { id:'catch_10',     emoji:'🐟', name:'Getting Started',desc:'Caught 10 fish' },
+    { id:'catch_50',     emoji:'🎏', name:'Avid Angler',    desc:'Caught 50 fish' },
+    { id:'catch_100',    emoji:'🏆', name:'Master Angler',  desc:'Caught 100 fish' },
+    { id:'legendary_1',  emoji:'⭐', name:'Legend Hunter',  desc:'Caught a legendary fish' },
+    { id:'legendary_5',  emoji:'🌟', name:'Legend Master',  desc:'Caught 5 legendary fish' },
+    { id:'puffer_1',     emoji:'☠️', name:'Poisoned',       desc:'Caught a pufferfish' },
+    { id:'puffer_5',     emoji:'💀', name:'Cursed',         desc:'Caught 5 pufferfish' },
+    { id:'rich_1000',    emoji:'💰', name:'Thousandaire',   desc:'Reached 1,000 coins' },
+    { id:'rich_10000',   emoji:'💎', name:'Ten Thousand',   desc:'Reached 10,000 coins' }
+  ];
+
+  var state = {
+    account: null,
+    catches: [],
+    badges: [],
+    casting: false,
+    result: null,
+    bankConvId: null,
+  };
+
+  function tierLabel(t){ return t === 'puffer' ? 'Hazard' : t; }
+
+  // ---------- Load ----------
+  async function ensureAccount(){
+    var r = await sb.from('bank_accounts').select('*').eq('user_id', window.ME.id).maybeSingle();
+    if (r.data){ state.account = r.data; return r.data; }
+    var ins = await sb.from('bank_accounts').insert({ user_id: window.ME.id, balance: 100 }).select().single();
+    if (ins.error) log("create failed:", ins.error.message);
+    state.account = ins.data;
+    // Bank welcome DM
+    setTimeout(bankWelcome, 800);
+    return ins.data;
+  }
+
+  async function loadCatches(){
+    var r = await sb.from('fishing_catches').select('*').eq('user_id', window.ME.id).order('caught_at', { ascending: false }).limit(30);
+    state.catches = r.data || [];
+  }
+  async function loadBadges(){
+    var r = await sb.from('user_badges').select('*').eq('user_id', window.ME.id);
+    state.badges = (r.data || []).map(function(b){ return b.badge_id; });
+  }
+
+  // ---------- Badges ----------
+  async function awardBadge(id){
+    if (state.badges.indexOf(id) >= 0) return false;
+    var r = await sb.from('user_badges').insert({ user_id: window.ME.id, badge_id: id });
+    if (r.error) return false;
+    state.badges.push(id);
+    var b = BADGES.find(function(x){ return x.id === id; });
+    if (b) window.toast("Badge unlocked!", b.emoji + " " + b.name, "ok");
+    return true;
+  }
+
+  async function checkBadges(){
+    var count = state.catches.length;
+    var legendaryCount = state.catches.filter(function(c){ return c.fish_tier === 'legendary'; }).length;
+    var pufferCount = state.catches.filter(function(c){ return c.fish_tier === 'puffer'; }).length;
+    var balance = state.account ? state.account.balance : 0;
+
+    if (count >= 1)   await awardBadge('first_catch');
+    if (count >= 10)  await awardBadge('catch_10');
+    if (count >= 50)  await awardBadge('catch_50');
+    if (count >= 100) await awardBadge('catch_100');
+    if (legendaryCount >= 1) await awardBadge('legendary_1');
+    if (legendaryCount >= 5) await awardBadge('legendary_5');
+    if (pufferCount >= 1) await awardBadge('puffer_1');
+    if (pufferCount >= 5) await awardBadge('puffer_5');
+    if (balance >= 1000)  await awardBadge('rich_1000');
+    if (balance >= 10000) await awardBadge('rich_10000');
+  }
+
+  // ---------- Bank bot ----------
+  async function ensureBankDM(){
+    if (state.bankConvId) return state.bankConvId;
+    try {
+      var r = await sb.rpc('ensure_bank_dm');
+      if (!r.error && r.data){
+        state.bankConvId = r.data;
+        await window.fetchProfiles([BANK_ID]);
+        return state.bankConvId;
+      }
+    } catch(e){ log("ensure_bank_dm failed:", e.message); }
+    return null;
+  }
+  async function bankSay(msg){
+    var convId = await ensureBankDM();
+    if (!convId) return;
+    try { await sb.rpc('bank_say', { conv: convId, msg: msg }); } catch(e){ log("bank_say failed:", e.message); }
+  }
+  async function bankWelcome(){
+    await ensureBankDM();
+    await bankSay(
+      "Welcome to the Bank 💰\n" +
+      "You start with 100 coins. Cast your line in the Fishing game to earn more.\n\n" +
+      "Watch out for 🐡 Pufferfish — catching one poisons you and drains 10 coins per minute " +
+      "until you pay 100 to cure. Type 'balance' any time to check your coins."
+    );
+  }
+
+  // ---------- Poison tick ----------
+  async function tickPoison(){
+    try {
+      var r = await sb.rpc('tick_poison');
+      if (!r.error && r.data && r.data.drained > 0){
+        log("poison tick drained", r.data.drained);
+        state.account = await ensureAccount();
+        if (r.data.drained >= 20){
+          bankSay("☠️ Poison drain: -" + r.data.drained + " coins (" + r.data.minutes + " min).\n" +
+                  "Balance: " + r.data.new_balance + " coins. Type 'cure' to pay 100 and heal.");
+        }
+      }
+    } catch(e){ log("tick failed:", e.message); }
+  }
+
+  // ---------- Fishing ----------
+  function rollFish(){
+    var total = FISH.reduce(function(s, f){ return s + f.weight; }, 0);
+    var r = Math.random() * total;
+    var acc = 0;
+    for (var i = 0; i < FISH.length; i++){
+      acc += FISH[i].weight;
+      if (r < acc) return FISH[i];
+    }
+    return FISH[0];
+  }
+
+  async function castLine(){
+    if (state.casting) return;
+    if (!state.account) await ensureAccount();
+    if (state.account && state.account.poisoned){
+      window.toast("You're poisoned", "Cure yourself before fishing.", "err");
+      return;
+    }
+    state.casting = true;
+    state.result = null;
+    renderFishing();
+
+    var caught = rollFish();
+    var wait = 2500 + Math.random() * 1500;
+
+    setTimeout(async function(){
+      try {
+        var r = await sb.rpc('record_catch', {
+          fish_name: caught.name,
+          fish_emoji: caught.emoji,
+          fish_tier: caught.tier,
+          fish_value: caught.value
+        });
+        if (r.error) throw r.error;
+
+        state.account = await ensureAccount();
+        await loadCatches();
+        state.result = caught;
+        state.casting = false;
+
+        if (caught.tier === 'puffer'){
+          bankSay("🐡 You caught a Pufferfish! You are now POISONED.\n" +
+                  "Losing " + POISON_DRAIN_PER_MIN + " coins per minute.\n" +
+                  "Type 'cure' to pay " + CURE_COST + " and heal instantly.");
+        } else if (caught.tier === 'legendary'){
+          bankSay("⭐ LEGENDARY CATCH! " + caught.emoji + " " + caught.name +
+                  " — +" + caught.value + " coins.\n" +
+                  "New balance: " + state.account.balance);
+        }
+
+        await checkBadges();
+        renderFishing();
+      } catch(e){
+        state.casting = false;
+        log("catch failed:", e.message);
+        window.toast("Error", e.message || String(e), "err");
+        renderFishing();
+      }
+    }, wait);
+  }
+
+  async function cure(){
+    try {
+      var r = await sb.rpc('cure_poison');
+      if (r.error) throw r.error;
+      state.account = await ensureAccount();
+      await bankSay("✨ Poison cured. -100 coins.\nNew balance: " + state.account.balance);
+      window.toast("Cured", "You're healthy again.", "ok");
+      renderFishing();
+    } catch(e){
+      window.toast("Could not cure", e.message || String(e), "err");
+    }
+  }
+
+  // ---------- UI ----------
+  function renderFishing(){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+
+    var acc = state.account || { balance: 0, poisoned: false };
+    var drained = state.casting ? '<div class="cast-overlay"><div class="lbl">Casting...</div><div class="bar"><i></i></div></div>' : '';
+    var resultHTML = state.result ? resultOverlay(state.result) : '';
+
+    var html = '<div class="fish-wrap">';
+
+    html += '<div class="fish-head">' +
+      '<div class="ico">🎣</div>' +
+      '<h2>Fishing</h2>' +
+      '<div class="sub">Cast your line and reel in some coins</div>' +
+    '</div>';
+
+    html += '<div class="bank-balance">' +
+      '<div class="amt"><span class="coin">🪙</span>' + acc.balance.toLocaleString() + '</div>' +
+      '<div class="lbl">Your Balance</div>' +
+    '</div>';
+
+    if (acc.poisoned){
+      var minsLeft = Math.floor(acc.balance / POISON_DRAIN_PER_MIN);
+      html += '<div class="poison-bar">' +
+        '<div class="icon">🐡</div>' +
+        '<div class="info"><div class="t">POISONED</div>' +
+          '<div class="d">-10 coins/min · ' + minsLeft + ' min until broke</div></div>' +
+        '<button id="fish-cure"' + (acc.balance < CURE_COST ? ' disabled' : '') + '>Cure -100</button>' +
+      '</div>';
+    }
+
+    html += '<div class="water-scene">' +
+      drained + resultHTML +
+      '<div class="swimmer">🐟</div><div class="swimmer">🐠</div><div class="swimmer">🐟</div>' +
+      '<div class="swimmer">🐡</div><div class="swimmer">🐠</div><div class="swimmer">🐟</div>' +
+    '</div>';
+
+    var disabled = state.casting || acc.poisoned;
+    html += '<button class="cast-btn" id="fish-cast"' + (disabled ? ' disabled' : '') + '>' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 12 12M12 12l8-8M12 12H4M12 12v8"/></svg>' +
+      (acc.poisoned ? 'Cure first to fish' : state.casting ? 'Casting...' : 'Cast Line') +
+    '</button>';
+
+    // Recent catches
+    if (state.catches.length){
+      html += '<div class="fish-recent"><h3>Recent catches</h3>';
+      state.catches.slice(0, 6).forEach(function(c){
+        var v = c.fish_tier === 'puffer'
+          ? '<span class="val bad">POISON</span>'
+          : '<span class="val">+' + c.value + '</span>';
+        html += '<div class="fish-item">' +
+          '<span class="emoji">' + c.fish_emoji + '</span>' +
+          '<span class="name">' + esc(c.fish_name) + '</span>' +
+          '<span style="font-size:10.5px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">' + esc(tierLabel(c.fish_tier)) + '</span>' +
+          v +
+        '</div>';
+      });
+      html += '</div>';
+    }
+
+    html += '<div class="fish-actions">' +
+      '<button id="fish-lb">🏆 Leaderboard</button>' +
+      '<button id="fish-inv">🎒 Inventory</button>' +
+      '<button id="fish-badges">🏅 Badges</button>' +
+    '</div>';
+
+    html += '</div>';
+    body.innerHTML = html;
+
+    var c = document.getElementById('fish-cast');
+    if (c) c.onclick = castLine;
+    var cu = document.getElementById('fish-cure');
+    if (cu && !cu.disabled) cu.onclick = cure;
+    var lb = document.getElementById('fish-lb');
+    if (lb) lb.onclick = openLeaderboard;
+    var inv = document.getElementById('fish-inv');
+    if (inv) inv.onclick = openInventory;
+    var bg = document.getElementById('fish-badges');
+    if (bg) bg.onclick = openBadges;
+    var closeRes = document.getElementById('fish-res-close');
+    if (closeRes) closeRes.onclick = function(){ state.result = null; renderFishing(); };
+  }
+
+  function resultOverlay(fish){
+    var isPuff = fish.tier === 'puffer';
+    var valueHTML = isPuff
+      ? '<div class="value bad">+ POISON</div>'
+      : '<div class="value">+' + fish.value + '</div>';
+    return '<div class="catch-result">' +
+      '<div class="catch-card">' +
+        '<div class="emoji">' + fish.emoji + '</div>' +
+        '<div class="name">' + esc(fish.name) + '</div>' +
+        '<div class="tier ' + fish.tier + '">' + esc(tierLabel(fish.tier)) + '</div>' +
+        valueHTML +
+        '<br><button class="close" id="fish-res-close">Close</button>' +
+      '</div>' +
+    '</div>';
+  }
+
+  // ---------- Modals ----------
+  async function openLeaderboard(){
+    var r = await sb.from('bank_accounts').select('*').order('balance', { ascending: false }).limit(20);
+    var rows = r.data || [];
+    var ids = rows.map(function(x){ return x.user_id; });
+    await window.fetchProfiles(ids);
+    var html = '<div class="lb-list">';
+    if (!rows.length) html += '<div class="empty" style="padding:20px">No accounts yet.</div>';
+    rows.forEach(function(row, i){
+      var p = window.PROFILES[row.user_id] || { username: 'user', display_name: 'User' };
+      var rank = i + 1;
+      var cls = rank === 1 ? 'gold' : rank === 2 ? 'silver' : rank === 3 ? 'bronze' : '';
+      var me = row.user_id === window.ME.id;
+      html += '<div class="lb-row' + (me ? ' me' : '') + '">' +
+        '<div class="rank ' + cls + '">' + rank + '</div>' +
+        '<div style="position:relative">' + window.avatarHTML(row.user_id, 34) + '</div>' +
+        '<div class="info"><div class="nm">' + esc(p.display_name || p.username) + (me ? ' (you)' : '') + '</div>' +
+          '<div class="un">' + row.total_earned + ' earned total</div></div>' +
+        '<div class="val">🪙 ' + row.balance.toLocaleString() + '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+    window.openModal("Wealth Leaderboard", html, { wide: true });
+  }
+
+  async function openInventory(){
+    var r = await sb.from('fishing_catches').select('*').eq('user_id', window.ME.id);
+    var rows = r.data || [];
+    var counts = {};
+    rows.forEach(function(c){
+      if (!counts[c.fish_name]) counts[c.fish_name] = { ...c, count: 0, total: 0 };
+      counts[c.fish_name].count++;
+      counts[c.fish_name].total += c.value;
+    });
+    var entries = Object.keys(counts).map(function(k){ return counts[k]; });
+    entries.sort(function(a, b){ return b.count - a.count; });
+
+    var html = '';
+    if (!entries.length){
+      html = '<div class="empty" style="padding:20px">You haven\'t caught any fish yet.</div>';
+    } else {
+      html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px">' +
+        entries.map(function(e){
+          return '<div style="padding:12px;border-radius:10px;background:rgba(255,255,255,.03);display:flex;align-items:center;gap:10px">' +
+            '<span style="font-size:26px">' + e.fish_emoji + '</span>' +
+            '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13px">' + esc(e.fish_name) + '</div>' +
+            '<div style="font-size:11px;color:var(--text3)">x' + e.count + ' · ' + e.total + ' coins</div></div>' +
+          '</div>';
+        }).join('') + '</div>';
+    }
+    window.openModal("Fish Inventory", html, { wide: true });
+  }
+
+  async function openBadges(){
+    await loadBadges();
+    var html = '<div class="badge-grid">';
+    BADGES.forEach(function(b){
+      var owned = state.badges.indexOf(b.id) >= 0;
+      html += '<div class="badge-card ' + (owned ? 'unlocked' : 'locked') + '">' +
+        '<div class="be">' + b.emoji + '</div>' +
+        '<div class="bn">' + esc(b.name) + '</div>' +
+        '<div class="bd">' + esc(b.desc) + '</div>' +
+      '</div>';
+    });
+    html += '</div>';
+    window.openModal("Your Badges", html, { wide: true });
+  }
+
+  // ---------- Rail button ----------
+  function updateRailPill(){
+    var btn = document.querySelector('.rail-btn.fishing-btn');
+    if (!btn) return;
+    var acc = state.account;
+    if (!acc) return;
+    var pill = btn.querySelector('.fish-pill');
+    var label = acc.poisoned ? 'POISON' : (acc.balance >= 1000 ? (acc.balance >= 10000 ? '10K+' : Math.floor(acc.balance/1000) + 'K') : acc.balance);
+    if (!pill){
+      btn.insertAdjacentHTML('beforeend', '<span class="fish-pill' + (acc.poisoned ? ' poison' : '') + '">' + label + '</span>');
+    } else {
+      pill.textContent = label;
+      pill.classList.toggle('poison', !!acc.poisoned);
+    }
+  }
+
+  function injectRailButton(){
+    var rail = document.getElementById('rail');
+    if (!rail) return;
+    if (rail.querySelector('.fishing-btn')){ updateRailPill(); return; }
+    var btn = document.createElement('button');
+    btn.className = 'rail-btn fishing-btn';
+    btn.title = 'Fishing';
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><path d="M4 20 12 12M12 12l8-8M12 12H4M12 12v8"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>';
+    btn.onclick = openFishing;
+    var anchor = rail.querySelector('[data-rail="create-community"]') || rail.querySelector('[data-rail="find"]');
+    if (anchor) rail.insertBefore(btn, anchor.nextSibling);
+    else rail.appendChild(btn);
+    updateRailPill();
+  }
+
+  async function openFishing(){
+    window.CURRENT = { type: 'fishing', server: null, channel: null, conv: null, ticket: null };
+    await ensureAccount();
+    await Promise.all([loadCatches(), loadBadges()]);
+    window.renderChatHead();
+    renderFishing();
+    updateRailPill();
+  }
+
+  // ---------- Hook into render loop ----------
+  var origRenderRail = window.renderRail;
+  if (typeof origRenderRail === 'function'){
+    window.renderRail = function(){
+      var r = origRenderRail.apply(this, arguments);
+      setTimeout(injectRailButton, 10);
+      return r;
+    };
+  }
+
+  var origRenderChat = window.renderChat;
+  if (typeof origRenderChat === 'function'){
+    window.renderChat = function(){
+      if (window.CURRENT && window.CURRENT.type === 'fishing'){ renderFishing(); return; }
+      return origRenderChat.apply(this, arguments);
+    };
+  }
+
+  var origRenderChatHead = window.renderChatHead;
+  if (typeof origRenderChatHead === 'function'){
+    window.renderChatHead = function(){
+      if (window.CURRENT && window.CURRENT.type === 'fishing'){
+        var el = document.getElementById('chat-head');
+        if (el){
+          el.innerHTML =
+            '<button class="hbtn mobile-only" data-act="toggle-panel">' +
+              '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:20px;height:20px"><path d="M3 6h18M3 12h18M3 18h18"/></svg>' +
+            '</button>' +
+            '<div class="title"><span style="font-size:16px">🎣</span><span class="txt">Fishing</span></div>' +
+            '<div class="spacer"></div>';
+        }
+        return;
+      }
+      return origRenderChatHead.apply(this, arguments);
+    };
+  }
+
+  var origRenderComposer = window.renderComposer;
+  if (typeof origRenderComposer === 'function'){
+    window.renderComposer = function(){
+      if (window.CURRENT && window.CURRENT.type === 'fishing'){
+        var w = document.getElementById('composer-wrap'); if (w) w.innerHTML = '';
+        var t = document.getElementById('typing-bar'); if (t) t.innerHTML = '';
+        return;
+      }
+      return origRenderComposer.apply(this, arguments);
+    };
+  }
+
+  // ---------- Bank bot interception ----------
+  // The Bank bot should color its messages gold and offer quick actions
+  document.addEventListener('click', function(e){
+    var btn = e.target.closest('[data-bank-action]');
+    if (!btn) return;
+    var action = btn.dataset.bankAction;
+    if (action === 'cure') cure();
+    if (action === 'balance') { window.toast("Balance", (state.account ? state.account.balance : 0) + " coins", "ok"); }
+    if (action === 'fish') openFishing();
+  }, true);
+
+  // ---------- Boot ----------
+  setTimeout(async function(){
+    if (!window.ME) return;
+    try {
+      await ensureAccount();
+      await Promise.all([loadCatches(), loadBadges()]);
+      injectRailButton();
+      await tickPoison();
+      setInterval(tickPoison, 60000);
+      setInterval(updateRailPill, 5000);
+      log("boot complete");
+    } catch(e){ log("boot error:", e.message); }
+  }, 3500);
+
+  log("fishing game ready");
+})();
+</script>
+
 </body>
 </html>
