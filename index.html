@@ -18310,5 +18310,137 @@ div[style*="position:fixed"][style*="bottom"] > iframe[src*="bicea"]{
 })();
 </script>
 
+<!-- SLEEPY_PICKER_V2 -->
+<style>
+.picker-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:6px 0 4px}
+.picker-card{
+  padding:18px 14px;border-radius:14px;
+  background:rgba(255,255,255,.03);border:2px solid var(--border);
+  cursor:pointer;text-align:center;transition:all .15s;user-select:none;
+}
+.picker-card:hover{border-color:var(--border2);transform:translateY(-2px);background:rgba(255,255,255,.05)}
+.picker-card.sel{
+  border-color:rgba(139,124,255,.75);
+  background:linear-gradient(135deg, rgba(139,124,255,.16), rgba(94,231,215,.08));
+  box-shadow:0 0 24px rgba(139,124,255,.35);
+}
+.picker-card .em{font-size:44px;line-height:1;margin-bottom:8px}
+.picker-card .nm{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;color:var(--text);margin-bottom:4px}
+.picker-card .ds{font-size:11.5px;color:var(--text3);line-height:1.4}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyPickerV2) return;
+  window.__sleepyPickerV2 = true;
+  function log(){ try{console.log.apply(console,["[Picker]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  var chosenGame = 'ttt';
+
+  function showPicker(onChoose){
+    chosenGame = 'ttt';
+    window.openModal("Choose a game",
+      '<div style="font-size:13px;color:var(--text2);margin-bottom:14px">Pick which game you want to challenge someone to.</div>' +
+      '<div class="picker-grid" id="pgrid">' +
+        '<div class="picker-card sel" data-g="ttt">' +
+          '<div class="em">⭕</div>' +
+          '<div class="nm">Tic-Tac-Toe</div>' +
+          '<div class="ds">Fast 3×3 grid game</div>' +
+        '</div>' +
+        '<div class="picker-card" data-g="chess">' +
+          '<div class="em">♟️</div>' +
+          '<div class="nm">Chess</div>' +
+          '<div class="ds">Full board, all pieces</div>' +
+        '</div>' +
+      '</div>',
+      { footer:
+        '<button class="btn" id="pg-cancel">Cancel</button>' +
+        '<button class="btn primary" id="pg-ok">Create Challenge</button>',
+        onMount: function(){
+          var grid = document.getElementById('pgrid');
+          grid.onclick = function(e){
+            var card = e.target.closest('[data-g]');
+            if (!card) return;
+            chosenGame = card.dataset.g;
+            grid.querySelectorAll('.picker-card').forEach(function(c){ c.classList.remove('sel'); });
+            card.classList.add('sel');
+          };
+          document.getElementById('pg-cancel').onclick = window.closeModal;
+          document.getElementById('pg-ok').onclick = function(){
+            window.closeModal();
+            setTimeout(function(){ onChoose(chosenGame); }, 60);
+          };
+        }
+      });
+  }
+
+  // ------------------------------------------------------------
+  // Read the currently selected bet
+  // ------------------------------------------------------------
+  function readBet(){
+    var custom = document.getElementById('custom-bet');
+    if (custom && custom.value !== ''){
+      var n = parseInt(custom.value, 10);
+      if (!isNaN(n) && n >= 0 && n <= 100000) return n;
+    }
+    var sel = document.querySelector('[data-bet].sel');
+    if (sel) return parseInt(sel.dataset.bet, 10) || 0;
+    return 100;
+  }
+
+  async function createChallenge(game){
+    var bet = readBet();
+    try {
+      var r = await sb.rpc('create_game_challenge_v2', { p_bet: bet, p_game: game });
+      if (r.error) throw new Error(r.error.message || String(r.error));
+      window.toast(
+        "Challenge created",
+        game === 'chess' ? "♟️ Chess · " + (bet ? bet + " 🪙" : "Free") : "⭕ X-O · " + (bet ? bet + " 🪙" : "Free"),
+        "ok"
+      );
+      // Refresh the room
+      if (typeof window.openGameRoom === 'function') {
+        window.openGameRoom('play');
+      } else if (typeof window.openGames === 'function') {
+        window.openGames();
+      }
+    } catch(e){
+      log("create failed:", e.message);
+      var msg = e.message || String(e);
+      if (msg.indexOf('function') >= 0 && msg.indexOf('does not exist') >= 0){
+        msg = 'Run the create_game_challenge_v2 SQL in Supabase first.';
+      }
+      window.toast("Could not create challenge", msg, "err");
+    }
+  }
+
+  // ------------------------------------------------------------
+  // Capture-phase interception of #create-challenge clicks
+  // ------------------------------------------------------------
+  document.addEventListener('click', function(e){
+    var cc = e.target.closest('#create-challenge');
+    if (!cc) return;
+    if (cc.__pickerBusy) return;
+    cc.__pickerBusy = true;
+
+    // Stop every other click handler on this button from firing
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    e.stopPropagation();
+
+    log("create-challenge intercepted");
+    showPicker(function(game){
+      createChallenge(game);
+      setTimeout(function(){ cc.__pickerBusy = false; }, 1500);
+    });
+
+    // Failsafe: clear busy flag if modal is dismissed without choosing
+    setTimeout(function(){ cc.__pickerBusy = false; }, 30000);
+  }, true);
+
+  log("ready");
+})();
+</script>
+
 </body>
 </html>
