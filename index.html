@@ -18914,5 +18914,352 @@ img[src*="juicyads"]{
 })();
 </script>
 
+<!-- SLEEPY_RPS_V1 -->
+<style>
+.rps-wrap{max-width:520px;margin:0 auto;padding:24px 20px;text-align:center;font-family:'Inter',sans-serif}
+.rps-players{display:flex;justify-content:center;gap:20px;align-items:center;margin-bottom:18px;font-size:13px;color:var(--text2)}
+.rps-players > div{display:flex;align-items:center;gap:8px}
+.rps-players b{color:var(--text);font-weight:600}
+.rps-players .vs{color:var(--text3);font-size:11px;letter-spacing:.1em;font-family:monospace}
+.rps-score{display:flex;justify-content:center;align-items:center;gap:22px;margin-bottom:18px;font-family:'Space Grotesk',sans-serif}
+.rps-score .s{font-size:56px;font-weight:700;line-height:1;color:var(--cyan);text-shadow:0 0 24px rgba(94,231,215,.5)}
+.rps-score .s.opp{color:var(--rose);text-shadow:0 0 24px rgba(255,127,159,.5)}
+.rps-score .dash{font-size:26px;color:var(--text3);font-weight:400}
+.rps-round-info{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--text3);margin-bottom:20px;font-family:'JetBrains Mono',monospace}
+.rps-last{padding:12px 16px;border-radius:12px;margin-bottom:18px;background:rgba(255,255,255,.03);border:1px solid var(--border);font-size:12.5px;color:var(--text2);line-height:1.6}
+.rps-last b{color:var(--text);font-weight:600}
+.rps-last .good{color:var(--green);font-weight:700}
+.rps-last .bad{color:#ff8aa2;font-weight:700}
+.rps-picks{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+.rps-btn{padding:22px 10px;border-radius:16px;background:rgba(255,255,255,.03);border:2px solid var(--border);cursor:pointer;transition:all .18s cubic-bezier(.2,.9,.4,1);display:flex;flex-direction:column;align-items:center;gap:8px;font-family:inherit}
+.rps-btn:hover{border-color:rgba(94,231,215,.6);background:linear-gradient(135deg,rgba(94,231,215,.1),rgba(139,124,255,.06));transform:translateY(-3px);box-shadow:0 8px 24px rgba(94,231,215,.28)}
+.rps-btn:active{transform:translateY(-1px) scale(.98)}
+.rps-btn .em{font-size:42px;line-height:1;transition:transform .15s ease}
+.rps-btn:hover .em{transform:scale(1.1)}
+.rps-btn .nm{font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text2)}
+.rps-btn.sel{border-color:rgba(94,231,215,.85);background:linear-gradient(135deg,rgba(94,231,215,.18),rgba(139,124,255,.1));box-shadow:0 0 30px rgba(94,231,215,.4)}
+.rps-btn.sel .nm{color:var(--cyan)}
+.rps-waiting{padding:28px 20px;border-radius:14px;background:linear-gradient(135deg,rgba(94,231,215,.06),rgba(139,124,255,.04));border:1px solid rgba(94,231,215,.3);margin-bottom:20px}
+.rps-waiting .em{font-size:64px;line-height:1;margin-bottom:10px;animation:rpsPulse 2s ease-in-out infinite}
+@keyframes rpsPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+.rps-waiting .t{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;color:var(--cyan);margin-bottom:6px}
+.rps-waiting .s{font-size:12px;color:var(--text3)}
+.rps-result{padding:26px 20px;border-radius:14px;margin-bottom:20px;font-family:'Space Grotesk',sans-serif}
+.rps-result.win{background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.4)}
+.rps-result.lose{background:rgba(255,127,159,.1);border:1px solid rgba(255,127,159,.4)}
+.rps-result .ttl{font-size:26px;font-weight:700;margin-bottom:8px}
+.rps-result.win .ttl{color:var(--green)}
+.rps-result.lose .ttl{color:#ff7f9f}
+.rps-result .sub{font-size:12.5px;color:var(--text2);line-height:1.5}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyRps) return;
+  window.__sleepyRps = true;
+  function log(){ try{console.log.apply(console,["[RPS]"].concat([].slice.call(arguments)));}catch(e){} }
+  function esc(s){ return window.esc(s); }
+
+  var RPS_LABEL = { rock:'Rock', paper:'Paper', scissors:'Scissors' };
+  var RPS_EMOJI = { rock:'\u270A', paper:'\u270B', scissors:'\u270C\uFE0F' };
+
+  // ============================================================
+  // 1. Patch the game picker — hide chess, add RPS
+  // ============================================================
+  var origOpenModal = window.openModal;
+  if (typeof origOpenModal === 'function'){
+    window.openModal = function(title, body, opts){
+      var r = origOpenModal.call(this, title, body, opts);
+      if (title === 'Choose a game'){
+        setTimeout(function(){
+          var grid = document.getElementById('pgrid');
+          if (!grid) return;
+          var chessCard = grid.querySelector('[data-g="chess"]');
+          if (chessCard) chessCard.remove();
+          if (!grid.querySelector('[data-g="rps"]')){
+            var rps = document.createElement('div');
+            rps.className = 'picker-card';
+            rps.dataset.g = 'rps';
+            rps.innerHTML = '<div class="em">\u270A</div>' +
+              '<div class="nm">Rock Paper Scissors</div>' +
+              '<div class="ds">Best of 3 \u2014 first to 2 wins</div>';
+            grid.appendChild(rps);
+            log("RPS card injected, chess removed");
+          }
+        }, 20);
+      }
+      return r;
+    };
+  }
+
+  // ============================================================
+  // 2. RPS state and rendering
+  // ============================================================
+  function exitRPS(){
+    window.__rpsFocus = null;
+    window.__rpsReadyAt = 0;
+  }
+
+  function focusRPS(game){
+    window.__rpsFocus = { game: game };
+    log("RPS focus", game.id.slice(0, 8));
+    renderRPSGame();
+  }
+
+  async function rpsPick(choice){
+    if (!window.__rpsFocus) return;
+    var g = window.__rpsFocus.game;
+    var isCreator = g.creator_id === window.ME.id;
+    var myKey = isCreator ? 'creator' : 'opponent';
+
+    // Optimistic local update
+    if (!g.state) g.state = {};
+    if (!g.state.picks) g.state.picks = {};
+    g.state.picks[myKey] = choice;
+    renderRPSGame();
+
+    try {
+      var r = await sb.rpc('rps_pick', { cid: g.id, p_choice: choice });
+      if (r.error) throw r.error;
+      var fresh = await sb.from('game_challenges').select('*').eq('id', g.id).single();
+      if (fresh.data){
+        window.__rpsFocus.game = fresh.data;
+        renderRPSGame();
+      }
+    } catch(e){
+      log("pick failed:", e.message);
+      window.toast('Pick failed', e.message || String(e), 'err');
+      var cur = await sb.from('game_challenges').select('*').eq('id', g.id).single();
+      if (cur.data){
+        window.__rpsFocus.game = cur.data;
+        renderRPSGame();
+      }
+    }
+  }
+
+  function renderRPSGame(){
+    var body = document.getElementById('chat-body');
+    if (!body || !window.__rpsFocus) return;
+    var g = window.__rpsFocus.game;
+    var isCreator = g.creator_id === window.ME.id;
+    var myKey = isCreator ? 'creator' : 'opponent';
+    var oppKey = isCreator ? 'opponent' : 'creator';
+    var opId = isCreator ? g.opponent_id : g.creator_id;
+    var me = window.PROFILES[window.ME.id];
+    var op = opId ? window.PROFILES[opId] : null;
+
+    var score = (g.state && g.state.score) || { creator: 0, opponent: 0 };
+    var picks = (g.state && g.state.picks) || {};
+    var lastRound = g.state && g.state.last_round;
+    var myPick = picks[myKey] || null;
+    var myScore = score[myKey] || 0;
+    var oppScore = score[oppKey] || 0;
+    var isOver = g.status === 'finished';
+    var iWon = g.winner_id === window.ME.id;
+
+    var html = '<div class="rps-wrap">';
+
+    // Players
+    html += '<div class="rps-players">' +
+      '<div>' + window.avatarHTML(window.ME.id, 30) +
+        '<b>' + esc(me.display_name || me.username) + '</b></div>' +
+      '<div class="vs">VS</div>' +
+      '<div>' + (opId ? window.avatarHTML(opId, 30) : '') +
+        '<b>' + (op ? esc(op.display_name || op.username) : 'Waiting\u2026') + '</b></div>' +
+    '</div>';
+
+    // Score
+    html += '<div class="rps-score">' +
+      '<div class="s">' + myScore + '</div>' +
+      '<div class="dash">\u2013</div>' +
+      '<div class="s opp">' + oppScore + '</div>' +
+    '</div>';
+
+    // Round info
+    html += '<div class="rps-round-info">' +
+      (isOver ? 'Match complete' : 'Best of 3 \u2014 first to 2 wins') +
+    '</div>';
+
+    // Last round recap
+    if (lastRound && lastRound.creator && lastRound.opponent){
+      var myLast = lastRound[myKey];
+      var oppLast = lastRound[oppKey];
+      var good = (lastRound.winner === 'creator' && isCreator) ||
+                 (lastRound.winner === 'opponent' && !isCreator);
+      var tie = lastRound.winner === null;
+      var resultClass = tie ? '' : (good ? 'good' : 'bad');
+      var resultText = tie ? 'Tie \u2014 replay' : (good ? 'You won the round' : 'You lost the round');
+      html += '<div class="rps-last">' +
+        'Last round: <b>' + RPS_LABEL[myLast] + '</b> vs <b>' + RPS_LABEL[oppLast] + '</b> \u00b7 ' +
+        '<span class="' + resultClass + '">' + resultText + '</span>' +
+      '</div>';
+    }
+
+    // Main area
+    if (isOver){
+      var amt = g.bet_amount > 0 ? Math.abs(g.bet_amount * (iWon ? 2 : 1)) : 0;
+      html += '<div class="rps-result ' + (iWon ? 'win' : 'lose') + '">' +
+        '<div class="ttl">' + (iWon ? '\uD83C\uDFC6 You won!' : '\uD83D\uDE14 You lost') + '</div>' +
+        '<div class="sub">Final score: ' + myScore + ' \u2013 ' + oppScore +
+          (amt > 0 ? ' \u00b7 ' + (iWon ? '+' : '\u2212') + amt + ' coins' : '') +
+        '</div>' +
+      '</div>';
+    } else if (myPick){
+      html += '<div class="rps-waiting">' +
+        '<div class="em">' + RPS_EMOJI[myPick] + '</div>' +
+        '<div class="t">You picked ' + RPS_LABEL[myPick] + '</div>' +
+        '<div class="s">Waiting for ' + (op ? esc(op.display_name || op.username) : 'opponent') + ' to pick\u2026</div>' +
+      '</div>';
+    } else {
+      html += '<div class="rps-picks">';
+      ['rock','paper','scissors'].forEach(function(c){
+        html += '<button class="rps-btn" data-rps-pick="' + c + '">' +
+          '<div class="em">' + RPS_EMOJI[c] + '</div>' +
+          '<div class="nm">' + RPS_LABEL[c] + '</div>' +
+        '</button>';
+      });
+      html += '</div>';
+    }
+
+    html += '<button class="btn" id="rps-back" style="margin-top:8px">\u2190 Back to lobby</button>';
+    html += '</div>';
+    body.innerHTML = html;
+
+    body.querySelectorAll('[data-rps-pick]').forEach(function(b){
+      b.onclick = function(){ rpsPick(b.dataset.rpsPick); };
+    });
+    var back = document.getElementById('rps-back');
+    if (back) back.onclick = function(){
+      exitRPS();
+      if (typeof window.openGameRoomFixed === 'function') window.openGameRoomFixed();
+      else if (typeof window.openGameRoom === 'function') window.openGameRoom('play');
+    };
+  }
+
+  // ============================================================
+  // 3. Intercept Play / Accept clicks for RPS games (and retired chess)
+  // ============================================================
+  document.addEventListener('click', async function(e){
+    var enter = e.target.closest('[data-enter]');
+    if (enter){
+      var g1 = (window.__myGames || []).filter(function(x){ return x.id === enter.dataset.enter; })[0];
+      if (g1 && g1.game_type === 'chess'){
+        e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+        window.toast("Chess retired", "Cancel this match and start a new one.", "err");
+        return;
+      }
+      if (g1 && g1.game_type === 'rps'){
+        e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+        focusRPS(g1);
+        return;
+      }
+    }
+    var acc = e.target.closest('[data-accept]');
+    if (acc){
+      var g2 = (window.__lobby || []).filter(function(x){ return x.id === acc.dataset.accept; })[0];
+      if (g2 && g2.game_type === 'chess'){
+        e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+        window.toast("Chess retired", "You cannot accept chess challenges anymore.", "err");
+        return;
+      }
+      if (g2 && g2.game_type === 'rps'){
+        e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+        if (acc.disabled) return;
+        acc.disabled = true; acc.textContent = '...';
+        try {
+          var r = await sb.rpc('accept_game_challenge', { cid: g2.id });
+          if (r.error) throw r.error;
+          var fresh = await sb.from('game_challenges').select('*').eq('id', g2.id).single();
+          if (fresh.data) focusRPS(fresh.data);
+        } catch(err){
+          window.toast('Failed to accept', err.message || String(err), 'err');
+          acc.disabled = false; acc.textContent = 'Accept';
+        }
+      }
+    }
+  }, true);
+
+  // ============================================================
+  // 4. Wrap renderChat so RPS takes over when focused
+  // ============================================================
+  var origRC = window.renderChat;
+  window.renderChat = function(){
+    if (window.CURRENT && window.CURRENT.type === 'games' && window.__rpsFocus){
+      renderRPSGame();
+      return;
+    }
+    return origRC.apply(this, arguments);
+  };
+
+  // ============================================================
+  // 5. Wrap openGameRoomFixed so it clears RPS focus
+  // ============================================================
+  if (typeof window.openGameRoomFixed === 'function'){
+    var origOGF = window.openGameRoomFixed;
+    window.openGameRoomFixed = function(){
+      exitRPS();
+      return origOGF.apply(this, arguments);
+    };
+  }
+
+  // ============================================================
+  // 6. Re-render RPS if V3's realtime subscriber clobbers the body
+  // ============================================================
+  var mo = null;
+  function attachObserver(){
+    var body = document.getElementById('chat-body');
+    if (!body){ setTimeout(attachObserver, 500); return; }
+    mo = new MutationObserver(function(){
+      if (!window.__rpsFocus) return;
+      if (!window.CURRENT || window.CURRENT.type !== 'games') return;
+      var b = document.getElementById('chat-body');
+      if (!b) return;
+      if (b.querySelector('.rps-wrap')) return;
+      renderRPSGame();
+    });
+    mo.observe(body, { childList: true });
+    log("observer attached");
+  }
+  attachObserver();
+
+  // ============================================================
+  // 7. Poll the focused game so opponent moves appear automatically
+  // ============================================================
+  setInterval(async function(){
+    if (!window.__rpsFocus) return;
+    if (!window.CURRENT || window.CURRENT.type !== 'games') return;
+    try {
+      var r = await sb.from('game_challenges').select('*').eq('id', window.__rpsFocus.game.id).single();
+      if (!r.data) return;
+      var old = window.__rpsFocus.game;
+      var changed = r.data.status !== old.status ||
+                    JSON.stringify(r.data.state) !== JSON.stringify(old.state);
+      window.__rpsFocus.game = r.data;
+      if (changed){
+        renderRPSGame();
+        if (r.data.status === 'finished' && r.data.winner_id){
+          var won = r.data.winner_id === window.ME.id;
+          if (window.__lastRpsToast !== r.data.id + ':' + r.data.status){
+            window.__lastRpsToast = r.data.id + ':' + r.data.status;
+            window.toast(won ? 'You won!' : 'You lost',
+              (won ? '+' : '\u2212') + Math.abs(r.data.bet_amount * (won ? 2 : 1)) + ' coins',
+              won ? 'ok' : 'err');
+          }
+        }
+      }
+    } catch(e){ /* silent */ }
+  }, 700);
+
+  // Clear RPS focus if the user leaves the games page
+  setInterval(function(){
+    if (window.__rpsFocus && (!window.CURRENT || window.CURRENT.type !== 'games')){
+      exitRPS();
+    }
+  }, 1200);
+
+  log("RPS ready");
+})();
+</script>
+
 </body>
 </html>
