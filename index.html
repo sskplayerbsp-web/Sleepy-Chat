@@ -18442,5 +18442,477 @@ div[style*="position:fixed"][style*="bottom"] > iframe[src*="bicea"]{
 })();
 </script>
 
+<!-- SLEEPY_ADS_HIDDEN_V1 -->
+<style>
+/* Kill every visible ad surface. Scripts keep running. */
+
+/* Our own container */
+#ad-host{display:none!important;visibility:hidden!important;height:0!important;padding:0!important;margin:0!important;overflow:hidden!important}
+
+/* Login banner slot */
+.ad-slot-login{display:none!important;height:0!important;padding:0!important;margin:0!important;overflow:hidden!important}
+
+/* Adsterra NativeBanner container */
+#container-fa854199a041432aa0a5fa0fd34ead52{
+  position:fixed!important;
+  left:-10000px!important;
+  top:-10000px!important;
+  width:1px!important;
+  height:1px!important;
+  overflow:hidden!important;
+  opacity:0!important;
+  pointer-events:none!important;
+  visibility:hidden!important;
+}
+
+/* Reward cards */
+.ad-reward{display:none!important}
+
+/* SocialBar - all known wrapper patterns */
+[id^="socialbar"],[class^="socialbar"],[class*="socialbar"],
+[id^="social_"],[class^="social_"],[class*="social_"],
+[data-socialbar],
+div[data-widget="socialbar"],
+div[data-type="socialbar"]{
+  position:fixed!important;
+  left:-10000px!important;
+  top:-10000px!important;
+  width:1px!important;
+  height:1px!important;
+  overflow:hidden!important;
+  opacity:0!important;
+  visibility:hidden!important;
+  pointer-events:none!important;
+  display:block!important;
+}
+
+/* Pop-unders that anchor to body corners */
+body > div[style*="position: fixed"][style*="bottom"],
+body > div[style*="position:fixed"][style*="bottom"],
+body > a[target="_blank"][style*="position: fixed"],
+body > iframe[style*="position: fixed"]{
+  position:fixed!important;
+  left:-10000px!important;
+  top:-10000px!important;
+  width:1px!important;
+  height:1px!important;
+  opacity:0!important;
+  pointer-events:none!important;
+  visibility:hidden!important;
+}
+
+/* Blocklist domains — always hidden no matter what */
+iframe[src*="exoclick"],
+iframe[src*="trafficjunky"],
+iframe[src*="juicyads"],
+iframe[src*="trafficstars"],
+iframe[src*="clickadu"],
+iframe[src*="popads"],
+iframe[src*="popcash"],
+iframe[src*="propellerpops"],
+iframe[src*="bongacams"],
+iframe[src*="stripchat"],
+iframe[src*="livejasmin"],
+iframe[src*="chaturbate"],
+img[src*="exoclick"],
+img[src*="juicyads"]{
+  display:none!important;
+  visibility:hidden!important;
+  position:absolute!important;
+  left:-10000px!important;
+  width:1px!important;
+  height:1px!important;
+  pointer-events:none!important;
+}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyAdsHidden) return;
+  window.__sleepyAdsHidden = true;
+  function log(){ try{console.log.apply(console,["[AdsHide]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  // ------------------------------------------------------------
+  // 1. VULGAR FILTER — hides any ad whose text we can read
+  // ------------------------------------------------------------
+  var VULGAR = [
+    'gf','bf','girlfriend','boyfriend','singles','hot singles','meet local',
+    'meet girls','meet boys','near you','hookup','dating','adult','mature',
+    'milf','sex','xxx','porn','onlyfans','nsfw','18+','sexy','affair',
+    'lonely','seduc','swipe','match now','chat live','live girls','local girls',
+    'casino','betting','gambling','poker','slots','jackpot','spin to win',
+    'play now win','crypto','viagra','weight loss','diet'
+  ];
+
+  function looksVulgar(text){
+    if (!text) return false;
+    var t = String(text).toLowerCase();
+    // Multi-word first (more reliable)
+    for (var i = 0; i < VULGAR.length; i++){
+      var kw = VULGAR[i];
+      if (kw.indexOf(' ') >= 0 && t.indexOf(kw) >= 0) return true;
+    }
+    // Single-word: match on word boundaries
+    for (var j = 0; j < VULGAR.length; j++){
+      var kw2 = VULGAR[j];
+      if (kw2.indexOf(' ') >= 0) continue;
+      var re = new RegExp('\\b' + kw2 + '\\b', 'i');
+      if (re.test(t)) return true;
+    }
+    return false;
+  }
+
+  // ------------------------------------------------------------
+  // 2. Hide everything ad-related, blocklist domains
+  // ------------------------------------------------------------
+  var BLOCKED_DOMAINS = [
+    'exoclick','trafficjunky','juicyads','trafficstars','clickadu',
+    'popads','popcash','propellerpops','bongacams','stripchat',
+    'livejasmin','chaturbate','adultforce','xxx','porn','cam4','cams'
+  ];
+
+  function isBlocked(url){
+    if (!url) return false;
+    var u = String(url).toLowerCase();
+    for (var i = 0; i < BLOCKED_DOMAINS.length; i++){
+      if (u.indexOf(BLOCKED_DOMAINS[i]) >= 0) return true;
+    }
+    return false;
+  }
+
+  function hideEl(el){
+    if (!el || !el.style) return;
+    el.style.setProperty('position', 'fixed', 'important');
+    el.style.setProperty('left', '-10000px', 'important');
+    el.style.setProperty('top', '-10000px', 'important');
+    el.style.setProperty('width', '1px', 'important');
+    el.style.setProperty('height', '1px', 'important');
+    el.style.setProperty('opacity', '0', 'important');
+    el.style.setProperty('visibility', 'hidden', 'important');
+    el.style.setProperty('pointer-events', 'none', 'important');
+    el.setAttribute('data-hidden', '1');
+  }
+
+  function sweep(){
+    // 1. Our own container (already hidden by CSS but be sure)
+    var host = document.getElementById('ad-host');
+    if (host) hideEl(host);
+
+    var login = document.querySelector('.ad-slot-login');
+    if (login) hideEl(login);
+
+    // 2. Any element whose ID/class contains "socialbar", "social_", "popunder"
+    document.querySelectorAll('[id*="socialbar"],[class*="socialbar"],[id*="social_"],[class*="social_"],[id*="popunder"],[class*="popunder"]').forEach(function(el){
+      if (el.tagName === 'SCRIPT') return; // leave the loader alone
+      hideEl(el);
+    });
+
+    // 3. Blocked-domain iframes/images/scripts
+    document.querySelectorAll('iframe,img,script,ins,embed,object').forEach(function(el){
+      var src = el.src || el.getAttribute('src') || '';
+      if (isBlocked(src)) hideEl(el);
+    });
+
+    // 4. Body-level floating wrappers that aren't ours
+    Array.prototype.forEach.call(document.body.children, function(el){
+      if (!el || el.tagName === 'SCRIPT' || el.tagName === 'STYLE' || el.tagName === 'LINK') return;
+      // Skip legitimate app roots
+      var keepIds = ['app','auth-screen','modal-root','toasts','ad-host','voice-video-grid','voice-dock','voice-composer-slot','sc-install','oc-install-btn','pwa-splash','voice-debug','install-inline-bar','snake-canvas'];
+      if (el.id && keepIds.indexOf(el.id) >= 0) return;
+      // If it looks like a floating overlay we didn't make
+      var s = el.getAttribute('style') || '';
+      if (/position\s*:\s*fixed/i.test(s) && /(bottom|right|left|top)/i.test(s)){
+        // Check if it contains our own known elements
+        if (el.querySelector('#app, #auth-screen, #modal-root, #toasts, .chat, .rail, .panel')) return;
+        hideEl(el);
+      }
+    });
+
+    // 5. Vulgar-text sweep on any visible ad container we can read
+    var banner = document.getElementById('container-fa854199a041432aa0a5fa0fd34ead52');
+    if (banner){
+      var txt = (banner.innerText || banner.textContent || '').trim();
+      if (looksVulgar(txt)){
+        log("vulgar banner hidden:", txt.slice(0,60));
+        hideEl(banner);
+      } else {
+        // Even if not vulgar, keep it in the background
+        hideEl(banner);
+      }
+    }
+
+    // 6. Vulgar-text sweep on ALL visible divs (in case some render as plain DOM)
+    // Only checks elements with ad-ish indicators to avoid scanning the whole app
+    document.querySelectorAll('[id*="ad"],[class*="ad-"],[class*="ad_"],ins').forEach(function(el){
+      if (el.id && el.id === 'ad-host') return;
+      if (el.closest('.chat, .rail, .panel, .modal, .auth-card')) return;
+      var t = (el.innerText || el.textContent || '').trim();
+      if (looksVulgar(t)) hideEl(el);
+    });
+  }
+
+  // ------------------------------------------------------------
+  // 3. Continuous sweep
+  // ------------------------------------------------------------
+  // Aggressive at boot to catch everything the ad scripts inject.
+  sweep();
+  [200, 500, 1000, 2000, 4000, 8000].forEach(function(ms){
+    setTimeout(sweep, ms);
+  });
+  setInterval(sweep, 1500);
+
+  // ------------------------------------------------------------
+  // 4. MutationObserver — hide new ad nodes the instant they appear
+  // ------------------------------------------------------------
+  function attachObserver(){
+    if (!document.body){ setTimeout(attachObserver, 300); return; }
+    var mo = new MutationObserver(function(muts){
+      var needsSweep = false;
+      muts.forEach(function(m){
+        m.addedNodes.forEach(function(n){
+          if (!n || n.nodeType !== 1) return;
+          var tag = n.tagName ? n.tagName.toLowerCase() : '';
+          if (tag === 'iframe' || tag === 'ins' || tag === 'embed'){
+            needsSweep = true;
+            return;
+          }
+          if (tag === 'div' || tag === 'a' || tag === 'span'){
+            var id = (n.id || '').toLowerCase();
+            var cls = (typeof n.className === 'string' ? n.className : '').toLowerCase();
+            if (id.indexOf('social') >= 0 || cls.indexOf('social') >= 0 ||
+                id.indexOf('popunder') >= 0 || cls.indexOf('popunder') >= 0 ||
+                id.indexOf('ad') === 0 || cls.indexOf('ad-') === 0){
+              needsSweep = true;
+            }
+            var st = n.getAttribute && n.getAttribute('style') || '';
+            if (/position\s*:\s*fixed/i.test(st)) needsSweep = true;
+          }
+        });
+      });
+      if (needsSweep) setTimeout(sweep, 40);
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+    log("observer attached");
+  }
+  attachObserver();
+
+  // ------------------------------------------------------------
+  // 5. Remove SocialBar loader entirely (no visual, no server call)
+  // ------------------------------------------------------------
+  function killSocialLoader(){
+    var t = document.getElementById('socialbar-js');
+    if (t && t.parentElement) t.parentElement.removeChild(t);
+    document.querySelectorAll('script[src*="bicea.org/14/"]').forEach(function(s){
+      try { s.remove(); } catch(e){}
+    });
+  }
+  killSocialLoader();
+  setInterval(killSocialLoader, 3000);
+
+  // ------------------------------------------------------------
+  // 6. Block pop-under windows (some ad scripts call window.open)
+  // ------------------------------------------------------------
+  var origOpen = window.open;
+  window.open = function(url, name, features){
+    if (url && isBlocked(url)) {
+      log("blocked pop-under:", url);
+      return null;
+    }
+    // Also block anything that isn't our own app
+    if (url && (String(url).indexOf(location.origin) !== 0 && String(url).indexOf('http') === 0)){
+      // Allow known safe: supabase, github, fonts, google
+      var safe = ['supabase.co','github.io','fonts.googleapis','fonts.gstatic','jsdelivr','googleusercontent'];
+      var ok = false;
+      for (var i = 0; i < safe.length; i++) if (String(url).indexOf(safe[i]) >= 0) { ok = true; break; }
+      if (!ok){
+        log("blocked popup:", url);
+        return null;
+      }
+    }
+    return origOpen.apply(this, arguments);
+  };
+
+  // ------------------------------------------------------------
+  // 7. Kill the reward-claim button too (it opens the timer overlay)
+  // ------------------------------------------------------------
+  var overlayKiller = setInterval(function(){
+    document.querySelectorAll('.ad-reward button, #ad-claim').forEach(function(b){
+      var wrap = b.closest('.ad-reward');
+      if (wrap) hideEl(wrap);
+    });
+  }, 2000);
+
+  log("hidden ads + filter ready");
+})();
+</script>
+
+<!-- SLEEPY_BOARD_FIX_V1 -->
+<style>
+/* Smooth cell state changes even when the DOM rebuilds */
+.ttt-cell{
+  transition: background .18s ease, color .18s ease, box-shadow .18s ease,
+              transform .12s ease;
+}
+.ttt-cell.taken{
+  animation: cellPop .18s ease;
+}
+@keyframes cellPop{
+  0%   { transform: scale(.86); }
+  60%  { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+.chess-sq{
+  transition: box-shadow .15s ease, background .15s ease;
+}
+.chess-sq .chess-piece-w,
+.chess-sq .chess-piece-b{
+  transition: opacity .12s ease, transform .12s ease;
+  display: inline-block;
+}
+.chess-sq.move::after,
+.chess-sq.capture::after{
+  animation: dotIn .14s ease;
+}
+@keyframes dotIn{
+  from { opacity: 0; transform: scale(.4); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* Prevent the chat body from flashing white on rebuild */
+.chat-body{ background-color: transparent; }
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyBoardFix) return;
+  window.__sleepyBoardFix = true;
+  function log(){ try{console.log.apply(console,["[BoardFix]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  // ============================================================
+  // 1. Suppress duplicate realtime callbacks for game_challenges
+  // ============================================================
+  // Three different patches subscribe to game_challenges and each one
+  // refreshes + re-renders the whole chat body. That's the "reload on
+  // every click" bug. We let only V3's channel fire when the user is
+  // actually on the Game Room page. Other patches still get their
+  // callbacks when the user is off the games page (for notifications).
+
+  var sbRef = window.sb;
+  if (sbRef && typeof sbRef.channel === 'function' && !sbRef.__boardFixWrapped){
+    var origChannel = sbRef.channel.bind(sbRef);
+    sbRef.channel = function(name, opts){
+      var ch = origChannel(name, opts);
+      var isV3 = name && String(name).indexOf('games-v3-') === 0;
+
+      var origOn = ch.on.bind(ch);
+      ch.on = function(event, filter, callback){
+        // Only touch subscriptions to game_challenges
+        if (filter && filter.schema === 'public' && filter.table === 'game_challenges' && !isV3){
+          var wrapped = function(payload){
+            // If the user is on the games page, V3's callback is going
+            // to render the board. Suppress this one to avoid the
+            // double/triple rebuild.
+            if (window.CURRENT && window.CURRENT.type === 'games'){
+              return;
+            }
+            return callback(payload);
+          };
+          return origOn(event, filter, wrapped);
+        }
+        return origOn(event, filter, callback);
+      };
+      return ch;
+    };
+    sbRef.__boardFixWrapped = true;
+    log("channel wrapper installed");
+  }
+
+  // ============================================================
+  // 2. Dedup toasts
+  // ============================================================
+  // Multiple patches fire identical toasts on the same event.
+  // We collapse any toast with the same title fired within 1.2s.
+
+  var origToast = window.toast;
+  if (typeof origToast === 'function' && !origToast.__boardFixDedup){
+    var lastTitle = '';
+    var lastAt = 0;
+    var deduped = function(title, body, kind){
+      var now = Date.now();
+      if (title === lastTitle && (now - lastAt) < 1200){
+        return;
+      }
+      lastTitle = title;
+      lastAt = now;
+      return origToast.call(this, title, body, kind);
+    };
+    deduped.__boardFixDedup = true;
+    window.toast = deduped;
+    log("toast dedup installed");
+  }
+
+  // ============================================================
+  // 3. Kill duplicate refresh bursts on the games page
+  // ============================================================
+  // If any straggler subscription still fires 2+ refreshes in a burst,
+  // we throttle the renderChat wrapper to a 600ms minimum interval
+  // while a TTT or chess board is visible. This makes even a rebuild
+  // feel instant because the previous frame is already on screen.
+
+  var origRenderChat = window.renderChat;
+  var lastBoardRender = 0;
+  window.renderChat = function(scroll){
+    try {
+      var body = document.getElementById('chat-body');
+      if (body && body.querySelector('.ttt, .chess-board')){
+        var now = Date.now();
+        // Allow the very first render. Block anything within 600ms.
+        if (lastBoardRender > 0 && (now - lastBoardRender) < 600){
+          return;
+        }
+        lastBoardRender = now;
+      }
+    } catch(e){ /* fall through */ }
+    return origRenderChat.apply(this, arguments);
+  };
+  log("board render throttle installed");
+
+  // ============================================================
+  // 4. Optimistic cell feedback
+  // ============================================================
+  // Add a small local pulse the moment a cell is clicked so the user
+  // gets visual feedback before the round trip lands.
+
+  document.addEventListener('click', function(e){
+    var cell = e.target.closest('.ttt-cell');
+    if (cell){
+      cell.style.transform = 'scale(.9)';
+      setTimeout(function(){ cell.style.transform = ''; }, 130);
+    }
+    var sq = e.target.closest('.chess-sq');
+    if (sq){
+      sq.style.transform = 'scale(.94)';
+      setTimeout(function(){ sq.style.transform = ''; }, 130);
+    }
+  }, true);
+
+  // ============================================================
+  // 5. Reset throttle when leaving the board
+  // ============================================================
+  // When the user leaves a board (back to lobby, home, etc), reset
+  // the timer so the next board shows immediately.
+
+  var origOpenGameRoom = window.openGameRoom;
+  if (typeof origOpenGameRoom === 'function'){
+    window.openGameRoom = function(){
+      lastBoardRender = 0;
+      return origOpenGameRoom.apply(this, arguments);
+    };
+  }
+
+  log("board fix ready");
+})();
+</script>
+
 </body>
 </html>
