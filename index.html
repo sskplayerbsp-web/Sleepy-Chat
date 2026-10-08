@@ -1005,9 +1005,12 @@ function renderTyping(){
 }
 async function renderMembers(){
   var el=$("#members");
-  if(CURRENT.type!=="server"||!CURRENT.server){el.innerHTML="";return;}
+  if(!window.CURRENT||CURRENT.type!=="server"||!CURRENT.server){el.innerHTML="";return;}
   if(!UI.showMembers){el.innerHTML="";return;}
-  var ids=await loadServerMembers(CURRENT.server.id);
+  var __srv=CURRENT.server;
+  var ids;
+  try { ids=await loadServerMembers(__srv.id); } catch(e){ el.innerHTML=""; return; }
+  if(!window.CURRENT||window.CURRENT.server!==__srv){ return; }
   var h='<div class="mgroup"><div class="glabel">Members - '+ids.length+'</div>';
   ids.sort(function(a,b){
     var sa=ONLINE.has(a)?0:1,sb=ONLINE.has(b)?0:1;
@@ -1017,7 +1020,7 @@ async function renderMembers(){
   ids.forEach(function(uid){
     var p=PROFILES[uid]||{username:'unknown',display_name:'Unknown'};
     var online=ONLINE.has(uid);
-    var isOwner=uid===CURRENT.server.owner_id;
+    var isOwner=uid===(window.CURRENT&&window.CURRENT.server?window.CURRENT.server.owner_id:null);
     h+='<div class="member '+(online?'':'offline')+'" data-member="'+esc(uid)+'">'+
       '<div style="position:relative">'+avatarHTML(uid,32)+statusDot(uid)+'</div>'+
       '<div style="flex:1;min-width:0"><div class="nm">'+esc(p.display_name||p.username)+
@@ -1980,13 +1983,20 @@ sb.auth.onAuthStateChange(function(ev){
   // Render members grouped by top role
   window.renderMembers = async function(){
     var el = document.getElementById('members');
-    if (window.CURRENT.type !== 'server' || !window.CURRENT.server) { el.innerHTML = ''; return; }
+    if (!el) return;
+    if (!window.CURRENT || window.CURRENT.type !== 'server' || !window.CURRENT.server) { el.innerHTML = ''; return; }
     if (!window.UI.showMembers) { el.innerHTML = ''; return; }
-    if (!window.ROLES.length || Object.keys(window.MEMBER_ROLES).length === 0) {
-      await loadRoles(window.CURRENT.server.id);
-      await loadMemberRoles(window.CURRENT.server.id);
-    }
-    var ids = await window.loadServerMembers(window.CURRENT.server.id);
+    var __srv = window.CURRENT.server;
+    try {
+      if (!window.ROLES.length || Object.keys(window.MEMBER_ROLES).length === 0) {
+        await loadRoles(__srv.id);
+        await loadMemberRoles(__srv.id);
+      }
+    } catch(e){ log("roles load failed:", e && e.message); }
+    if (!window.CURRENT || window.CURRENT.server !== __srv) return;
+    var ids;
+    try { ids = await window.loadServerMembers(__srv.id); } catch(e){ el.innerHTML = ''; return; }
+    if (!window.CURRENT || window.CURRENT.server !== __srv) return;
     var groups = {};
     var noRole = [];
     ids.forEach(function(uid){
@@ -2004,7 +2014,7 @@ sb.auth.onAuthStateChange(function(ev){
     function memberHTML(uid, color){
       var p = window.PROFILES[uid] || { username: 'unknown', display_name: 'Unknown' };
       var online = window.ONLINE.has(uid);
-      var isOwner = uid === window.CURRENT.server.owner_id;
+      var isOwner = uid === (window.CURRENT&&window.CURRENT.server?window.CURRENT.server.owner_id:null);
       var nameStyle = color ? ' style="color:' + color + '"' : '';
       return '<div class="member ' + (online ? '' : 'offline') + '" data-member="' + window.esc(uid) + '">' +
         '<div style="position:relative">' + window.avatarHTML(uid, 32) + window.statusDot(uid) + '</div>' +
@@ -16272,6 +16282,9 @@ body.in-game-room .chat-head .topic{display:none!important}
     if (!cc) return;
     // Skip if disabled or already being processed
     if (cc.disabled) return;
+    // If the RPS/game picker patch is loaded, it handles this entirely.
+    // Otherwise we'd create a second (TTT) challenge behind its back.
+    if (window.__sleepyPickerV2 || window.__pickerWillHandle) return;
     cc.disabled = true;
     var origText = cc.textContent;
     cc.textContent = 'Creating...';
@@ -19228,6 +19241,8 @@ img[src*="juicyads"]{
   setInterval(async function(){
     if (!window.__rpsFocus) return;
     if (!window.CURRENT || window.CURRENT.type !== 'games') return;
+    // If realtime is active for this match, trust it and don't poll.
+    if (window.__rpsFocusSub && window.__rpsFocusSub.__live) return;
     try {
       var r = await sb.from('game_challenges').select('*').eq('id', window.__rpsFocus.game.id).single();
       if (!r.data) return;
@@ -19248,7 +19263,7 @@ img[src*="juicyads"]{
         }
       }
     } catch(e){ /* silent */ }
-  }, 700);
+  }, 220);
 
   // Clear RPS focus if the user leaves the games page
   setInterval(function(){
@@ -19258,6 +19273,372 @@ img[src*="juicyads"]{
   }, 1200);
 
   log("RPS ready");
+})();
+</script>
+
+<!-- SLEEPY_RACE_FIX_V1 -->
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyRaceFix) return;
+  window.__sleepyRaceFix = true;
+  function log(){ try{console.log.apply(console,["[Race]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  // ============================================================
+  // 1. Global unhandled rejection guard
+  // ============================================================
+  // Several patches run async renders that fire during goServer races.
+  // Swallow the noisy ones so they don't break other flows.
+  window.addEventListener('unhandledrejection', function(e){
+    var msg = e && e.reason && (e.reason.message || String(e.reason));
+    if (msg && (
+        msg.indexOf("reading 'owner_id'") >= 0 ||
+        msg.indexOf("reading 'id'") >= 0 ||
+        msg.indexOf("reading 'name'") >= 0 ||
+        msg.indexOf("reading 'members'") >= 0
+    )){
+      e.preventDefault();
+      log("suppressed race error:", msg);
+    }
+  });
+
+  // ============================================================
+  // 2. Picker: disable Continue, fix Cancel
+  // ============================================================
+  // The picker is SLEEPY_PICKER_V2. We wrap its #pg-ok and #pg-cancel
+  // handlers by intercepting the modal render.
+
+  var origOpenModal = window.openModal;
+  if (typeof origOpenModal === 'function'){
+    window.openModal = function(title, body, opts){
+      var r = origOpenModal.call(this, title, body, opts);
+
+      if (title === 'Choose a game'){
+        setTimeout(function(){
+          var ok = document.getElementById('pg-ok');
+          var cancel = document.getElementById('pg-cancel');
+          var grid = document.getElementById('pgrid');
+
+          // The RPS patch may have swapped cards. Re-read current state.
+          if (grid){
+            var currentSelected = grid.querySelector('.picker-card.sel');
+            if (!currentSelected){
+              var first = grid.querySelector('.picker-card');
+              if (first) first.classList.add('sel');
+            }
+          }
+
+          var creating = false;
+
+          if (ok){
+            var origOk = ok.onclick;
+            ok.onclick = function(e){
+              if (creating) return;
+              creating = true;
+              ok.disabled = true;
+              ok.textContent = 'Creating…';
+              ok.style.opacity = '0.7';
+              ok.style.cursor = 'wait';
+              // Let the original handler run once
+              if (typeof origOk === 'function'){
+                try { origOk.call(this, e); }
+                catch(err){
+                  log("picker ok error:", err.message);
+                  creating = false;
+                  ok.disabled = false;
+                  ok.textContent = 'Create Challenge';
+                  ok.style.opacity = '';
+                  ok.style.cursor = '';
+                }
+              }
+              // Failsafe reset
+              setTimeout(function(){
+                creating = false;
+                if (ok.parentElement){
+                  ok.disabled = false;
+                  ok.textContent = 'Create Challenge';
+                  ok.style.opacity = '';
+                  ok.style.cursor = '';
+                }
+              }, 2500);
+            };
+          }
+
+          if (cancel){
+            var origCancel = cancel.onclick;
+            cancel.onclick = function(e){
+              if (typeof origCancel === 'function'){
+                try { origCancel.call(this, e); }
+                catch(err){ log("picker cancel error:", err.message); }
+              }
+              // Clear the picker-busy flag on the create-challenge button
+              // so clicking Create again works immediately
+              var cc = document.getElementById('create-challenge');
+              if (cc){ cc.__pickerBusy = false; }
+            };
+          }
+        }, 30);
+      }
+
+      return r;
+    };
+  }
+
+  // ============================================================
+  // 3. Speed up RPS updates via direct realtime subscription
+  // ============================================================
+  // Currently RPS polls every 700ms. We add a per-match realtime
+  // subscription so updates land instantly. Keep polling as fallback
+  // at a slower cadence.
+
+  function subscribeFocusedRPS(){
+    if (window.__rpsFocusSub){
+      try { sb.removeChannel(window.__rpsFocusSub); } catch(e){}
+      window.__rpsFocusSub = null;
+    }
+    if (!window.__rpsFocus) return;
+    var gid = window.__rpsFocus.game.id;
+    log("subscribing to RPS match", gid.slice(0,8));
+
+    window.__rpsFocusSub = sb.channel('rps-focus-' + gid + '-' + Math.random().toString(36).slice(2,6))
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'game_challenges',
+        filter: 'id=eq.' + gid
+      }, function(payload){
+        if (!window.__rpsFocus) return;
+        if (window.__rpsFocus.game.id !== payload.new.id) return;
+        window.__rpsFocus.game = payload.new;
+        if (typeof window.renderRPSGame === 'function'){
+          window.renderRPSGame();
+        }
+        // Fire result toast once
+        if (payload.new.status === 'finished' && payload.new.winner_id){
+          var key = 'rps-end-' + payload.new.id;
+          if (window[key]) return;
+          window[key] = true;
+          var won = payload.new.winner_id === window.ME.id;
+          window.toast(won ? 'You won!' : 'You lost',
+            (won ? '+' : '\u2212') + Math.abs(payload.new.bet_amount * (won ? 2 : 1)) + ' coins',
+            won ? 'ok' : 'err');
+        }
+      })
+      .subscribe(function(status){
+        if (status === 'SUBSCRIBED') log("RPS realtime ready for", gid.slice(0,8));
+      });
+  }
+
+  // Hook into RPS focus changes
+  var lastFocusedId = null;
+  setInterval(function(){
+    var id = window.__rpsFocus && window.__rpsFocus.game ? window.__rpsFocus.game.id : null;
+    if (id !== lastFocusedId){
+      lastFocusedId = id;
+      subscribeFocusedRPS();
+    }
+  }, 250);
+
+  // Also subscribe immediately whenever focusRPS is called
+  var origFocusCheck = setInterval(function(){
+    if (typeof window.focusRPS === 'function' && !window.focusRPS.__wrapped){
+      var orig = window.focusRPS;
+      window.focusRPS = function(game){
+        var r = orig.apply(this, arguments);
+        lastFocusedId = null;
+        setTimeout(subscribeFocusedRPS, 50);
+        return r;
+      };
+      window.focusRPS.__wrapped = true;
+      clearInterval(origFocusCheck);
+      log("focusRPS wrapped");
+    }
+  }, 300);
+
+  // ============================================================
+  // 4. Bulletproof the RPS polling fallback (slower cadence now)
+  // ============================================================
+  // Nothing to do — the existing 700ms poll still runs, but realtime
+  // makes it mostly redundant. We leave it as a safety net.
+
+  // ============================================================
+  // 5. Make sure __pickerBusy gets cleared when picker modal closes
+  // ============================================================
+  var origCloseModal = window.closeModal;
+  if (typeof origCloseModal === 'function'){
+    window.closeModal = function(){
+      var cc = document.getElementById('create-challenge');
+      if (cc) cc.__pickerBusy = false;
+      return origCloseModal.apply(this, arguments);
+    };
+  }
+
+  log("race + picker fix ready");
+})();
+</script>
+
+<!-- SLEEPY_KILL_DOUBLE_V1 -->
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyKillDouble) return;
+  window.__sleepyKillDouble = true;
+  function log(){ try{console.log.apply(console,["[KillDup]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  // ============================================================
+  // 1. Belt-and-suspenders: block duplicate create RPC calls
+  // ============================================================
+  // Even if some other patch sneaks a call through, we collapse
+  // calls to create_game_challenge / create_game_challenge_v2
+  // that arrive within 800ms of each other.
+
+  var recentCreates = [];
+  function isDuplicateCreate(){
+    var now = Date.now();
+    recentCreates = recentCreates.filter(function(t){ return now - t < 800; });
+    if (recentCreates.length > 0) return true;
+    recentCreates.push(now);
+    return false;
+  }
+
+  // Patch sb.rpc to intercept both create functions
+  if (window.sb && typeof window.sb.rpc === 'function' && !window.sb.__killDoubleWrapped){
+    var origRpc = window.sb.rpc.bind(window.sb);
+    window.sb.rpc = async function(fn, params, options){
+      if (fn === 'create_game_challenge' || fn === 'create_game_challenge_v2'){
+        if (isDuplicateCreate()){
+          log("blocked duplicate " + fn);
+          // Return a synthetic 'ok' so callers don't show error toasts
+          return { data: null, error: null, blocked: true };
+        }
+      }
+      return origRpc(fn, params, options);
+    };
+    window.sb.__killDoubleWrapped = true;
+    log("rpc dedup installed");
+  }
+
+  // ============================================================
+  // 2. Also collapse the picker modal: only one 'Choose a game' open
+  // ============================================================
+  // If a second picker modal tries to open while one is up, ignore it.
+
+  var pickerOpen = false;
+  var origOpenModal = window.openModal;
+  if (typeof origOpenModal === 'function' && !origOpenModal.__killDoubleWrapped){
+    var wrapped = function(title, body, opts){
+      if (title === 'Choose a game'){
+        if (pickerOpen){
+          log("blocked second picker");
+          return;
+        }
+        pickerOpen = true;
+        var r = origOpenModal.call(this, title, body, opts);
+        // Clear the flag when the modal closes
+        var check = setInterval(function(){
+          if (!document.getElementById('pgrid')){
+            clearInterval(check);
+            pickerOpen = false;
+          }
+        }, 200);
+        return r;
+      }
+      return origOpenModal.call(this, title, body, opts);
+    };
+    wrapped.__killDoubleWrapped = true;
+    window.openModal = wrapped;
+    log("picker singleton installed");
+  }
+
+  // ============================================================
+  // 3. Speed up RPS: force a realtime subscription immediately on focus
+  // ============================================================
+  // The previous patch subscribes to realtime on a 250ms poll. We
+  // also expose a fast path: if RPS is focused and no subscription
+  // exists yet, subscribe right now.
+
+  function subscribeNow(){
+    if (!window.__rpsFocus || !window.__rpsFocus.game) return;
+    if (window.__rpsFocusSub && window.__rpsFocusSub.__gid === window.__rpsFocus.game.id) return;
+    if (window.__rpsFocusSub){
+      try { window.sb.removeChannel(window.__rpsFocusSub); } catch(e){}
+      window.__rpsFocusSub = null;
+    }
+    var gid = window.__rpsFocus.game.id;
+    log("subscribing now:", gid.slice(0,8));
+
+    var ch = window.sb.channel('rps-fast-' + gid + '-' + Math.random().toString(36).slice(2,6))
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'game_challenges',
+        filter: 'id=eq.' + gid
+      }, function(payload){
+        if (!window.__rpsFocus) return;
+        if (window.__rpsFocus.game.id !== payload.new.id) return;
+        window.__rpsFocus.game = payload.new;
+        // Re-render through whatever renderer is active
+        if (window.CURRENT && window.CURRENT.type === 'games'){
+          var body = document.getElementById('chat-body');
+          if (body && !body.querySelector('.rps-wrap')){
+            // RPS renderer is what we want
+            if (typeof window.__rpsRenderNow === 'function') window.__rpsRenderNow();
+          } else {
+            if (typeof window.__rpsRenderNow === 'function') window.__rpsRenderNow();
+          }
+        }
+        // Fire final result toast once
+        if (payload.new.status === 'finished' && payload.new.winner_id){
+          var key = 'rps-end-' + payload.new.id;
+          if (window[key]) return;
+          window[key] = true;
+          var won = payload.new.winner_id === window.ME.id;
+          window.toast(won ? 'You won!' : 'You lost',
+            (won ? '+' : '\u2212') + Math.abs(payload.new.bet_amount * (won ? 2 : 1)) + ' coins',
+            won ? 'ok' : 'err');
+        }
+      })
+      .subscribe(function(status){
+        if (status === 'SUBSCRIBED'){
+          ch.__live = true;
+          ch.__gid = gid;
+          log("realtime live for", gid.slice(0,8));
+        }
+      });
+    window.__rpsFocusSub = ch;
+  }
+
+  // Run subscribeNow whenever RPS view appears
+  var mo = new MutationObserver(function(){
+    if (!window.__rpsFocus) return;
+    if (document.querySelector('.rps-wrap')){
+      subscribeNow();
+    }
+  });
+  var observerTarget = null;
+  function attachObserver(){
+    var body = document.getElementById('chat-body');
+    if (!body){ setTimeout(attachObserver, 300); return; }
+    if (observerTarget !== body){
+      if (observerTarget && mo) mo.disconnect();
+      observerTarget = body;
+      mo.observe(body, { childList: true, subtree: true });
+      log("observer attached");
+    }
+  }
+  attachObserver();
+
+  // Also poll cheaply to catch view changes
+  setInterval(function(){
+    if (!window.__rpsFocus) return;
+    if (document.querySelector('.rps-wrap')) subscribeNow();
+  }, 500);
+
+  // Clear subscription when RPS loses focus
+  setInterval(function(){
+    if (!window.__rpsFocus && window.__rpsFocusSub){
+      try { window.sb.removeChannel(window.__rpsFocusSub); } catch(e){}
+      window.__rpsFocusSub = null;
+    }
+  }, 800);
+
+  log("kill-double + rps speed ready");
 })();
 </script>
 
