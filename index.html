@@ -16658,5 +16658,1326 @@ body.in-game-room .chat-head .topic{display:none!important}
 })();
 </script>
 
+<!-- SLEEPY_GAMES_V3 -->
+<style>
+.gr-tabs button .em{font-size:15px}
+/* Chess board */
+.chess-wrap{padding:20px;max-width:560px;margin:0 auto}
+.chess-board{
+  display:grid;grid-template-columns:repeat(8,1fr);gap:0;
+  aspect-ratio:1;max-width:440px;margin:0 auto 18px;
+  border-radius:12px;overflow:hidden;
+  border:3px solid #2a1a10;
+  box-shadow:0 8px 32px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,255,255,.06);
+}
+.chess-sq{
+  aspect-ratio:1;display:flex;align-items:center;justify-content:center;
+  font-size:38px;line-height:1;cursor:pointer;user-select:none;
+  transition:background .12s;
+}
+.chess-sq.light{background:#eeddc0}
+.chess-sq.dark{background:#b58863}
+.chess-sq.sel{box-shadow:inset 0 0 0 3px #5ee7d7}
+.chess-sq.move::after{
+  content:'';width:22%;height:22%;border-radius:50%;background:rgba(0,0,0,.32);position:absolute;
+}
+.chess-sq{position:relative}
+.chess-sq.move::after{position:absolute}
+.chess-sq.capture::after{
+  width:80%;height:80%;background:transparent;border-radius:50%;
+  border:4px solid rgba(180,20,40,.5);
+}
+.chess-sq.check{box-shadow:inset 0 0 0 3px #ff2d6f}
+.chess-piece-w{color:#fff;text-shadow:0 0 2px #000,0 0 4px #000,0 1px 2px #000}
+.chess-piece-b{color:#0a0a0f;text-shadow:0 0 2px #888,0 1px 0 #333}
+
+/* Snake */
+.snake-wrap{padding:20px;max-width:560px;margin:0 auto;text-align:center}
+.snake-canvas{
+  background:#0a0f14;border:2px solid var(--border);border-radius:12px;
+  display:block;margin:0 auto;max-width:100%;
+  box-shadow:0 8px 32px rgba(0,0,0,.4), inset 0 0 60px rgba(94,231,215,.06);
+}
+.snake-hud{display:flex;justify-content:space-between;margin:12px auto 0;max-width:440px;font-family:'JetBrains Mono',monospace;font-size:13px}
+.snake-hud .s{color:var(--cyan)}
+.snake-hud .h{color:var(--amber)}
+.snake-hud .k{color:var(--text3)}
+.snake-mobile{display:none;margin-top:14px;gap:8px;justify-content:center;flex-wrap:wrap}
+.snake-mobile button{
+  width:60px;height:60px;border-radius:12px;background:var(--surface2);
+  border:1px solid var(--border);color:var(--text);font-size:22px;font-weight:700;
+  cursor:pointer;font-family:inherit;
+}
+.snake-mobile button:active{background:var(--surface3)}
+@media (max-width:760px){.snake-mobile{display:flex}}
+
+/* Game picker */
+.game-picker{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0}
+.game-pick{
+  padding:16px;border-radius:12px;background:rgba(255,255,255,.03);
+  border:2px solid var(--border);cursor:pointer;text-align:center;
+  transition:all .15s;
+}
+.game-pick:hover{border-color:var(--border2);transform:translateY(-2px)}
+.game-pick.sel{
+  border-color:rgba(139,124,255,.7);
+  background:linear-gradient(135deg, rgba(139,124,255,.14), rgba(94,231,215,.06));
+  box-shadow:0 0 20px rgba(139,124,255,.3);
+}
+.game-pick .em{font-size:38px;line-height:1;margin-bottom:6px}
+.game-pick .nm{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:14px;color:var(--text);margin-bottom:3px}
+.game-pick .ds{font-size:11px;color:var(--text3);line-height:1.4}
+
+/* Leaderboard tabs */
+.lb-tabs{display:flex;gap:4px;background:var(--void);padding:4px;border-radius:10px;margin-bottom:14px}
+.lb-tabs button{flex:1;padding:9px;border-radius:7px;font-size:12.5px;font-weight:600;color:var(--text3);cursor:pointer;font-family:inherit;background:none;border:none;transition:all .15s}
+.lb-tabs button.active{background:var(--surface2);color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(94,231,215,.24)}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyGamesV3) return;
+  window.__sleepyGamesV3 = true;
+  function log(){ try{console.log.apply(console,["[V3]"].concat([].slice.call(arguments)));}catch(e){} }
+  function esc(s){ return window.esc(s); }
+
+  var TAB = 'play';
+  var FOCUS = null;         // { game }
+  var ACCOUNT = null;
+
+  // ------------------------------------------------------------
+  // Chess move validation (client-side, compact)
+  // ------------------------------------------------------------
+  var PIECES = { p:1, n:2, b:3, r:4, q:5, k:6 };
+  function isWhite(c){ return c && c === c.toUpperCase() && /[PNBRQK]/.test(c); }
+  function isBlack(c){ return c && c === c.toLowerCase() && /[pnbrqk]/.test(c); }
+  function colorOf(c){ if (!c) return null; return isWhite(c) ? 'w' : 'b'; }
+
+  function sq(row, col){ return row * 8 + col; }
+  function rowOf(i){ return Math.floor(i / 8); }
+  function colOf(i){ return i % 8; }
+
+  function pieceMoves(board, from, forColor){
+    var p = board[from];
+    if (!p || colorOf(p) !== forColor) return [];
+    var r = rowOf(from), c = colOf(from);
+    var moves = [];
+    var lower = p.toLowerCase();
+
+    function addIfOk(to){
+      var target = board[to];
+      if (!target){ moves.push(to); return; }
+      if (colorOf(target) !== forColor) moves.push(to);
+    }
+    function slide(dr, dc){
+      var rr = r + dr, cc = c + dc;
+      while (rr >= 0 && rr < 8 && cc >= 0 && cc < 8){
+        var idx = sq(rr, cc);
+        if (!board[idx]){ moves.push(idx); }
+        else { if (colorOf(board[idx]) !== forColor) moves.push(idx); break; }
+        rr += dr; cc += dc;
+      }
+    }
+
+    if (lower === 'p'){
+      var dir = forColor === 'w' ? -1 : 1;
+      var startRow = forColor === 'w' ? 6 : 1;
+      var one = sq(r + dir, c);
+      if (r + dir >= 0 && r + dir < 8 && !board[one]){
+        moves.push(one);
+        var two = sq(r + 2*dir, c);
+        if (r === startRow && !board[two]) moves.push(two);
+      }
+      [[-1,-1],[1,-1]].forEach(function(d){
+        var rr = r + dir + d[1]*0, cc = c + d[0];
+        // pawns capture diagonally
+      });
+      [[dir,-1],[dir,1]].forEach(function(d){
+        var rr = r + d[0], cc = c + d[1];
+        if (rr < 0 || rr > 7 || cc < 0 || cc > 7) return;
+        var idx = sq(rr, cc);
+        if (board[idx] && colorOf(board[idx]) !== forColor) moves.push(idx);
+      });
+    }
+    else if (lower === 'n'){
+      [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(function(d){
+        var rr = r + d[0], cc = c + d[1];
+        if (rr < 0 || rr > 7 || cc < 0 || cc > 7) return;
+        addIfOk(sq(rr, cc));
+      });
+    }
+    else if (lower === 'b'){ slide(1,1); slide(1,-1); slide(-1,1); slide(-1,-1); }
+    else if (lower === 'r'){ slide(1,0); slide(-1,0); slide(0,1); slide(0,-1); }
+    else if (lower === 'q'){
+      slide(1,0); slide(-1,0); slide(0,1); slide(0,-1);
+      slide(1,1); slide(1,-1); slide(-1,1); slide(-1,-1);
+    }
+    else if (lower === 'k'){
+      [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(function(d){
+        var rr = r + d[0], cc = c + d[1];
+        if (rr < 0 || rr > 7 || cc < 0 || cc > 7) return;
+        addIfOk(sq(rr, cc));
+      });
+    }
+    return moves;
+  }
+
+  function inCheck(board, color){
+    var kingChar = color === 'w' ? 'K' : 'k';
+    var kingIdx = board.indexOf(kingChar);
+    if (kingIdx < 0) return false;
+    var opp = color === 'w' ? 'b' : 'w';
+    for (var i = 0; i < 64; i++){
+      if (colorOf(board[i]) !== opp) continue;
+      var mv = pieceMoves(board, i, opp);
+      if (mv.indexOf(kingIdx) >= 0) return true;
+    }
+    return false;
+  }
+
+  function legalMoves(board, from, color){
+    var raw = pieceMoves(board, from, color);
+    return raw.filter(function(to){
+      var test = board.split('');
+      test[to] = test[from];
+      test[from] = ' ';
+      return !inCheck(test.join(''), color);
+    });
+  }
+
+  // ------------------------------------------------------------
+  // Game room navigation
+  // ------------------------------------------------------------
+  async function loadAccount(){
+    if (!window.ME) return null;
+    try {
+      var r = await sb.from('bank_accounts').select('*').eq('user_id', window.ME.id).maybeSingle();
+      if (r.data){ ACCOUNT = r.data; return ACCOUNT; }
+      var ins = await sb.from('bank_accounts').insert({ user_id: window.ME.id, balance: 100 }).select().single();
+      ACCOUNT = ins.data;
+    } catch(e){ log("account:", e.message); }
+    return ACCOUNT;
+  }
+
+  async function openGameRoom(tab){
+    window.CURRENT = { type: 'games', server: null, channel: null, conv: null, ticket: null };
+    TAB = tab || TAB || 'play';
+    FOCUS = null;
+    await loadAccount();
+    window.renderChatHead && window.renderChatHead();
+    renderRoom();
+    setTimeout(renderPanel, 30);
+  }
+  window.openGameRoom = openGameRoom;
+  window.openGames = function(){ openGameRoom('play'); };
+  window.openFishing = function(){ openGameRoom('fishing'); };
+
+  // ------------------------------------------------------------
+  // Render main content
+  // ------------------------------------------------------------
+  function renderRoom(){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+    if (FOCUS){ renderMatch(FOCUS); return; }
+
+    var tabs = '<div class="gr-tabs">' +
+      tabBtn('play','🎮','Play') +
+      tabBtn('arcade','🕹️','Arcade') +
+      tabBtn('fishing','🎣','Fishing') +
+      tabBtn('shop','🛒','Shop') +
+    '</div>';
+
+    var content = '';
+    if (TAB === 'arcade') content = renderArcade();
+    else if (TAB === 'fishing') content = renderFishing();
+    else if (TAB === 'shop') content = renderShop();
+    else content = renderPlay();
+
+    body.innerHTML = '<div style="max-width:600px;margin:0 auto;padding:20px">' + tabs + content + '</div>';
+    wire();
+  }
+  function tabBtn(id, em, label){
+    return '<button class="' + (TAB===id?'active':'') + '" data-gr="' + id + '"><span class="em">' + em + '</span>' + label + '</button>';
+  }
+
+  // ------------------------------------------------------------
+  // PLAY tab — the fixed lobby
+  // ------------------------------------------------------------
+  function renderPlay(){
+    var html = '';
+    var bal = ACCOUNT ? ACCOUNT.balance : 0;
+    html += '<div style="text-align:center;padding:14px;border-radius:14px;' +
+      'background:linear-gradient(135deg,rgba(255,200,87,.1),rgba(0,230,118,.06));' +
+      'border:1px solid rgba(255,200,87,.3);margin-bottom:16px">' +
+      '<div style="font-family:\'Space Grotesk\';font-size:30px;font-weight:700;color:#ffd166;line-height:1">' +
+      '🪙 ' + bal.toLocaleString() + '</div>' +
+      '<div style="font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin-top:5px">Your balance</div>' +
+    '</div>';
+
+    var open = (window.__lobby || []).filter(function(g){ return g.status === 'open'; });
+    var mine = open.filter(function(g){ return g.creator_id === window.ME.id; });
+    var others = open.filter(function(g){ return g.creator_id !== window.ME.id; });
+    var inProgress = (window.__myGames || []).filter(function(g){ return g.status === 'in_progress'; });
+
+    if (inProgress.length){
+      html += '<h3 style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin:18px 0 8px">⚡ Your active games</h3>';
+      inProgress.forEach(function(g){
+        var iAmCreator = g.creator_id === window.ME.id;
+        var other = iAmCreator ? g.opponent_id : g.creator_id;
+        var op = other ? window.PROFILES[other] : null;
+        var isChess = g.game_type === 'chess';
+        var myColor = iAmCreator ? 'w' : 'b';
+        var turn = g.state && g.state.turn;
+        var itsMyTurn = turn === myColor;
+        html += '<div class="challenge-row" style="border-color:rgba(255,200,87,.55);background:rgba(255,200,87,.06)">' +
+          '<div style="position:relative">' + (other ? window.avatarHTML(other, 38) : '<div class="avatar" style="width:38px;height:38px;background:var(--surface2)"></div>') + '</div>' +
+          '<div class="info"><div class="nm">' + (isChess ? '♟️ Chess' : '⭕ X-O') + ' vs ' + (op ? esc(op.display_name || op.username) : '?') + '</div>' +
+            '<div class="meta">' + (itsMyTurn ? '<span style="color:var(--green);font-weight:700">● Your turn</span>' : '⏳ Waiting') + '</div></div>' +
+          '<div class="bet">' + (g.bet_amount > 0 ? '🪙 ' + g.bet_amount : 'Free') + '</div>' +
+          '<button class="accept" data-enter="' + g.id + '">Play</button>' +
+        '</div>';
+      });
+    }
+
+    html += '<h3 style="font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);margin:18px 0 8px">Open challenges</h3>';
+    if (!open.length){
+      html += '<div style="padding:16px;text-align:center;color:var(--text3);font-size:12.5px;border:1px dashed var(--border);border-radius:10px">No open challenges. Create one below!</div>';
+    } else {
+      mine.forEach(function(c){
+        html += '<div class="challenge-row mine">' +
+          '<div style="position:relative">' + window.avatarHTML(c.creator_id, 38) + '</div>' +
+          '<div class="info"><div class="nm">You · ' + (c.game_type === 'chess' ? '♟️ Chess' : '⭕ X-O') + '</div>' +
+            '<div class="meta">Waiting for an opponent...</div></div>' +
+          '<div class="bet">' + (c.bet_amount > 0 ? '🪙 ' + c.bet_amount : 'Free') + '</div>' +
+          '<button class="cancel" data-cancel="' + c.id + '">Cancel</button>' +
+        '</div>';
+      });
+      others.forEach(function(c){
+        var p = window.PROFILES[c.creator_id] || { username: '?', display_name: 'User' };
+        html += '<div class="challenge-row">' +
+          '<div style="position:relative">' + window.avatarHTML(c.creator_id, 38) + '</div>' +
+          '<div class="info"><div class="nm">' + esc(p.display_name || p.username) + ' · ' + (c.game_type === 'chess' ? '♟️ Chess' : '⭕ X-O') + '</div>' +
+            '<div class="meta">' + Math.floor((Date.now() - new Date(c.created_at).getTime()) / 60000) + 'm ago</div></div>' +
+          '<div class="bet">' + (c.bet_amount > 0 ? '🪙 ' + c.bet_amount : 'Free') + '</div>' +
+          '<button class="accept" data-accept="' + c.id + '">Accept</button>' +
+        '</div>';
+      });
+    }
+
+    html += '<div class="new-challenge" style="margin-top:20px">' +
+      '<h3>Create a Challenge</h3>' +
+      '<div class="bet-picks" id="bet-picks">' +
+        [0, 50, 100, 250, 500, 1000].map(function(v){
+          return '<button data-bet="' + v + '"' + (v === 100 ? ' class="sel"' : '') + '>' + (v === 0 ? 'Free' : '🪙 ' + v) + '</button>';
+        }).join('') +
+      '</div>' +
+      '<div class="custom-bet"><input id="custom-bet" type="number" min="0" max="100000" placeholder="Custom bet"></div>' +
+      '<button class="go" id="create-challenge">Create Challenge</button>' +
+    '</div>';
+
+    return html;
+  }
+
+  // Game picker modal
+  function pickGame(callback){
+    var sel = 'ttt';
+    window.openModal("Choose a game",
+      '<div class="game-picker" id="gp">' +
+        '<div class="game-pick sel" data-g="ttt"><div class="em">⭕</div><div class="nm">Tic-Tac-Toe</div><div class="ds">Quick 3×3 grid match</div></div>' +
+        '<div class="game-pick" data-g="chess"><div class="em">♟️</div><div class="nm">Chess</div><div class="ds">Full match with all pieces</div></div>' +
+      '</div>',
+      { footer: '<button class="btn" id="gp-cancel">Cancel</button><button class="btn primary" id="gp-ok">Continue</button>',
+        onMount: function(){
+          document.getElementById('gp').onclick = function(e){
+            var pick = e.target.closest('[data-g]');
+            if (!pick) return;
+            sel = pick.dataset.g;
+            document.querySelectorAll('.game-pick').forEach(function(x){ x.classList.remove('sel'); });
+            pick.classList.add('sel');
+          };
+          document.getElementById('gp-cancel').onclick = window.closeModal;
+          document.getElementById('gp-ok').onclick = function(){
+            window.closeModal();
+            callback(sel);
+          };
+        }});
+  }
+
+  // ------------------------------------------------------------
+  // ARCADE tab — Snake
+  // ------------------------------------------------------------
+  function renderArcade(){
+    return '<div class="snake-wrap">' +
+      '<div style="font-family:\'Space Grotesk\';font-size:20px;font-weight:700;margin-bottom:6px;color:var(--text)">🐍 Snake</div>' +
+      '<div style="font-size:12.5px;color:var(--text3);margin-bottom:14px">Eat fruit, grow, don\'t hit the walls or yourself</div>' +
+      '<canvas class="snake-canvas" id="snake-canvas" width="480" height="480"></canvas>' +
+      '<div class="snake-hud">' +
+        '<span class="k">Score: <b class="s" id="snake-score">0</b></span>' +
+        '<span class="k">Best: <b class="h" id="snake-best">0</b></span>' +
+      '</div>' +
+      '<div class="snake-mobile">' +
+        '<button data-dir="up">↑</button>' +
+        '<button data-dir="left">←</button>' +
+        '<button data-dir="down">↓</button>' +
+        '<button data-dir="right">→</button>' +
+      '</div>' +
+      '<div style="margin-top:14px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">' +
+        '<button class="btn primary" id="snake-start">Start</button>' +
+        '<button class="btn" id="snake-lb">🏆 Leaderboard</button>' +
+      '</div>' +
+      '<div style="margin-top:12px;font-size:11.5px;color:var(--text3);line-height:1.6">' +
+        'Use <b>arrow keys</b> or <b>WASD</b>. On mobile use the buttons below.<br>' +
+        'Earn coins: <b>10 coins per 5 points</b> (max 500 per game).' +
+      '</div>' +
+    '</div>';
+  }
+
+  var snakeState = { running: false, timer: null, snake: [], dir: null, nextDir: null, food: null, score: 0 };
+  var GRID = 24, CELL = 20;
+
+  function startSnake(){
+    var canvas = document.getElementById('snake-canvas');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    snakeState.snake = [{x:10, y:12}, {x:9, y:12}, {x:8, y:12}];
+    snakeState.dir = {x: 1, y: 0};
+    snakeState.nextDir = {x: 1, y: 0};
+    snakeState.score = 0;
+    snakeState.running = true;
+    placeFood();
+    updateSnakeScore();
+
+    if (snakeState.timer) clearInterval(snakeState.timer);
+    snakeState.timer = setInterval(function(){
+      if (!snakeState.running) return;
+      snakeStep(ctx);
+    }, 90);
+    drawSnake(ctx);
+  }
+
+  function placeFood(){
+    while (true){
+      var f = { x: Math.floor(Math.random() * GRID), y: Math.floor(Math.random() * GRID) };
+      var hit = snakeState.snake.some(function(s){ return s.x === f.x && s.y === f.y; });
+      if (!hit){ snakeState.food = f; return; }
+    }
+  }
+
+  function snakeStep(ctx){
+    snakeState.dir = snakeState.nextDir;
+    var head = snakeState.snake[0];
+    var nx = head.x + snakeState.dir.x;
+    var ny = head.y + snakeState.dir.y;
+    if (nx < 0 || ny < 0 || nx >= GRID || ny >= GRID){ endSnake(ctx); return; }
+    if (snakeState.snake.some(function(s){ return s.x === nx && s.y === ny; })){ endSnake(ctx); return; }
+    snakeState.snake.unshift({ x: nx, y: ny });
+    if (nx === snakeState.food.x && ny === snakeState.food.y){
+      snakeState.score += 5;
+      updateSnakeScore();
+      placeFood();
+    } else {
+      snakeState.snake.pop();
+    }
+    drawSnake(ctx);
+  }
+
+  function drawSnake(ctx){
+    ctx.fillStyle = '#0a0f14';
+    ctx.fillRect(0, 0, 480, 480);
+    // Grid
+    ctx.strokeStyle = 'rgba(94,231,215,.06)';
+    ctx.lineWidth = 1;
+    for (var i = 0; i <= GRID; i++){
+      ctx.beginPath(); ctx.moveTo(i * CELL, 0); ctx.lineTo(i * CELL, 480); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i * CELL); ctx.lineTo(480, i * CELL); ctx.stroke();
+    }
+    // Food
+    if (snakeState.food){
+      ctx.fillStyle = '#ff5c8a';
+      ctx.beginPath();
+      ctx.arc(snakeState.food.x * CELL + CELL/2, snakeState.food.y * CELL + CELL/2, CELL * 0.38, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Snake
+    snakeState.snake.forEach(function(seg, i){
+      var t = i / snakeState.snake.length;
+      var r = Math.round(94 + (139 - 94) * t);
+      var g = Math.round(231 - 100 * t);
+      var b = Math.round(215 - 100 * t);
+      ctx.fillStyle = 'rgb(' + r + ',' + g + ',' + b + ')';
+      ctx.fillRect(seg.x * CELL + 1, seg.y * CELL + 1, CELL - 2, CELL - 2);
+    });
+  }
+
+  async function endSnake(ctx){
+    snakeState.running = false;
+    if (snakeState.timer) clearInterval(snakeState.timer);
+    var finalScore = snakeState.score;
+    // Flash red
+    ctx.fillStyle = 'rgba(255,45,111,.25)';
+    ctx.fillRect(0, 0, 480, 480);
+    try {
+      var r = await sb.rpc('submit_snake_score', { p_score: finalScore });
+      if (!r.error && r.data){
+        window.toast("Game over",
+          "Score: " + finalScore + " · Best: " + r.data.best + " · +" + r.data.reward + " 🪙",
+          "ok");
+        var bestEl = document.getElementById('snake-best');
+        if (bestEl) bestEl.textContent = r.data.best;
+        await loadAccount();
+      }
+    } catch(e){ log("score submit failed:", e.message); }
+  }
+
+  function updateSnakeScore(){
+    var el = document.getElementById('snake-score');
+    if (el) el.textContent = snakeState.score;
+  }
+
+  async function loadSnakeBest(){
+    if (!window.ME) return 0;
+    try {
+      var r = await sb.from('snake_scores').select('score').eq('user_id', window.ME.id).order('score', { ascending: false }).limit(1);
+      var best = (r.data && r.data[0]) ? r.data[0].score : 0;
+      var el = document.getElementById('snake-best');
+      if (el) el.textContent = best;
+      return best;
+    } catch(e){ return 0; }
+  }
+
+  // ------------------------------------------------------------
+  // FISHING & SHOP tabs — thin wrappers so they keep working
+  // ------------------------------------------------------------
+  function renderFishing(){
+    // Delegate to the fishing patch by calling it after render
+    setTimeout(function(){
+      if (typeof window.__renderFishingInner === 'function'){
+        window.__renderFishingInner();
+      } else {
+        var body = document.getElementById('chat-body');
+        if (body){
+          var wrap = body.querySelector('#fish-stage') || body.querySelector('.fish-wrap');
+          if (!wrap) {
+            body.insertAdjacentHTML('beforeend',
+              '<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px">' +
+              'Fishing is loading...</div>');
+          }
+        }
+      }
+    }, 30);
+    return '<div id="fish-mount"></div>';
+  }
+  function renderShop(){
+    return '<div style="padding:20px;text-align:center;color:var(--text3);font-size:13px">Opening shop...</div>';
+  }
+
+  // ------------------------------------------------------------
+  // MATCH view — TTT or Chess
+  // ------------------------------------------------------------
+  function renderMatch(m){
+    var g = m.game;
+    var isChess = g.game_type === 'chess';
+    if (isChess) return renderChessMatch(g);
+    return renderTTTMatch(g);
+  }
+
+  function renderTTTMatch(g){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+    var isCreator = g.creator_id === window.ME.id;
+    var myMark = isCreator ? 'X' : 'O';
+    var opId = isCreator ? g.opponent_id : g.creator_id;
+    var op = opId ? window.PROFILES[opId] : null;
+    var me = window.PROFILES[window.ME.id];
+    var board = (g.state && g.state.board) || ['','','','','','','','',''];
+    var turn = g.state ? g.state.turn : 'X';
+    var winning = (g.state && g.state.winning_line) || null;
+    var isOver = g.status === 'finished';
+    var myTurn = !isOver && turn === myMark;
+
+    var html = '<div style="max-width:500px;margin:0 auto;padding:24px;text-align:center">';
+    html += '<div style="display:flex;justify-content:center;gap:24px;margin-bottom:14px;font-size:13px">' +
+      '<div><span style="color:var(--cyan);font-weight:700">X</span> ' + esc(me.display_name || me.username) + '</div>' +
+      '<div><span style="color:var(--rose);font-weight:700">O</span> ' + (op ? esc(op.display_name || op.username) : '...') + '</div>' +
+    '</div>';
+    if (g.bet_amount > 0){
+      html += '<div style="font-size:12px;color:var(--text3);margin-bottom:12px">Pot: <b style="color:var(--gold);font-family:monospace">🪙 ' + (g.bet_amount * 2) + '</b></div>';
+    }
+    if (isOver){
+      if (!g.winner_id) html += '<div class="board-result draw">🤝 Draw</div>';
+      else if (g.winner_id === window.ME.id) html += '<div class="board-result win">🏆 You won! +' + (g.bet_amount * 2) + ' 🪙</div>';
+      else html += '<div class="board-result lose">😔 You lost -' + g.bet_amount + ' 🪙</div>';
+    } else {
+      html += '<div style="font-size:14px;font-weight:700;margin-bottom:12px;color:' + (myTurn ? 'var(--cyan)' : 'var(--text3)') + '">' + (myTurn ? '🎯 Your turn (' + myMark + ')' : '⏳ Waiting') + '</div>';
+    }
+    html += '<div class="ttt">';
+    for (var i = 0; i < 9; i++){
+      var v = board[i] || '';
+      var cls = 'ttt-cell';
+      if (v) cls += ' taken ' + v;
+      if (winning && winning.indexOf(i) >= 0) cls += ' win';
+      html += '<div class="' + cls + '" data-cell="' + i + '">' + esc(v) + '</div>';
+    }
+    html += '</div>';
+    html += '<button class="btn" id="back-btn" style="margin-top:18px">← Back</button>';
+    html += '</div>';
+    body.innerHTML = html;
+
+    body.querySelectorAll('[data-cell]').forEach(function(c){
+      c.onclick = async function(){
+        if (isOver || c.classList.contains('taken') || !myTurn) return;
+        try { await sb.rpc('make_game_move', { cid: g.id, p_cell: parseInt(c.dataset.cell, 10) }); }
+        catch(e){ window.toast("Move rejected", e.message || String(e), "err"); }
+      };
+    });
+    var back = document.getElementById('back-btn');
+    if (back) back.onclick = function(){ FOCUS = null; refreshThenRender(); };
+  }
+
+  // ------------------------------------------------------------
+  // CHESS board
+  // ------------------------------------------------------------
+  var PIECE_UNICODE = {
+    'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙',
+    'k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟'
+  };
+
+  var chessSel = null;
+  var chessLegal = [];
+
+  function renderChessMatch(g){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+    var isCreator = g.creator_id === window.ME.id;
+    var myColor = isCreator ? 'w' : 'b';
+    var opId = isCreator ? g.opponent_id : g.creator_id;
+    var op = opId ? window.PROFILES[opId] : null;
+    var me = window.PROFILES[window.ME.id];
+    var boardStr = (g.state && g.state.board) || 'rnbqkbnrpppppppp................................PPPPPPPPRNBQKBNR';
+    var turn = g.state ? g.state.turn : 'w';
+    var isOver = g.status === 'finished';
+    var myTurn = !isOver && turn === myColor;
+    var board = boardStr.split('').map(function(c){ return c === '.' ? ' ' : c; });
+
+    var html = '<div class="chess-wrap">';
+    html += '<div style="display:flex;justify-content:center;gap:20px;margin-bottom:12px;font-size:13px">' +
+      '<div><b style="color:var(--cyan)">White</b> ' + (isCreator ? esc(me.display_name || me.username) : (op ? esc(op.display_name || op.username) : '...')) + '</div>' +
+      '<div><b style="color:var(--rose)">Black</b> ' + (isCreator ? (op ? esc(op.display_name || op.username) : '...') : esc(me.display_name || me.username)) + '</div>' +
+    '</div>';
+    if (g.bet_amount > 0){
+      html += '<div style="text-align:center;font-size:12px;color:var(--text3);margin-bottom:10px">Pot: <b style="color:var(--gold);font-family:monospace">🪙 ' + (g.bet_amount * 2) + '</b></div>';
+    }
+    if (isOver){
+      if (!g.winner_id) html += '<div class="board-result draw" style="text-align:center;padding:12px;border-radius:10px;margin-bottom:10px">🤝 Draw</div>';
+      else if (g.winner_id === window.ME.id) html += '<div class="board-result win" style="text-align:center;padding:12px;border-radius:10px;margin-bottom:10px">🏆 You won! +' + (g.bet_amount * 2) + ' 🪙</div>';
+      else html += '<div class="board-result lose" style="text-align:center;padding:12px;border-radius:10px;margin-bottom:10px">😔 You lost -' + g.bet_amount + ' 🪙</div>';
+    } else {
+      html += '<div style="text-align:center;font-size:14px;font-weight:700;margin-bottom:10px;color:' + (myTurn ? 'var(--cyan)' : 'var(--text3)') + '">' +
+        (myTurn ? '🎯 Your turn — you play ' + (myColor === 'w' ? 'White' : 'Black') : '⏳ Waiting for opponent') + '</div>';
+    }
+    html += '<div class="chess-board">';
+    // Render 8x8, top-left is a8 (row 0, col 0)
+    for (var row = 0; row < 8; row++){
+      for (var col = 0; col < 8; col++){
+        var idx = row * 8 + col;
+        var light = (row + col) % 2 === 0;
+        var piece = board[idx];
+        var cls = 'chess-sq ' + (light ? 'light' : 'dark');
+        if (chessSel === idx) cls += ' sel';
+        if (chessLegal.indexOf(idx) >= 0) cls += ' move' + (board[idx] && board[idx] !== ' ' ? ' capture' : '');
+        html += '<div class="' + cls + '" data-chess-idx="' + idx + '">';
+        if (piece && piece !== ' '){
+          var isW = piece === piece.toUpperCase();
+          html += '<span class="chess-piece-' + (isW ? 'w' : 'b') + '">' + PIECE_UNICODE[piece] + '</span>';
+        }
+        html += '</div>';
+      }
+    }
+    html += '</div>';
+    html += '<button class="btn" id="back-btn">← Back</button>';
+    html += '</div>';
+    body.innerHTML = html;
+
+    body.querySelectorAll('[data-chess-idx]').forEach(function(sq){
+      sq.onclick = async function(){
+        if (isOver || !myTurn) return;
+        var idx = parseInt(sq.dataset.chessIdx, 10);
+        var board2 = boardStr.split('').map(function(c){ return c === '.' ? ' ' : c; });
+
+        if (chessSel === null){
+          // Select piece
+          var p = board2[idx];
+          if (!p || p === ' ') return;
+          if (colorOf(p) !== myColor){ window.toast("Not your piece", "", "err"); return; }
+          chessSel = idx;
+          chessLegal = legalMoves(board2.join(''), idx, myColor);
+          renderChessMatch(g);
+        } else {
+          // Attempt move
+          if (chessLegal.indexOf(idx) < 0){
+            // Deselect or reselect
+            chessSel = null; chessLegal = [];
+            renderChessMatch(g);
+            return;
+          }
+          // Perform move locally then send to server
+          var from = chessSel;
+          var to = idx;
+          var moving = board2[from];
+          board2[to] = moving;
+          board2[from] = ' ';
+          // Pawn promotion
+          var toRow = rowOf(to);
+          if (moving === 'P' && toRow === 0) board2[to] = 'Q';
+          if (moving === 'p' && toRow === 7) board2[to] = 'q';
+          var newBoard = board2.map(function(c){ return c === ' ' ? '.' : c; }).join('');
+          var newTurn = myColor === 'w' ? 'b' : 'w';
+
+          chessSel = null; chessLegal = [];
+
+          try {
+            // We use the ttt RPC for turn validation, but custom for chess
+            // Since we don't have a chess-specific RPC, we do client-side state push.
+            // Server validates turn correctness via the same make_game_move path by
+            // trusting the client for chess (see note in the SQL).
+            var r = await sb.from('game_challenges').update({
+              state: Object.assign({}, g.state, { board: newBoard, turn: newTurn })
+            }).eq('id', g.id).eq('status', 'in_progress');
+            if (r.error) throw r.error;
+          } catch(e){
+            window.toast("Move failed", e.message || String(e), "err");
+          }
+        }
+      };
+    });
+
+    var back = document.getElementById('back-btn');
+    if (back) back.onclick = function(){ FOCUS = null; refreshThenRender(); };
+  }
+
+  // ------------------------------------------------------------
+  // Data refresh
+  // ------------------------------------------------------------
+  async function refreshAll(){
+    if (!window.ME) return;
+    try {
+      var r1 = await sb.from('game_challenges').select('*').eq('status', 'open').order('created_at', { ascending: false }).limit(40);
+      window.__lobby = r1.data || [];
+      var ids = window.__lobby.map(function(x){ return x.creator_id; });
+      if (ids.length) await window.fetchProfiles(ids);
+
+      var r2 = await sb.from('game_challenges').select('*')
+        .or('creator_id.eq.' + window.ME.id + ',opponent_id.eq.' + window.ME.id)
+        .order('created_at', { ascending: false }).limit(40);
+      window.__myGames = r2.data || [];
+      var ids2 = [];
+      window.__myGames.forEach(function(g){ ids2.push(g.creator_id); if (g.opponent_id) ids2.push(g.opponent_id); });
+      if (ids2.length) await window.fetchProfiles(ids2);
+    } catch(e){ log("refresh:", e.message); }
+  }
+  async function refreshThenRender(){
+    await refreshAll();
+    renderRoom();
+  }
+
+  // ------------------------------------------------------------
+  // Wire renderRoom interactions
+  // ------------------------------------------------------------
+  function wire(){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+
+    body.querySelectorAll('[data-gr]').forEach(function(b){
+      b.onclick = function(){ TAB = b.dataset.gr; renderRoom(); setTimeout(renderPanel, 10); };
+    });
+
+    body.querySelectorAll('[data-bet]').forEach(function(b){
+      b.onclick = function(){
+        body.querySelectorAll('[data-bet]').forEach(function(x){ x.classList.remove('sel'); });
+        b.classList.add('sel');
+        var inp = document.getElementById('custom-bet');
+        if (inp) inp.value = '';
+      };
+    });
+
+    var cc = document.getElementById('create-challenge');
+    if (cc) cc.onclick = function(){
+      var sel = body.querySelector('[data-bet].sel');
+      var custom = document.getElementById('custom-bet');
+      var bet = 100;
+      if (custom && custom.value !== '') bet = parseInt(custom.value, 10);
+      else if (sel) bet = parseInt(sel.dataset.bet, 10);
+      if (isNaN(bet) || bet < 0 || bet > 100000) return window.toast("Invalid bet", "0-100000", "err");
+
+      pickGame(async function(game){
+        try {
+          await loadAccount();
+          if (ACCOUNT && ACCOUNT.balance < bet){
+            return window.toast("Insufficient balance", "You have " + ACCOUNT.balance, "err");
+          }
+          var r = await sb.rpc('create_game_challenge_v2', { p_bet: bet, p_game: game });
+          if (r.error) throw r.error;
+          window.toast("Challenge created", "Waiting for an opponent.", "ok");
+          await refreshThenRender();
+        } catch(e){
+          window.toast("Failed", e.message || String(e), "err");
+        }
+      });
+    };
+
+    body.querySelectorAll('[data-accept]').forEach(function(b){
+      b.onclick = async function(){
+        if (b.disabled) return;
+        b.disabled = true; b.textContent = "...";
+        try {
+          var r = await sb.rpc('accept_game_challenge', { cid: b.dataset.accept });
+          if (r.error) throw r.error;
+          await refreshAll();
+          var g = window.__myGames.find(function(x){ return x.id === b.dataset.accept; });
+          if (g){ FOCUS = { game: g }; renderRoom(); }
+        } catch(e){
+          window.toast("Failed", e.message || String(e), "err");
+          b.disabled = false; b.textContent = "Accept";
+        }
+      };
+    });
+
+    body.querySelectorAll('[data-cancel]').forEach(function(b){
+      b.onclick = async function(){
+        try {
+          var r = await sb.rpc('cancel_game_challenge', { cid: b.dataset.cancel });
+          if (r.error) throw r.error;
+          await refreshThenRender();
+        } catch(e){ window.toast("Failed", e.message || String(e), "err"); }
+      };
+    });
+
+    body.querySelectorAll('[data-enter]').forEach(function(b){
+      b.onclick = function(){
+        var g = window.__myGames.find(function(x){ return x.id === b.dataset.enter; });
+        if (g){ FOCUS = { game: g }; renderRoom(); }
+      };
+    });
+
+    // Snake wiring
+    var startBtn = document.getElementById('snake-start');
+    if (startBtn) startBtn.onclick = startSnake;
+    var lbBtn = document.getElementById('snake-lb');
+    if (lbBtn) lbBtn.onclick = openLeaderboards;
+    body.querySelectorAll('[data-dir]').forEach(function(b){
+      b.onclick = function(){
+        var d = b.dataset.dir;
+        if (d === 'up' && snakeState.dir.y !== 1) snakeState.nextDir = {x:0, y:-1};
+        if (d === 'down' && snakeState.dir.y !== -1) snakeState.nextDir = {x:0, y:1};
+        if (d === 'left' && snakeState.dir.x !== 1) snakeState.nextDir = {x:-1, y:0};
+        if (d === 'right' && snakeState.dir.x !== -1) snakeState.nextDir = {x:1, y:0};
+      };
+    });
+    if (TAB === 'arcade') loadSnakeBest();
+  }
+
+  // Arrow key handler for snake
+  document.addEventListener('keydown', function(e){
+    if (TAB !== 'arcade' || !snakeState.running) return;
+    if (window.CURRENT && window.CURRENT.type !== 'games') return;
+    var k = e.key.toLowerCase();
+    if ((k === 'arrowup' || k === 'w') && snakeState.dir.y !== 1) snakeState.nextDir = {x:0, y:-1};
+    else if ((k === 'arrowdown' || k === 's') && snakeState.dir.y !== -1) snakeState.nextDir = {x:0, y:1};
+    else if ((k === 'arrowleft' || k === 'a') && snakeState.dir.x !== 1) snakeState.nextDir = {x:-1, y:0};
+    else if ((k === 'arrowright' || k === 'd') && snakeState.dir.x !== -1) snakeState.nextDir = {x:1, y:0};
+    else return;
+    e.preventDefault();
+  });
+
+  // ------------------------------------------------------------
+  // Leaderboards
+  // ------------------------------------------------------------
+  async function openLeaderboards(){
+    var tab = 'chess';
+    function draw(){
+      var tabs = '<div class="lb-tabs">' +
+        '<button data-lbt="chess" class="' + (tab==='chess'?'active':'') + '">♟️ Chess</button>' +
+        '<button data-lbt="ttt" class="' + (tab==='ttt'?'active':'') + '">⭕ X-O</button>' +
+        '<button data-lbt="snake" class="' + (tab==='snake'?'active':'') + '">🐍 Snake</button>' +
+      '</div>';
+      var body = document.getElementById('lb-body');
+      if (!body) return;
+      body.innerHTML = tabs + '<div id="lb-content">Loading...</div>';
+      body.querySelectorAll('[data-lbt]').forEach(function(b){
+        b.onclick = function(){ tab = b.dataset.lbt; draw(); };
+      });
+      loadLbContent(tab);
+    }
+    async function loadLbContent(which){
+      var el = document.getElementById('lb-content');
+      if (!el) return;
+      try {
+        if (which === 'snake'){
+          var r = await sb.from('snake_scores').select('user_id, score').order('score', { ascending: false }).limit(50);
+          var bestByUser = {};
+          (r.data || []).forEach(function(s){
+            if (!bestByUser[s.user_id] || s.score > bestByUser[s.user_id]) bestByUser[s.user_id] = s.score;
+          });
+          var ids = Object.keys(bestByUser);
+          await window.fetchProfiles(ids);
+          var rows = ids.map(function(uid){ return { uid: uid, score: bestByUser[uid] }; })
+            .sort(function(a,b){ return b.score - a.score; }).slice(0, 15);
+          el.innerHTML = rows.length ? rows.map(function(r, i){
+            var p = window.PROFILES[r.uid] || { username: 'user', display_name: 'User' };
+            var me = r.uid === window.ME.id;
+            return '<div class="lb-row' + (me ? ' me' : '') + '">' +
+              '<div class="rank ' + (i===0?'gold':i===1?'silver':i===2?'bronze':'') + '">' + (i+1) + '</div>' +
+              '<div style="position:relative">' + window.avatarHTML(r.uid, 32) + '</div>' +
+              '<div class="info"><div class="nm">' + esc(p.display_name || p.username) + (me ? ' (you)' : '') + '</div></div>' +
+              '<div class="val" style="color:var(--green)">' + r.score + '</div>' +
+            '</div>';
+          }).join('') : '<div style="padding:20px;text-align:center;color:var(--text3)">No scores yet.</div>';
+        } else {
+          var game = which === 'chess' ? 'chess' : 'ttt';
+          var r2 = await sb.from('game_challenges').select('*').eq('game_type', game).eq('status', 'finished').not('winner_id', 'is', null).limit(300);
+          var wins = {};
+          (r2.data || []).forEach(function(g){ wins[g.winner_id] = (wins[g.winner_id] || 0) + 1; });
+          var ids2 = Object.keys(wins);
+          await window.fetchProfiles(ids2);
+          var list = ids2.map(function(uid){ return { uid: uid, wins: wins[uid] }; })
+            .sort(function(a,b){ return b.wins - a.wins; }).slice(0, 15);
+          el.innerHTML = list.length ? list.map(function(r, i){
+            var p = window.PROFILES[r.uid] || { username: 'user', display_name: 'User' };
+            var me = r.uid === window.ME.id;
+            return '<div class="lb-row' + (me ? ' me' : '') + '">' +
+              '<div class="rank ' + (i===0?'gold':i===1?'silver':i===2?'bronze':'') + '">' + (i+1) + '</div>' +
+              '<div style="position:relative">' + window.avatarHTML(r.uid, 32) + '</div>' +
+              '<div class="info"><div class="nm">' + esc(p.display_name || p.username) + (me ? ' (you)' : '') + '</div></div>' +
+              '<div class="val" style="color:var(--cyan)">' + r.wins + ' wins</div>' +
+            '</div>';
+          }).join('') : '<div style="padding:20px;text-align:center;color:var(--text3)">No matches yet.</div>';
+        }
+      } catch(e){ el.innerHTML = '<div style="padding:20px;color:#ff8aa8">Error: ' + esc(e.message) + '</div>'; }
+    }
+    window.openModal("🏆 Leaderboards", '<div id="lb-body"></div>', { wide: true });
+    draw();
+  }
+
+  // ------------------------------------------------------------
+  // Realtime
+  // ------------------------------------------------------------
+  function subscribe(){
+    sb.channel('games-v3-' + window.ME.id)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'game_challenges' }, async function(p){
+        var row = p.new;
+        if (!row) return;
+        var mine = row.creator_id === window.ME.id || row.opponent_id === window.ME.id;
+        if (!mine) return;
+        await refreshAll();
+        await loadAccount();
+        if (window.CURRENT && window.CURRENT.type === 'games'){
+          if (FOCUS){
+            var fresh = window.__myGames.find(function(x){ return x.id === FOCUS.game.id; });
+            if (fresh){ FOCUS.game = fresh; }
+            else { FOCUS = null; }
+          } else {
+            var inProgress = window.__myGames.filter(function(g){ return g.status === 'in_progress'; });
+            if (inProgress.length === 1 && !FOCUS){
+              FOCUS = { game: inProgress[0] };
+            }
+          }
+          renderRoom();
+        } else if (p.eventType === 'UPDATE'){
+          if (row.status === 'in_progress' && p.old && p.old.status === 'open'){
+            window.toast("Challenge accepted!", "Open Game Room to play.", "ok");
+          }
+          if (row.status === 'finished' && row.winner_id){
+            if (row.winner_id === window.ME.id) window.toast("You won!", "+" + ((row.bet_amount||0)*2) + " 🪙", "ok");
+            else if (row.creator_id === window.ME.id || row.opponent_id === window.ME.id) window.toast("You lost", "-" + (row.bet_amount||0) + " 🪙", "err");
+          }
+        }
+      })
+      .subscribe();
+  }
+
+  // ------------------------------------------------------------
+  // Panel
+  // ------------------------------------------------------------
+  function renderPanel(){
+    if (!window.CURRENT || window.CURRENT.type !== 'games') return;
+    var body = document.getElementById('panel-body');
+    if (!body) return;
+    if (!window.__savedPanelHTML && !body.querySelector('.game-nav')){
+      window.__savedPanelHTML = body.innerHTML;
+    }
+    var head = document.getElementById('panel-head');
+    if (head) head.innerHTML = '<div class="ttl">🎮 Game Room</div>';
+    var tabs = [
+      { id:'play', em:'🎮', l:'Play', s:'X-O & Chess matches' },
+      { id:'arcade', em:'🕹️', l:'Arcade', s:'Snake & more' },
+      { id:'fishing', em:'🎣', l:'Fishing', s:'Cast & earn coins' },
+      { id:'shop', em:'🛒', l:'Shop', s:'Spend your coins' }
+    ];
+    body.innerHTML = '<div class="game-nav">' +
+      '<h3>Games</h3>' +
+      tabs.map(function(t){
+        return '<button class="gbtn' + (TAB===t.id?' active':'') + '" data-gpanel="' + t.id + '">' +
+          '<span class="emoji">' + t.em + '</span><span class="lbl">' + t.l + '<span class="sub">' + t.s + '</span></span></button>';
+      }).join('') +
+    '</div>';
+    body.querySelectorAll('[data-gpanel]').forEach(function(b){
+      b.onclick = function(){ TAB = b.dataset.gpanel; renderRoom(); renderPanel(); };
+    });
+  }
+
+  // ------------------------------------------------------------
+  // Render overrides
+  // ------------------------------------------------------------
+  var origRC = window.renderChat;
+  window.renderChat = function(){
+    if (window.CURRENT && window.CURRENT.type === 'games'){
+      document.body.classList.add('in-game-room');
+      renderRoom();
+      renderPanel();
+      return;
+    }
+    document.body.classList.remove('in-game-room');
+    return origRC.apply(this, arguments);
+  };
+  var origRCH = window.renderChatHead;
+  window.renderChatHead = function(){
+    if (window.CURRENT && window.CURRENT.type === 'games'){
+      var el = document.getElementById('chat-head');
+      if (el){
+        var labels = { play:['🎮','Play'], arcade:['🕹️','Arcade'], fishing:['🎣','Fishing'], shop:['🛒','Shop'] };
+        var l = labels[TAB] || labels.play;
+        el.innerHTML =
+          '<button class="hbtn mobile-only" data-act="toggle-panel">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:20px;height:20px"><path d="M3 6h18M3 12h18M3 18h18"/></svg>' +
+          '</button>' +
+          '<div class="title"><span style="font-size:16px">' + l[0] + '</span><span class="txt">' + l[1] + '</span></div>' +
+          '<div class="spacer"></div>' +
+          '<button class="hbtn" id="games-lb-head" title="Leaderboards">🏆</button>';
+        var lbh = document.getElementById('games-lb-head');
+        if (lbh) lbh.onclick = openLeaderboards;
+      }
+      return;
+    }
+    return origRCH.apply(this, arguments);
+  };
+  var origRComp = window.renderComposer;
+  window.renderComposer = function(){
+    if (window.CURRENT && window.CURRENT.type === 'games'){
+      var w = document.getElementById('composer-wrap'); if (w) w.innerHTML = '';
+      var t = document.getElementById('typing-bar'); if (t) t.innerHTML = '';
+      return;
+    }
+    return origRComp.apply(this, arguments);
+  };
+
+  // ------------------------------------------------------------
+  // Rail button
+  // ------------------------------------------------------------
+  function wireRail(){
+    var btn = document.querySelector('.rail-btn.games-btn');
+    if (!btn || btn.__v3wired) return;
+    btn.__v3wired = true;
+    btn.onclick = function(){ openGameRoom('play'); };
+  }
+  setInterval(wireRail, 2000);
+
+  // ------------------------------------------------------------
+  // BOOT
+  // ------------------------------------------------------------
+  setTimeout(async function(){
+    if (!window.ME) return;
+    await loadAccount();
+    await refreshAll();
+    subscribe();
+    wireRail();
+    log("V3 ready");
+  }, 8000);
+
+  log("loaded");
+})();
+</script>
+
+<!-- SLEEPY_ADS_LIVE_V1 -->
+<style>
+/* Ad container styling */
+.ad-slot{display:none;margin:16px auto;max-width:640px;padding:0 12px;text-align:center}
+.ad-slot.on{display:block}
+.ad-slot::before{
+  content:'Advertisement';display:block;
+  font-size:9px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--text3);opacity:.45;margin-bottom:6px;
+  font-family:'JetBrains Mono',monospace
+}
+.ad-slot #container-fa854199a041432aa0a5fa0fd34ead52{
+  min-height:60px;border-radius:10px;overflow:hidden;
+}
+/* Reward card */
+.ad-reward{
+  margin:20px auto;max-width:520px;padding:16px;
+  border-radius:14px;
+  background:linear-gradient(135deg, rgba(255,200,87,.1), rgba(139,124,255,.06));
+  border:1px solid rgba(255,200,87,.35);
+}
+.ad-reward .head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.ad-reward .head .ico{width:42px;height:42px;border-radius:11px;flex:none;background:linear-gradient(135deg,rgba(255,200,87,.24),rgba(255,159,28,.14));border:1px solid rgba(255,200,87,.5);display:flex;align-items:center;justify-content:center;font-size:20px}
+.ad-reward .head .t{flex:1;min-width:0}
+.ad-reward .head .t .n{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;color:var(--text);margin-bottom:2px}
+.ad-reward .head .t .d{font-size:11.5px;color:var(--text3)}
+.ad-reward .bar{height:5px;border-radius:99px;background:rgba(255,255,255,.06);overflow:hidden;margin:12px 0 4px}
+.ad-reward .bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#ffc857,#ff9f1c);transition:width .3s}
+.ad-reward .meta{display:flex;justify-content:space-between;font-size:11px;color:var(--text3);font-family:monospace;margin-bottom:12px}
+.ad-reward button{width:100%;padding:12px;border-radius:10px;font-size:13.5px;font-weight:700;border:none;cursor:pointer;font-family:inherit;background:linear-gradient(135deg,#ffc857,#ff9f1c);color:#1a0f00;transition:all .15s}
+.ad-reward button:hover{box-shadow:0 6px 22px rgba(255,200,87,.5);transform:translateY(-1px)}
+.ad-reward button:disabled{background:var(--surface3);color:var(--text3);cursor:not-allowed;box-shadow:none;transform:none}
+.ad-reward button.done{background:rgba(74,222,128,.15);color:var(--green);border:1px solid rgba(74,222,128,.4)}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyAdsLive) return;
+  window.__sleepyAdsLive = true;
+  function log(){ try{console.log.apply(console,["[AdsLive]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  var REWARD_AMOUNT = 100;
+
+  // ------------------------------------------------------------
+  // 1. SocialBar — load once, stays persistent
+  // ------------------------------------------------------------
+  function loadSocialBar(){
+    if (document.getElementById('socialbar-js')) return;
+    var s = document.createElement('script');
+    s.id = 'socialbar-js';
+    s.setAttribute('data-cfasync', 'false');
+    s.src = 'https://bicea.org/14/5d086699a154f0fa860f8168d376c142';
+    document.head.appendChild(s);
+    log("SocialBar loaded");
+  }
+
+  // ------------------------------------------------------------
+  // 2. NativeBanner — one container, moved between pages
+  // ------------------------------------------------------------
+  // Adsterra's NativeBanner uses a fixed container ID, so we
+  // keep one persistent container and move it to whichever page
+  // is currently shown. The script only runs once.
+  var BANNER_CONTAINER_ID = 'container-fa854199a041432aa0a5fa0fd34ead52';
+  var BANNER_SCRIPT_ID = 'native-banner-js';
+  var bannerMounted = false;
+
+  function ensureBannerContainer(){
+    var existing = document.getElementById(BANNER_CONTAINER_ID);
+    if (existing) return existing;
+    var div = document.createElement('div');
+    div.id = BANNER_CONTAINER_ID;
+    return div;
+  }
+
+  function loadBannerScript(){
+    if (document.getElementById(BANNER_SCRIPT_ID)) return;
+    var s = document.createElement('script');
+    s.id = BANNER_SCRIPT_ID;
+    s.async = true;
+    s.setAttribute('data-cfasync', 'false');
+    s.src = 'https://bicea.org/21/fa854199a041432aa0a5fa0fd34ead52';
+    document.head.appendChild(s);
+    log("NativeBanner script loaded");
+  }
+
+  // ------------------------------------------------------------
+  // 3. Banner slots — where to display it
+  // ------------------------------------------------------------
+  function attachBannerToLogin(){
+    var card = document.querySelector('.auth-card');
+    if (!card) return;
+    var slot = card.querySelector('.ad-slot.login-ad');
+    if (!slot){
+      slot = document.createElement('div');
+      slot.className = 'ad-slot login-ad on';
+      slot.dataset.adWhere = 'login';
+      card.appendChild(slot);
+    }
+    mountBannerIn(slot);
+  }
+
+  function attachBannerToGame(){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+    if (!window.CURRENT) return;
+    if (window.CURRENT.type !== 'games' && window.CURRENT.type !== 'fishing') return;
+    var slot = body.querySelector('.ad-slot.game-ad');
+    if (!slot){
+      slot = document.createElement('div');
+      slot.className = 'ad-slot game-ad on';
+      slot.dataset.adWhere = 'game';
+      body.appendChild(slot);
+    }
+    mountBannerIn(slot);
+  }
+
+  function mountBannerIn(slot){
+    if (!slot) return;
+    var container = document.getElementById(BANNER_CONTAINER_ID);
+    // If banner is already in this slot, nothing to do
+    if (container && container.parentElement === slot) return;
+    // Move the container into this slot
+    var c = ensureBannerContainer();
+    slot.appendChild(c);
+    if (!bannerMounted){
+      bannerMounted = true;
+      loadBannerScript();
+    }
+  }
+
+  function detachBannerFromLogin(){
+    var slot = document.querySelector('.ad-slot.login-ad');
+    if (slot) slot.classList.remove('on');
+  }
+
+  // ------------------------------------------------------------
+  // 4. Reward card for coins
+  // ------------------------------------------------------------
+  async function getRewardStatus(){
+    try {
+      var r = await sb.rpc('ad_reward_status');
+      if (!r.error && r.data) return r.data;
+    } catch(e){}
+    return { today_count: 0, today_amount: 0, daily_cap: 10, daily_amount_cap: 1000 };
+  }
+
+  async function renderRewardCard(){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+    if (!window.CURRENT) return;
+    if (window.CURRENT.type !== 'games' && window.CURRENT.type !== 'fishing') return;
+    if (body.querySelector('.ad-reward')) return;
+    // Skip in arcade (already busy) — keep it in game room + fishing
+    if (window.CURRENT.type === 'games' && body.querySelector('#snake-canvas')) return;
+
+    var status = await getRewardStatus();
+    var remaining = Math.max(0, status.daily_cap - status.today_count);
+    var done = remaining <= 0;
+
+    var card = document.createElement('div');
+    card.className = 'ad-reward';
+    card.innerHTML =
+      '<div class="head">' +
+        '<div class="ico">🎬</div>' +
+        '<div class="t">' +
+          '<div class="n">Watch an ad, get ' + REWARD_AMOUNT + ' coins</div>' +
+          '<div class="d">' + remaining + ' watches left today</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="bar"><i style="width:' + Math.min(100, (status.today_count / status.daily_cap) * 100) + '%"></i></div>' +
+      '<div class="meta">' +
+        '<span>' + status.today_count + ' / ' + status.daily_cap + '</span>' +
+        '<span>' + status.today_amount + ' / ' + status.daily_amount_cap + ' coins</span>' +
+      '</div>' +
+      '<button id="ad-claim"' + (done ? ' disabled class="done"' : '') + '>' +
+        (done ? 'Come back tomorrow' : 'Watch Ad for +' + REWARD_AMOUNT + ' 🪙') +
+      '</button>';
+
+    body.appendChild(card);
+
+    var btn = card.querySelector('#ad-claim');
+    if (btn && !done) btn.onclick = openRewardedOverlay;
+  }
+
+  // ------------------------------------------------------------
+  // 5. Rewarded overlay — shows an ad, then credits coins
+  // ------------------------------------------------------------
+  function openRewardedOverlay(){
+    // The SocialBar serves ads on the page. We count a 30-second
+    // timer as "watching" — realistic for the user, and Adsterra
+    // pays per impression on the site.
+    var overlay = document.createElement('div');
+    overlay.style.cssText =
+      'position:fixed;inset:0;z-index:9990;background:rgba(6,8,14,.98);' +
+      'display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px';
+    overlay.innerHTML =
+      '<div style="text-align:center;max-width:520px">' +
+        '<div style="font-family:Space Grotesk;font-size:22px;font-weight:700;color:var(--text);margin-bottom:10px">' +
+          '🎬 Rewarding you for watching' +
+        '</div>' +
+        '<div style="font-size:13.5px;color:var(--text2);line-height:1.55;margin-bottom:22px">' +
+          'Your reward will be credited when the timer finishes.' +
+        '</div>' +
+        '<div id="ad-count" style="font-family:JetBrains Mono,monospace;font-size:44px;font-weight:700;color:var(--cyan);margin-bottom:22px">30</div>' +
+        '<div style="width:100%;height:6px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden;margin-bottom:16px">' +
+          '<div id="ad-progress" style="height:100%;width:0;background:linear-gradient(90deg,#ffc857,#ff9f1c);transition:width 1s linear"></div>' +
+        '</div>' +
+        '<div style="font-size:11.5px;color:var(--text3);margin-top:8px">' +
+          'Tip: the ad banner at the bottom of the page counts as your impression.' +
+        '</div>' +
+      '</div>';
+
+    document.body.appendChild(overlay);
+
+    var secs = 30;
+    var countEl = overlay.querySelector('#ad-count');
+    var progEl = overlay.querySelector('#ad-progress');
+    var t = setInterval(function(){
+      secs--;
+      if (countEl) countEl.textContent = secs;
+      if (progEl) progEl.style.width = ((30 - secs) / 30 * 100) + '%';
+      if (secs <= 0){
+        clearInterval(t);
+        overlay.remove();
+        grantReward();
+      }
+    }, 1000);
+  }
+
+  async function grantReward(){
+    try {
+      var r = await sb.rpc('claim_ad_reward', { p_kind: 'ad_watch', p_amount: REWARD_AMOUNT });
+      if (r.error) throw new Error(r.error.message || String(r.error));
+      window.toast("+ " + REWARD_AMOUNT + " coins", "Reward credited to your balance.", "ok");
+      // Refresh
+      var card = document.querySelector('.ad-reward');
+      if (card) card.remove();
+      setTimeout(renderRewardCard, 300);
+      if (typeof window.loadAccount === 'function') window.loadAccount();
+      if (typeof window.refreshAccount === 'function') window.refreshAccount();
+    } catch(e){
+      window.toast("Could not credit reward", e.message || String(e), "err");
+    }
+  }
+  window.grantAdReward = grantReward;
+
+  // ------------------------------------------------------------
+  // 6. Orchestration
+  // ------------------------------------------------------------
+  function tick(){
+    // Login screen visible? Put banner there
+    var auth = document.getElementById('auth-screen');
+    var authVisible = auth && !auth.classList.contains('hidden');
+    if (authVisible){
+      attachBannerToLogin();
+      return;
+    }
+    detachBannerFromLogin();
+
+    // Inside the app: banner goes to game/fishing if we're there
+    if (window.CURRENT && (window.CURRENT.type === 'games' || window.CURRENT.type === 'fishing')){
+      attachBannerToGame();
+      renderRewardCard();
+    } else {
+      // Move the container out of any slot (keeps the script alive but hidden)
+      var c = document.getElementById(BANNER_CONTAINER_ID);
+      if (c && c.parentElement && c.parentElement.classList.contains('ad-slot')){
+        c.parentElement.classList.remove('on');
+      }
+    }
+  }
+
+  setInterval(tick, 1500);
+  loadSocialBar();
+
+  // Boot after login
+  setTimeout(function(){ tick(); }, 2000);
+
+  log("ads live");
+})();
+</script>
+
 </body>
 </html>
