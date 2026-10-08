@@ -1020,7 +1020,7 @@ async function renderMembers(){
   ids.forEach(function(uid){
     var p=PROFILES[uid]||{username:'unknown',display_name:'Unknown'};
     var online=ONLINE.has(uid);
-    var isOwner=uid===(window.CURRENT&&window.CURRENT.server?window.CURRENT.server.owner_id:null);
+    var isOwner=uid===(window.CURRENT&&window.CURRENT.server?(window.CURRENT && window.CURRENT.server ? window.CURRENT.server.owner_id : null):null);
     h+='<div class="member '+(online?'':'offline')+'" data-member="'+esc(uid)+'">'+
       '<div style="position:relative">'+avatarHTML(uid,32)+statusDot(uid)+'</div>'+
       '<div style="flex:1;min-width:0"><div class="nm">'+esc(p.display_name||p.username)+
@@ -1923,7 +1923,7 @@ sb.auth.onAuthStateChange(function(ev){
     if (window.CURRENT.type !== "server" || !window.CURRENT.server) return;
     e.preventDefault();
     var userId = mbr.dataset.member;
-    var isOwner = window.CURRENT.server.owner_id === window.ME.id;
+    var isOwner = (window.CURRENT && window.CURRENT.server ? window.CURRENT.server.owner_id : null) === window.ME.id;
     var items = [
       { head: window.PROFILES[userId] ? (window.PROFILES[userId].display_name || window.PROFILES[userId].username) : userId },
       { id: "profile", label: "View Profile", icon: window.SVG.user, onClick: function(){ window.openProfile(userId); } }
@@ -2014,7 +2014,7 @@ sb.auth.onAuthStateChange(function(ev){
     function memberHTML(uid, color){
       var p = window.PROFILES[uid] || { username: 'unknown', display_name: 'Unknown' };
       var online = window.ONLINE.has(uid);
-      var isOwner = uid === (window.CURRENT&&window.CURRENT.server?window.CURRENT.server.owner_id:null);
+      var isOwner = uid === (window.CURRENT&&window.CURRENT.server?(window.CURRENT && window.CURRENT.server ? window.CURRENT.server.owner_id : null):null);
       var nameStyle = color ? ' style="color:' + color + '"' : '';
       return '<div class="member ' + (online ? '' : 'offline') + '" data-member="' + window.esc(uid) + '">' +
         '<div style="position:relative">' + window.avatarHTML(uid, 32) + window.statusDot(uid) + '</div>' +
@@ -13102,7 +13102,7 @@ body{
             content: reply
           });
         }
-      }, 700);
+      }, 220);
     } catch(e){ log("handleBankIncoming failed:", e.message); }
   }
 
@@ -19639,6 +19639,100 @@ img[src*="juicyads"]{
   }, 800);
 
   log("kill-double + rps speed ready");
+})();
+</script>
+
+<!-- SLEEPY_FIXPACK_V2 -->
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyFixpackV2) return;
+  window.__sleepyFixpackV2 = true;
+  function log(){ try{console.log.apply(console,["[Fixpack]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  // 1. Silence race-condition rejections during page transitions
+  window.addEventListener('unhandledrejection', function(e){
+    var msg = e && e.reason && (e.reason.message || String(e.reason));
+    if (msg && (
+      msg.indexOf("reading 'owner_id'") >= 0 ||
+      msg.indexOf("reading 'id'") >= 0 ||
+      msg.indexOf("reading 'name'") >= 0
+    )){
+      e.preventDefault();
+      log("suppressed race:", msg.slice(0,60));
+    }
+  });
+
+  // 2. RPC dedup so one click cannot create two challenges
+  if (window.sb && typeof window.sb.rpc === 'function' && !window.sb.__fixpackWrapped){
+    var origRpc = window.sb.rpc.bind(window.sb);
+    var lastCreate = 0;
+    window.sb.rpc = async function(fn, params, options){
+      if (fn === 'create_game_challenge' || fn === 'create_game_challenge_v2'){
+        var now = Date.now();
+        if (now - lastCreate < 500){
+          log("blocked duplicate " + fn);
+          return { data: null, error: null, blocked: true };
+        }
+        lastCreate = now;
+      }
+      return origRpc(fn, params, options);
+    };
+    window.sb.__fixpackWrapped = true;
+    log("rpc dedup ready");
+  }
+
+  // 3. Fast realtime subscription for the RPS match in focus
+  function fastSub(){
+    if (!window.__rpsFocus || !window.__rpsFocus.game) return;
+    if (!window.CURRENT || window.CURRENT.type !== 'games') return;
+    var gid = window.__rpsFocus.game.id;
+    if (window.__rpsFocusSub && window.__rpsFocusSub.__gid === gid) return;
+    if (window.__rpsFocusSub){
+      try { window.sb.removeChannel(window.__rpsFocusSub); } catch(e){}
+      window.__rpsFocusSub = null;
+    }
+    log("fast sub for", gid.slice(0,8));
+    var ch = window.sb.channel('rps-fast-' + gid + '-' + Math.random().toString(36).slice(2,6))
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'game_challenges',
+        filter: 'id=eq.' + gid
+      }, function(p){
+        if (!window.__rpsFocus) return;
+        if (window.__rpsFocus.game.id !== p.new.id) return;
+        window.__rpsFocus.game = p.new;
+        if (window.renderChat) window.renderChat();
+        if (p.new.status === 'finished' && p.new.winner_id){
+          var key = 'rps-end-' + p.new.id;
+          if (window[key]) return;
+          window[key] = true;
+          var won = p.new.winner_id === window.ME.id;
+          window.toast(won ? 'You won!' : 'You lost',
+            (won ? '+' : '\u2212') + Math.abs(p.new.bet_amount * (won ? 2 : 1)) + ' coins',
+            won ? 'ok' : 'err');
+        }
+      })
+      .subscribe(function(s){
+        if (s === 'SUBSCRIBED'){
+          ch.__live = true;
+          ch.__gid = gid;
+          log("realtime live for", gid.slice(0,8));
+        }
+      });
+    window.__rpsFocusSub = ch;
+  }
+  setInterval(fastSub, 250);
+
+  // 4. Drop subscription when leaving games page
+  setInterval(function(){
+    var onGames = window.CURRENT && window.CURRENT.type === 'games';
+    if (!onGames && window.__rpsFocusSub){
+      try { window.sb.removeChannel(window.__rpsFocusSub); } catch(e){}
+      window.__rpsFocusSub = null;
+    }
+  }, 800);
+
+  log("fixpack ready");
 })();
 </script>
 
