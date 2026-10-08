@@ -17697,52 +17697,87 @@ body.in-game-room .chat-head .topic{display:none!important}
 })();
 </script>
 
-<!-- SLEEPY_ADS_LIVE_V1 -->
+
+
+<!-- SLEEPY_ADS_STABLE_V2 -->
 <style>
-/* Ad container styling */
-.ad-slot{display:none;margin:16px auto;max-width:640px;padding:0 12px;text-align:center}
-.ad-slot.on{display:block}
-.ad-slot::before{
+#ad-host{
+  display:none;flex:none;padding:0 20px 12px;
+}
+body.in-game-room #ad-host{display:block}
+#ad-host .ad-slot{
+  max-width:640px;margin:0 auto 14px;text-align:center;
+}
+#ad-host .ad-slot::before{
   content:'Advertisement';display:block;
   font-size:9px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
   color:var(--text3);opacity:.45;margin-bottom:6px;
-  font-family:'JetBrains Mono',monospace
+  font-family:'JetBrains Mono',monospace;
 }
-.ad-slot #container-fa854199a041432aa0a5fa0fd34ead52{
+#ad-host #container-fa854199a041432aa0a5fa0fd34ead52{
   min-height:60px;border-radius:10px;overflow:hidden;
 }
-/* Reward card */
-.ad-reward{
-  margin:20px auto;max-width:520px;padding:16px;
+#ad-host .ad-reward{
+  max-width:520px;margin:0 auto;padding:16px;
   border-radius:14px;
   background:linear-gradient(135deg, rgba(255,200,87,.1), rgba(139,124,255,.06));
   border:1px solid rgba(255,200,87,.35);
 }
-.ad-reward .head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-.ad-reward .head .ico{width:42px;height:42px;border-radius:11px;flex:none;background:linear-gradient(135deg,rgba(255,200,87,.24),rgba(255,159,28,.14));border:1px solid rgba(255,200,87,.5);display:flex;align-items:center;justify-content:center;font-size:20px}
-.ad-reward .head .t{flex:1;min-width:0}
-.ad-reward .head .t .n{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;color:var(--text);margin-bottom:2px}
-.ad-reward .head .t .d{font-size:11.5px;color:var(--text3)}
-.ad-reward .bar{height:5px;border-radius:99px;background:rgba(255,255,255,.06);overflow:hidden;margin:12px 0 4px}
-.ad-reward .bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#ffc857,#ff9f1c);transition:width .3s}
-.ad-reward .meta{display:flex;justify-content:space-between;font-size:11px;color:var(--text3);font-family:monospace;margin-bottom:12px}
-.ad-reward button{width:100%;padding:12px;border-radius:10px;font-size:13.5px;font-weight:700;border:none;cursor:pointer;font-family:inherit;background:linear-gradient(135deg,#ffc857,#ff9f1c);color:#1a0f00;transition:all .15s}
-.ad-reward button:hover{box-shadow:0 6px 22px rgba(255,200,87,.5);transform:translateY(-1px)}
-.ad-reward button:disabled{background:var(--surface3);color:var(--text3);cursor:not-allowed;box-shadow:none;transform:none}
-.ad-reward button.done{background:rgba(74,222,128,.15);color:var(--green);border:1px solid rgba(74,222,128,.4)}
+#ad-host .ad-reward .head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+#ad-host .ad-reward .head .ico{width:42px;height:42px;border-radius:11px;flex:none;background:linear-gradient(135deg,rgba(255,200,87,.24),rgba(255,159,28,.14));border:1px solid rgba(255,200,87,.5);display:flex;align-items:center;justify-content:center;font-size:20px}
+#ad-host .ad-reward .head .t{flex:1;min-width:0}
+#ad-host .ad-reward .head .t .n{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;color:var(--text);margin-bottom:2px}
+#ad-host .ad-reward .head .t .d{font-size:11.5px;color:var(--text3)}
+#ad-host .ad-reward .bar{height:5px;border-radius:99px;background:rgba(255,255,255,.06);overflow:hidden;margin:12px 0 4px}
+#ad-host .ad-reward .bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#ffc857,#ff9f1c);transition:width .3s}
+#ad-host .ad-reward .meta{display:flex;justify-content:space-between;font-size:11px;color:var(--text3);font-family:monospace;margin-bottom:12px}
+#ad-host .ad-reward button{width:100%;padding:12px;border-radius:10px;font-size:13.5px;font-weight:700;border:none;cursor:pointer;font-family:inherit;background:linear-gradient(135deg,#ffc857,#ff9f1c);color:#1a0f00;transition:all .15s}
+#ad-host .ad-reward button:hover{box-shadow:0 6px 22px rgba(255,200,87,.5);transform:translateY(-1px)}
+#ad-host .ad-reward button:disabled{background:var(--surface3);color:var(--text3);cursor:not-allowed;box-shadow:none;transform:none}
 </style>
 <script>
 (function(){
   "use strict";
-  if (window.__sleepyAdsLive) return;
-  window.__sleepyAdsLive = true;
-  function log(){ try{console.log.apply(console,["[AdsLive]"].concat([].slice.call(arguments)));}catch(e){} }
+  if (window.__sleepyAdsStableV2) return;
+  window.__sleepyAdsStableV2 = true;
+  function log(){ try{console.log.apply(console,["[AdsV2]"].concat([].slice.call(arguments)));}catch(e){} }
 
+  var BANNER_ID = 'container-fa854199a041432aa0a5fa0fd34ead52';
   var REWARD_AMOUNT = 100;
 
-  // ------------------------------------------------------------
-  // 1. SocialBar — load once, stays persistent
-  // ------------------------------------------------------------
+  // ----------------------------------------------------------------
+  // 1. Persistent ad host OUTSIDE chat-body (never wiped by re-renders)
+  // ----------------------------------------------------------------
+  function ensureHost(){
+    var host = document.getElementById('ad-host');
+    if (host) return host;
+    var chat = document.querySelector('.chat');
+    if (!chat) return null;
+    host = document.createElement('div');
+    host.id = 'ad-host';
+    host.innerHTML = '<div class="ad-slot game-ad"></div>';
+    var composer = chat.querySelector('.composer-wrap');
+    if (composer && composer.parentElement === chat){
+      chat.insertBefore(host, composer);
+    } else {
+      chat.appendChild(host);
+    }
+    return host;
+  }
+
+  // ----------------------------------------------------------------
+  // 2. Load ad scripts exactly once
+  // ----------------------------------------------------------------
+  function loadBannerScript(){
+    if (document.getElementById('native-banner-js')) return;
+    var s = document.createElement('script');
+    s.id = 'native-banner-js';
+    s.async = true;
+    s.setAttribute('data-cfasync', 'false');
+    s.src = 'https://bicea.org/21/fa854199a041432aa0a5fa0fd34ead52';
+    document.head.appendChild(s);
+    log("banner script loaded");
+  }
   function loadSocialBar(){
     if (document.getElementById('socialbar-js')) return;
     var s = document.createElement('script');
@@ -17750,110 +17785,83 @@ body.in-game-room .chat-head .topic{display:none!important}
     s.setAttribute('data-cfasync', 'false');
     s.src = 'https://bicea.org/14/5d086699a154f0fa860f8168d376c142';
     document.head.appendChild(s);
-    log("SocialBar loaded");
+    log("socialbar loaded");
   }
 
-  // ------------------------------------------------------------
-  // 2. NativeBanner — one container, moved between pages
-  // ------------------------------------------------------------
-  // Adsterra's NativeBanner uses a fixed container ID, so we
-  // keep one persistent container and move it to whichever page
-  // is currently shown. The script only runs once.
-  var BANNER_CONTAINER_ID = 'container-fa854199a041432aa0a5fa0fd34ead52';
-  var BANNER_SCRIPT_ID = 'native-banner-js';
-  var bannerMounted = false;
-
-  function ensureBannerContainer(){
-    var existing = document.getElementById(BANNER_CONTAINER_ID);
-    if (existing) return existing;
-    var div = document.createElement('div');
-    div.id = BANNER_CONTAINER_ID;
-    return div;
-  }
-
-  function loadBannerScript(){
-    if (document.getElementById(BANNER_SCRIPT_ID)) return;
-    var s = document.createElement('script');
-    s.id = BANNER_SCRIPT_ID;
-    s.async = true;
-    s.setAttribute('data-cfasync', 'false');
-    s.src = 'https://bicea.org/21/fa854199a041432aa0a5fa0fd34ead52';
-    document.head.appendChild(s);
-    log("NativeBanner script loaded");
-  }
-
-  // ------------------------------------------------------------
-  // 3. Banner slots — where to display it
-  // ------------------------------------------------------------
-  function attachBannerToLogin(){
-    var card = document.querySelector('.auth-card');
-    if (!card) return;
-    var slot = card.querySelector('.ad-slot.login-ad');
-    if (!slot){
-      slot = document.createElement('div');
-      slot.className = 'ad-slot login-ad on';
-      slot.dataset.adWhere = 'login';
-      card.appendChild(slot);
-    }
-    mountBannerIn(slot);
-  }
-
-  function attachBannerToGame(){
-    var body = document.getElementById('chat-body');
-    if (!body) return;
-    if (!window.CURRENT) return;
-    if (window.CURRENT.type !== 'games' && window.CURRENT.type !== 'fishing') return;
-    var slot = body.querySelector('.ad-slot.game-ad');
-    if (!slot){
-      slot = document.createElement('div');
-      slot.className = 'ad-slot game-ad on';
-      slot.dataset.adWhere = 'game';
-      body.appendChild(slot);
-    }
-    mountBannerIn(slot);
-  }
-
-  function mountBannerIn(slot){
+  // ----------------------------------------------------------------
+  // 3. Mount banner
+  // ----------------------------------------------------------------
+  var bannerReady = false;
+  function ensureBannerMounted(){
+    var host = ensureHost();
+    if (!host) return;
+    var slot = host.querySelector('.ad-slot');
     if (!slot) return;
-    var container = document.getElementById(BANNER_CONTAINER_ID);
-    // If banner is already in this slot, nothing to do
-    if (container && container.parentElement === slot) return;
-    // Move the container into this slot
-    var c = ensureBannerContainer();
-    slot.appendChild(c);
-    if (!bannerMounted){
-      bannerMounted = true;
+    var container = document.getElementById(BANNER_ID);
+    if (!container){
+      container = document.createElement('div');
+      container.id = BANNER_ID;
+    }
+    if (container.parentElement !== slot){
+      slot.appendChild(container);
+      log("banner attached to host");
+    }
+    if (!bannerReady){
+      bannerReady = true;
       loadBannerScript();
     }
   }
 
-  function detachBannerFromLogin(){
-    var slot = document.querySelector('.ad-slot.login-ad');
-    if (slot) slot.classList.remove('on');
+  // ----------------------------------------------------------------
+  // 4. Login banner
+  // ----------------------------------------------------------------
+  function moveBannerToLogin(){
+    var card = document.querySelector('.auth-card');
+    if (!card) return;
+    var slot = card.querySelector('.ad-slot-login');
+    if (!slot){
+      slot = document.createElement('div');
+      slot.className = 'ad-slot ad-slot-login';
+      slot.style.cssText = 'margin-top:20px;text-align:center';
+      slot.innerHTML = '<div style="font-size:9px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--text3);opacity:.45;margin-bottom:6px;font-family:JetBrains Mono,monospace">Advertisement</div>';
+      card.appendChild(slot);
+    }
+    var container = document.getElementById(BANNER_ID);
+    if (container && container.parentElement !== slot){
+      slot.appendChild(container);
+    }
   }
 
-  // ------------------------------------------------------------
-  // 4. Reward card for coins
-  // ------------------------------------------------------------
-  async function getRewardStatus(){
+  // ----------------------------------------------------------------
+  // 5. Reward card + status cache
+  // ----------------------------------------------------------------
+  var statusCache = null;
+  var statusAt = 0;
+
+  async function fetchStatus(force){
+    var now = Date.now();
+    if (!force && statusCache && (now - statusAt) < 30000) return statusCache;
     try {
       var r = await sb.rpc('ad_reward_status');
-      if (!r.error && r.data) return r.data;
+      if (!r.error && r.data) statusCache = r.data;
     } catch(e){}
-    return { today_count: 0, today_amount: 0, daily_cap: 10, daily_amount_cap: 1000 };
+    if (!statusCache) statusCache = { today_count:0, today_amount:0, daily_cap:10, daily_amount_cap:1000 };
+    statusAt = now;
+    return statusCache;
   }
 
-  async function renderRewardCard(){
-    var body = document.getElementById('chat-body');
-    if (!body) return;
+  function renderRewardCard(){
+    var host = ensureHost();
+    if (!host) return;
+    if (host.querySelector('.ad-reward')) return;
     if (!window.CURRENT) return;
     if (window.CURRENT.type !== 'games' && window.CURRENT.type !== 'fishing') return;
-    if (body.querySelector('.ad-reward')) return;
-    // Skip in arcade (already busy) — keep it in game room + fishing
-    if (window.CURRENT.type === 'games' && body.querySelector('#snake-canvas')) return;
+    // Skip arcade (busy with canvas)
+    var body = document.getElementById('chat-body');
+    if (body && body.querySelector('#snake-canvas')) return;
 
-    var status = await getRewardStatus();
-    var remaining = Math.max(0, status.daily_cap - status.today_count);
+    var s = statusCache || { today_count:0, today_amount:0, daily_cap:10, daily_amount_cap:1000 };
+    var remaining = Math.max(0, s.daily_cap - s.today_count);
     var done = remaining <= 0;
 
     var card = document.createElement('div');
@@ -17861,54 +17869,32 @@ body.in-game-room .chat-head .topic{display:none!important}
     card.innerHTML =
       '<div class="head">' +
         '<div class="ico">🎬</div>' +
-        '<div class="t">' +
-          '<div class="n">Watch an ad, get ' + REWARD_AMOUNT + ' coins</div>' +
-          '<div class="d">' + remaining + ' watches left today</div>' +
-        '</div>' +
+        '<div class="t"><div class="n">Watch an ad, get ' + REWARD_AMOUNT + ' coins</div>' +
+        '<div class="d">' + remaining + ' watches left today</div></div>' +
       '</div>' +
-      '<div class="bar"><i style="width:' + Math.min(100, (status.today_count / status.daily_cap) * 100) + '%"></i></div>' +
-      '<div class="meta">' +
-        '<span>' + status.today_count + ' / ' + status.daily_cap + '</span>' +
-        '<span>' + status.today_amount + ' / ' + status.daily_amount_cap + ' coins</span>' +
-      '</div>' +
-      '<button id="ad-claim"' + (done ? ' disabled class="done"' : '') + '>' +
+      '<div class="bar"><i style="width:' + Math.min(100, (s.today_count/s.daily_cap)*100) + '%"></i></div>' +
+      '<div class="meta"><span>' + s.today_count + ' / ' + s.daily_cap + '</span>' +
+        '<span>' + s.today_amount + ' / ' + s.daily_amount_cap + ' coins</span></div>' +
+      '<button id="ad-claim"' + (done ? ' disabled' : '') + '>' +
         (done ? 'Come back tomorrow' : 'Watch Ad for +' + REWARD_AMOUNT + ' 🪙') +
       '</button>';
-
-    body.appendChild(card);
+    host.appendChild(card);
 
     var btn = card.querySelector('#ad-claim');
     if (btn && !done) btn.onclick = openRewardedOverlay;
   }
 
-  // ------------------------------------------------------------
-  // 5. Rewarded overlay — shows an ad, then credits coins
-  // ------------------------------------------------------------
   function openRewardedOverlay(){
-    // The SocialBar serves ads on the page. We count a 30-second
-    // timer as "watching" — realistic for the user, and Adsterra
-    // pays per impression on the site.
     var overlay = document.createElement('div');
-    overlay.style.cssText =
-      'position:fixed;inset:0;z-index:9990;background:rgba(6,8,14,.98);' +
-      'display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9990;background:rgba(6,8,14,.98);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px';
     overlay.innerHTML =
       '<div style="text-align:center;max-width:520px">' +
-        '<div style="font-family:Space Grotesk;font-size:22px;font-weight:700;color:var(--text);margin-bottom:10px">' +
-          '🎬 Rewarding you for watching' +
-        '</div>' +
-        '<div style="font-size:13.5px;color:var(--text2);line-height:1.55;margin-bottom:22px">' +
-          'Your reward will be credited when the timer finishes.' +
-        '</div>' +
+        '<div style="font-family:Space Grotesk;font-size:22px;font-weight:700;color:var(--text);margin-bottom:10px">🎬 Rewarding you</div>' +
+        '<div style="font-size:13.5px;color:var(--text2);line-height:1.55;margin-bottom:22px">Your reward will be credited when the timer finishes.</div>' +
         '<div id="ad-count" style="font-family:JetBrains Mono,monospace;font-size:44px;font-weight:700;color:var(--cyan);margin-bottom:22px">30</div>' +
         '<div style="width:100%;height:6px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden;margin-bottom:16px">' +
           '<div id="ad-progress" style="height:100%;width:0;background:linear-gradient(90deg,#ffc857,#ff9f1c);transition:width 1s linear"></div>' +
-        '</div>' +
-        '<div style="font-size:11.5px;color:var(--text3);margin-top:8px">' +
-          'Tip: the ad banner at the bottom of the page counts as your impression.' +
-        '</div>' +
-      '</div>';
-
+        '</div></div>';
     document.body.appendChild(overlay);
 
     var secs = 30;
@@ -17917,12 +17903,8 @@ body.in-game-room .chat-head .topic{display:none!important}
     var t = setInterval(function(){
       secs--;
       if (countEl) countEl.textContent = secs;
-      if (progEl) progEl.style.width = ((30 - secs) / 30 * 100) + '%';
-      if (secs <= 0){
-        clearInterval(t);
-        overlay.remove();
-        grantReward();
-      }
+      if (progEl) progEl.style.width = ((30-secs)/30*100) + '%';
+      if (secs <= 0){ clearInterval(t); overlay.remove(); grantReward(); }
     }, 1000);
   }
 
@@ -17930,52 +17912,236 @@ body.in-game-room .chat-head .topic{display:none!important}
     try {
       var r = await sb.rpc('claim_ad_reward', { p_kind: 'ad_watch', p_amount: REWARD_AMOUNT });
       if (r.error) throw new Error(r.error.message || String(r.error));
-      window.toast("+ " + REWARD_AMOUNT + " coins", "Reward credited to your balance.", "ok");
-      // Refresh
+      window.toast("+ " + REWARD_AMOUNT + " coins", "Reward credited.", "ok");
+      statusCache = null; statusAt = 0;
       var card = document.querySelector('.ad-reward');
       if (card) card.remove();
-      setTimeout(renderRewardCard, 300);
+      await fetchStatus(true);
+      renderRewardCard();
       if (typeof window.loadAccount === 'function') window.loadAccount();
       if (typeof window.refreshAccount === 'function') window.refreshAccount();
     } catch(e){
       window.toast("Could not credit reward", e.message || String(e), "err");
     }
   }
-  window.grantAdReward = grantReward;
 
-  // ------------------------------------------------------------
-  // 6. Orchestration
-  // ------------------------------------------------------------
-  function tick(){
-    // Login screen visible? Put banner there
+  // ----------------------------------------------------------------
+  // 6. Show/hide host based on view
+  // ----------------------------------------------------------------
+  function updateHost(){
+    var host = ensureHost();
+    if (!host) return;
+
+    // Login screen?
     var auth = document.getElementById('auth-screen');
-    var authVisible = auth && !auth.classList.contains('hidden');
-    if (authVisible){
-      attachBannerToLogin();
+    if (auth && !auth.classList.contains('hidden')){
+      host.style.display = 'none';
+      moveBannerToLogin();
       return;
     }
-    detachBannerFromLogin();
 
-    // Inside the app: banner goes to game/fishing if we're there
+    // Remove login slot if present
+    var loginSlot = document.querySelector('.ad-slot-login');
+    if (loginSlot) loginSlot.remove();
+
+    // In game room or fishing?
     if (window.CURRENT && (window.CURRENT.type === 'games' || window.CURRENT.type === 'fishing')){
-      attachBannerToGame();
-      renderRewardCard();
+      ensureBannerMounted();
+      host.style.display = 'block';
     } else {
-      // Move the container out of any slot (keeps the script alive but hidden)
-      var c = document.getElementById(BANNER_CONTAINER_ID);
-      if (c && c.parentElement && c.parentElement.classList.contains('ad-slot')){
-        c.parentElement.classList.remove('on');
-      }
+      host.style.display = 'none';
     }
   }
 
-  setInterval(tick, 1500);
-  loadSocialBar();
+  // ----------------------------------------------------------------
+  // 7. MutationObserver on chat-body — fires when the game room re-renders
+  // ----------------------------------------------------------------
+  var debounceT = null;
+  function scheduleRefresh(){
+    if (debounceT) clearTimeout(debounceT);
+    debounceT = setTimeout(function(){
+      updateHost();
+      renderRewardCard();
+    }, 80);
+  }
+  function attachObserver(){
+    var body = document.getElementById('chat-body');
+    if (!body){ setTimeout(attachObserver, 500); return; }
+    var mo = new MutationObserver(scheduleRefresh);
+    mo.observe(body, { childList: true });
+    log("observer attached");
+  }
 
-  // Boot after login
-  setTimeout(function(){ tick(); }, 2000);
+  // Watch for view changes (games <-> channel etc.) at a light cadence
+  setInterval(updateHost, 2500);
 
-  log("ads live");
+  // ----------------------------------------------------------------
+  // 8. Boot
+  // ----------------------------------------------------------------
+  setTimeout(function(){
+    ensureHost();
+    loadSocialBar();
+    attachObserver();
+    fetchStatus(true).then(function(){
+      updateHost();
+      renderRewardCard();
+    });
+    log("ready");
+  }, 2500);
+
+  log("loaded");
+})();
+</script>
+
+<!-- SLEEPY_LB_PAGE_V1 -->
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyLbPage) return;
+  window.__sleepyLbPage = true;
+  function log(){ try{console.log.apply(console,["[LB]"].concat([].slice.call(arguments)));}catch(e){} }
+  function esc(s){ return window.esc(s); }
+
+  var CURRENT_TAB = 'chess';
+
+  window.openLeaderboards = function(){
+    window.CURRENT = Object.assign({}, window.CURRENT, { type: 'leaderboards' });
+    renderLB();
+  };
+  window.openLeaderboardsPage = window.openLeaderboards;
+
+  function renderLB(){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+
+    var tabs = '<div class="lb-tabs" style="margin-bottom:14px">' +
+      ['chess','ttt','snake'].map(function(t){
+        var lbl = t === 'chess' ? '♟️ Chess' : t === 'ttt' ? '⭕ X-O' : '🐍 Snake';
+        return '<button data-lbt="' + t + '" class="' + (CURRENT_TAB === t ? 'active' : '') + '">' + lbl + '</button>';
+      }).join('') +
+    '</div>';
+
+    body.innerHTML = '<div style="max-width:520px;margin:0 auto;padding:24px 20px">' +
+      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">' +
+        '<button id="lb-back" style="width:36px;height:36px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:18px;cursor:pointer;font-family:inherit">&larr;</button>' +
+        '<div style="font-family:\'Space Grotesk\',sans-serif;font-size:20px;font-weight:700;color:var(--text)">🏆 Leaderboards</div>' +
+      '</div>' +
+      tabs +
+      '<div id="lb-content" style="display:flex;flex-direction:column;gap:6px"><div style="padding:20px;text-align:center;color:var(--text3)">Loading...</div></div>' +
+    '</div>';
+
+    body.querySelectorAll('[data-lbt]').forEach(function(b){
+      b.onclick = function(){ CURRENT_TAB = b.dataset.lbt; renderLB(); };
+    });
+    var back = document.getElementById('lb-back');
+    if (back) back.onclick = function(){
+      if (typeof window.openGameRoom === 'function') window.openGameRoom('arcade');
+    };
+
+    loadContent(CURRENT_TAB);
+  }
+
+  async function loadContent(which){
+    var el = document.getElementById('lb-content');
+    if (!el) return;
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text3)">Loading...</div>';
+
+    try {
+      if (which === 'snake'){
+        var r = await sb.from('snake_scores').select('user_id, score').order('score', { ascending: false }).limit(100);
+        if (r.error) throw new Error(r.error.message);
+        var best = {};
+        (r.data || []).forEach(function(row){
+          if (!best[row.user_id] || row.score > best[row.user_id]) best[row.user_id] = row.score;
+        });
+        var ids = Object.keys(best);
+        if (ids.length) await window.fetchProfiles(ids);
+        var list = ids.map(function(uid){ return { uid: uid, v: best[uid] }; })
+          .sort(function(a,b){ return b.v - a.v; }).slice(0, 20);
+        renderList(el, list, 'score', 'var(--green)', true);
+      } else {
+        var game = which === 'chess' ? 'chess' : 'ttt';
+        var r2 = await sb.from('game_challenges').select('*')
+          .eq('game_type', game).eq('status', 'finished')
+          .not('winner_id', 'is', null).limit(500);
+        if (r2.error) throw new Error(r2.error.message);
+        var wins = {};
+        (r2.data || []).forEach(function(g){ wins[g.winner_id] = (wins[g.winner_id] || 0) + 1; });
+        var ids2 = Object.keys(wins);
+        if (ids2.length) await window.fetchProfiles(ids2);
+        var list2 = ids2.map(function(uid){ return { uid: uid, v: wins[uid] }; })
+          .sort(function(a,b){ return b.v - a.v; }).slice(0, 20);
+        renderList(el, list2, 'wins', 'var(--cyan)', false);
+      }
+    } catch(e){
+      log("lb error:", e.message);
+      el.innerHTML = '<div style="padding:20px;text-align:center;color:#ff8aa8;font-size:13px">' +
+        'Could not load: ' + esc(e.message) +
+        '<div style="font-size:11px;color:var(--text3);margin-top:8px">Check that the SQL for this table has been run in Supabase.</div>' +
+      '</div>';
+    }
+  }
+
+  function renderList(el, list, unit, color, isScore){
+    if (!list.length){
+      el.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text3);font-size:13px">No entries yet.</div>';
+      return;
+    }
+    el.innerHTML = list.map(function(r, i){
+      var p = window.PROFILES[r.uid] || { username: 'user', display_name: 'User' };
+      var me = r.uid === window.ME.id;
+      var rankCls = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+      var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
+      return '<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:10px;' +
+        'background:' + (me ? 'rgba(94,231,215,.08)' : 'rgba(255,255,255,.03)') + ';' +
+        (me ? 'border:1px solid rgba(94,231,215,.35)' : 'border:1px solid transparent') + '">' +
+        '<div style="width:32px;text-align:center;font-family:JetBrains Mono,monospace;font-weight:700;font-size:14px;color:' + (i < 3 ? '#ffd166' : 'var(--text3)') + '">' + medal + '</div>' +
+        '<div style="position:relative">' + window.avatarHTML(r.uid, 32) + '</div>' +
+        '<div style="flex:1;min-width:0"><div style="font-weight:600;font-size:13.5px;color:var(--text)">' +
+          esc(p.display_name || p.username) + (me ? ' (you)' : '') + '</div></div>' +
+        '<div style="font-family:JetBrains Mono,monospace;font-weight:700;font-size:15px;color:' + color + '">' +
+          r.v + (isScore ? '' : '') +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  // Override the old modal-based leaderboard
+  var origRC = window.renderChat;
+  window.renderChat = function(){
+    if (window.CURRENT && window.CURRENT.type === 'leaderboards'){
+      renderLB();
+      return;
+    }
+    return origRC.apply(this, arguments);
+  };
+
+  var origRCH = window.renderChatHead;
+  window.renderChatHead = function(){
+    if (window.CURRENT && window.CURRENT.type === 'leaderboards'){
+      var el = document.getElementById('chat-head');
+      if (el) el.innerHTML =
+        '<button class="hbtn mobile-only" data-act="toggle-panel">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:20px;height:20px"><path d="M3 6h18M3 12h18M3 18h18"/></svg>' +
+        '</button>' +
+        '<div class="title"><span style="font-size:16px">🏆</span><span class="txt">Leaderboards</span></div>' +
+        '<div class="spacer"></div>';
+      return;
+    }
+    return origRCH.apply(this, arguments);
+  };
+
+  var origRComp = window.renderComposer;
+  window.renderComposer = function(){
+    if (window.CURRENT && window.CURRENT.type === 'leaderboards'){
+      var w = document.getElementById('composer-wrap'); if (w) w.innerHTML = '';
+      var t = document.getElementById('typing-bar'); if (t) t.innerHTML = '';
+      return;
+    }
+    return origRComp.apply(this, arguments);
+  };
+
+  log("leaderboard page ready");
 })();
 </script>
 
