@@ -18145,5 +18145,170 @@ body.in-game-room #ad-host{display:block}
 })();
 </script>
 
+<!-- SLEEPY_ADS_CLEAN_V1 -->
+<style>
+/* Hide the previous ad host entirely — we don't render ads in-app anymore */
+#ad-host{display:none!important}
+/* If SocialBar injected anything, hide it too (it uses common wrappers) */
+.socialbar-container,.social-bar-container,
+[id^="socialbar"],[class*="social-bar"],[class*="socialbar"],
+iframe[src*="bicea.org"],
+div[style*="position:fixed"][style*="bottom"] > iframe[src*="bicea"]{
+  display:none!important;visibility:hidden!important;pointer-events:none!important;
+}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyAdsClean) return;
+  window.__sleepyAdsClean = true;
+  function log(){ try{console.log.apply(console,["[AdsClean]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  // ------------------------------------------------------------
+  // 1. Kill the SocialBar script before it ever runs
+  // ------------------------------------------------------------
+  function killSocialBar(){
+    // Remove the loader tag if it was already added
+    var tag = document.getElementById('socialbar-js');
+    if (tag && tag.parentElement){ tag.parentElement.removeChild(tag); }
+
+    // Sweep the DOM for anything the SocialBar spawned
+    var sweep = function(){
+      // Common wrappers
+      var selectors = [
+        '.socialbar-container', '.social-bar-container',
+        '[id^="socialbar"]', '[class^="socialbar"]', '[class*="social-bar"]',
+        'iframe[src*="bicea.org"]',
+        'div[data-socialbar]', 'div[id*="socialbar"]'
+      ];
+      selectors.forEach(function(sel){
+        try {
+          document.querySelectorAll(sel).forEach(function(el){
+            // Don't hide our own banner slot; only socialbar stuff
+            if (el.id === 'container-fa854199a041432aa0a5fa0fd34ead52') return;
+            el.style.display = 'none';
+            el.style.visibility = 'hidden';
+            el.style.pointerEvents = 'none';
+          });
+        } catch(e){}
+      });
+    };
+
+    // Run a few times because the SocialBar keeps re-injecting
+    sweep();
+    setTimeout(sweep, 500);
+    setTimeout(sweep, 1500);
+    setTimeout(sweep, 3000);
+    setInterval(sweep, 4000);
+  }
+
+  // ------------------------------------------------------------
+  // 2. Only show NativeBanner on the login screen
+  // ------------------------------------------------------------
+  var BANNER_ID = 'container-fa854199a041432aa0a5fa0fd34ead52';
+
+  function ensureLoginSlot(){
+    var card = document.querySelector('.auth-card');
+    if (!card) return null;
+    var slot = card.querySelector('.ad-slot-login');
+    if (!slot){
+      slot = document.createElement('div');
+      slot.className = 'ad-slot-login';
+      slot.style.cssText = 'margin-top:20px;text-align:center;padding-top:16px;border-top:1px solid var(--border)';
+      slot.innerHTML =
+        '<div style="font-size:9px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;' +
+        'color:var(--text3);opacity:.4;margin-bottom:8px;font-family:JetBrains Mono,monospace">' +
+        'Advertisement</div>';
+      card.appendChild(slot);
+    }
+    return slot;
+  }
+
+  function moveBannerToLogin(){
+    var auth = document.getElementById('auth-screen');
+    if (!auth || auth.classList.contains('hidden')){
+      // Not on login — park the banner off-screen
+      var container = document.getElementById(BANNER_ID);
+      if (container){
+        container.style.position = 'fixed';
+        container.style.left = '-9999px';
+        container.style.top = '0';
+        container.style.width = '1px';
+        container.style.height = '1px';
+        container.style.overflow = 'hidden';
+        container.style.pointerEvents = 'none';
+      }
+      return;
+    }
+    var slot = ensureLoginSlot();
+    var container = document.getElementById(BANNER_ID);
+    if (!container){
+      container = document.createElement('div');
+      container.id = BANNER_ID;
+    }
+    // Reset any hiding we did
+    container.style.position = '';
+    container.style.left = '';
+    container.style.top = '';
+    container.style.width = '';
+    container.style.height = '';
+    container.style.overflow = '';
+    container.style.pointerEvents = '';
+    if (slot && container.parentElement !== slot){
+      slot.appendChild(container);
+    }
+  }
+
+  // ------------------------------------------------------------
+  // 3. Hide the reward card in the game room
+  // ------------------------------------------------------------
+  // The reward card was inside #ad-host which we've hidden with CSS.
+  // Additionally, remove any stray .ad-reward that some patch put
+  // inside the game room body.
+  function killRewardInApp(){
+    if (window.CURRENT && (window.CURRENT.type === 'games' || window.CURRENT.type === 'fishing')){
+      document.querySelectorAll('#chat-body .ad-reward, #chat-body .ad-slot, #chat-body .ad-slot.game-ad').forEach(function(el){
+        el.remove();
+      });
+    }
+  }
+
+  // ------------------------------------------------------------
+  // 4. Boot
+  // ------------------------------------------------------------
+  killSocialBar();
+
+  // Route the banner based on current view every couple of seconds
+  setInterval(function(){
+    moveBannerToLogin();
+    killRewardInApp();
+  }, 1500);
+
+  // Also on chat re-render
+  var origRC = window.renderChat;
+  if (typeof origRC === 'function'){
+    window.renderChat = function(){
+      var r = origRC.apply(this, arguments);
+      setTimeout(killRewardInApp, 60);
+      return r;
+    };
+  }
+
+  // Also run when the game room changes
+  var origOpenGames = window.openGameRoom || window.openGames;
+  if (typeof origOpenGames === 'function'){
+    var wrapped = async function(){
+      var r = await origOpenGames.apply(this, arguments);
+      setTimeout(killRewardInApp, 200);
+      return r;
+    };
+    if (window.openGameRoom) window.openGameRoom = wrapped;
+    else window.openGames = wrapped;
+  }
+
+  log("cleaned");
+})();
+</script>
+
 </body>
 </html>
