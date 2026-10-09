@@ -19860,5 +19860,373 @@ body > div[style*="position:fixed"][style*="bottom"]{
 })();
 </script>
 
+<!-- SLEEPY_GUESTS_V1 -->
+<style>
+.guest-panel{padding:16px;border-radius:12px;border:1px solid rgba(180,74,255,.35);background:rgba(180,74,255,.05);margin-top:22px}
+.guest-panel h4{color:#c4b8ff;font-size:13px;font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em}
+.guest-panel p{font-size:12.5px;color:var(--text2);margin-bottom:12px;line-height:1.5}
+.guest-panel .row{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:12.5px;color:var(--text2);cursor:pointer}
+.guest-panel input[type=checkbox]{accent-color:var(--purple);width:15px;height:15px}
+.guest-panel .num{width:70px;padding:8px 10px;border-radius:8px;background:var(--void);border:1px solid var(--border);color:var(--text);text-align:center;font-family:monospace}
+.guest-panel button{margin-top:10px}
+.guest-list{margin-top:16px;font-family:monospace;font-size:12px;line-height:1.7}
+.guest-item{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--void);border-radius:8px;border:1px solid var(--border);margin-bottom:6px}
+.guest-item .id{flex:1;color:var(--cyan);word-break:break-all}
+.guest-item .pw{flex:1;color:var(--amber);word-break:break-all}
+.guest-item button{width:28px;height:28px;padding:0;margin:0;border-radius:6px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);font-size:11px;cursor:pointer}
+.guest-item button:hover{background:var(--surface3);color:var(--text)}
+.guest-mode-bar{position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(90deg,rgba(180,74,255,.9),rgba(139,124,255,.9));color:#fff;padding:6px 14px;font-size:12px;font-weight:700;text-align:center;letter-spacing:.05em;box-shadow:0 4px 20px rgba(180,74,255,.4);font-family:'Space Grotesk',sans-serif}
+body.guest-mode{padding-top:28px}
+body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
+.guest-login-hint{padding:8px 12px;background:rgba(180,74,255,.1);border:1px solid rgba(180,74,255,.3);border-radius:8px;font-size:12px;color:#c4b8ff;margin-bottom:14px;font-family:'JetBrains Mono',monospace}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyGuestsV1) return;
+  window.__sleepyGuestsV1 = true;
+  function log(){ try{console.log.apply(console,["[Guests]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  var GUEST_EMAIL_DOMAIN = "@guest.sleepychat.local";
+  var GUEST_STATE = null; // { is_guest, owner_id, permissions }
+
+  // ============================================================
+  // 1. Guest auto-login from URL hash
+  // ============================================================
+  // URL format: https://site/#guest=USERNAME:PASSWORD
+
+  function checkGuestLink(){
+    var hash = (location.hash || "").replace(/^#/, "");
+    if (!hash.startsWith("guest=")) return;
+    var rest = hash.slice(6);
+    var idx = rest.indexOf(":");
+    if (idx < 0) return;
+    var username = rest.slice(0, idx);
+    var password = decodeURIComponent(rest.slice(idx + 1));
+
+    var liUser = document.getElementById("li-email");
+    var liPass = document.getElementById("li-pass");
+    if (!liUser || !liPass) return;
+
+    liUser.value = username + GUEST_EMAIL_DOMAIN;
+    liPass.value = password;
+
+    // Show a hint
+    var card = document.querySelector(".auth-card");
+    if (card && !card.querySelector(".guest-login-hint")){
+      var hint = document.createElement("div");
+      hint.className = "guest-login-hint";
+      hint.textContent = "\uD83D\uDD10 Guest link detected \u2014 signing you in as " + username;
+      card.insertBefore(hint, card.firstChild);
+    }
+
+    // Auto-submit
+    setTimeout(function(){
+      var form = document.getElementById("form-login");
+      if (form) form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    }, 300);
+
+    // Clean URL
+    setTimeout(function(){
+      history.replaceState(null, "", location.pathname);
+    }, 800);
+  }
+
+  // ============================================================
+  // 2. Detect guest on login and load permissions
+  // ============================================================
+  async function loadGuestState(){
+    if (!window.ME) return null;
+    try {
+      var r = await sb.from("profiles")
+        .select("is_guest, guest_owner_id")
+        .eq("id", window.ME.id)
+        .maybeSingle();
+      if (!r.data || !r.data.is_guest){
+        GUEST_STATE = { is_guest: false };
+        return GUEST_STATE;
+      }
+      var p = await sb.from("guest_permissions")
+        .select("*").eq("user_id", window.ME.id).maybeSingle();
+      GUEST_STATE = {
+        is_guest: true,
+        owner_id: r.data.guest_owner_id,
+        permissions: p.data || {
+          can_play_games: false,
+          can_use_voice: false,
+          can_use_dms: false,
+          can_use_servers: true,
+          can_send_messages: true,
+          allowed_server_ids: []
+        }
+      };
+      log("guest mode:", GUEST_STATE.permissions);
+      return GUEST_STATE;
+    } catch(e){
+      log("guest state load failed:", e.message);
+      return null;
+    }
+  }
+
+  // ============================================================
+  // 3. Apply guest restrictions to the UI
+  // ============================================================
+  function applyGuestGating(){
+    if (!GUEST_STATE || !GUEST_STATE.is_guest) {
+      document.body.classList.remove("guest-mode");
+      var old = document.getElementById("guest-mode-bar");
+      if (old) old.remove();
+      return;
+    }
+
+    document.body.classList.add("guest-mode");
+
+    // Top banner
+    if (!document.getElementById("guest-mode-bar")){
+      var bar = document.createElement("div");
+      bar.id = "guest-mode-bar";
+      bar.className = "guest-mode-bar";
+      bar.textContent = "\uD83D\uDD10 Guest account \u2014 some features are disabled by your host";
+      document.body.appendChild(bar);
+    }
+
+    var p = GUEST_STATE.permissions;
+
+    // Hide game / fishing / arcade rail buttons
+    if (!p.can_play_games){
+      document.querySelectorAll(".rail-btn.games-btn, .rail-btn.game-btn, .rail-btn.fishing-btn").forEach(function(b){
+        b.style.display = "none";
+      });
+    }
+
+    // Hide voice channels from the channel list
+    if (!p.can_use_voice){
+      document.querySelectorAll('[data-channel]').forEach(function(b){
+        var ch = (window.CHANNELS || []).find(function(c){ return c.id === b.dataset.channel; });
+        if (ch && (ch.type === "voice" || ch.type === "video")){
+          b.style.display = "none";
+        }
+      });
+    }
+
+    // Hide DM / group DM entry points if DMs are disabled
+    if (!p.can_use_dms){
+      document.querySelectorAll('[data-act="friends"], [data-act="newgroup"], [data-conv]').forEach(function(el){
+        el.style.display = "none";
+      });
+      document.querySelectorAll('[data-rail="home"]').forEach(function(el){
+        el.style.display = "none";
+      });
+    }
+
+    // Block profile edit for guests (they shouldn't change identity)
+    document.querySelectorAll('[data-act="settings"], [data-act="profile"], [data-pd="edit"]').forEach(function(el){
+      el.style.display = "none";
+    });
+  }
+
+  // Re-apply on every render pass
+  setInterval(applyGuestGating, 800);
+
+  // ============================================================
+  // 4. Block forbidden actions at click time
+  // ============================================================
+  document.addEventListener("click", function(e){
+    if (!GUEST_STATE || !GUEST_STATE.is_guest) return;
+    var p = GUEST_STATE.permissions;
+
+    var gamesBtn = e.target.closest(".rail-btn.games-btn, .rail-btn.game-btn, .rail-btn.fishing-btn");
+    if (gamesBtn && !p.can_play_games){
+      e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+      window.toast("Not allowed", "Your host has disabled games.", "err");
+      return;
+    }
+
+    var convBtn = e.target.closest("[data-conv], [data-act='friends'], [data-act='newgroup']");
+    if (convBtn && !p.can_use_dms){
+      e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+      window.toast("Not allowed", "Your host has disabled direct messages.", "err");
+      return;
+    }
+
+    var voiceBtn = e.target.closest("[data-voice-action='join-voice'], [data-voice-action='join-video']");
+    if (voiceBtn && !p.can_use_voice){
+      e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+      window.toast("Not allowed", "Your host has disabled voice chat.", "err");
+      return;
+    }
+  }, true);
+
+  // ============================================================
+  // 5. Owner panel — generate guests
+  // ============================================================
+  async function buildOwnerPanel(){
+    // Only show for full accounts
+    var me = window.PROFILES[window.ME.id] || window.ME;
+    if (me && me.is_guest) return "";
+
+    var html = '<div class="guest-panel" id="guest-panel">' +
+      '<h4>\uD83D\uDD10 Managed Guest Accounts</h4>' +
+      '<p>Create temporary accounts with limited permissions. Great for onboarding people into a focused work space without giving them full access to the server.</p>' +
+      '<div class="row"><label style="display:flex;align-items:center;gap:8px;flex:1"><input type="checkbox" id="gp-games"> Allow games</label></div>' +
+      '<div class="row"><label style="display:flex;align-items:center;gap:8px;flex:1"><input type="checkbox" id="gp-voice" checked> Allow voice chat</label></div>' +
+      '<div class="row"><label style="display:flex;align-items:center;gap:8px;flex:1"><input type="checkbox" id="gp-dms"> Allow DMs</label></div>' +
+      '<div class="row"><label style="display:flex;align-items:center;gap:8px;flex:1"><input type="checkbox" id="gp-msgs" checked> Allow sending messages</label></div>' +
+      '<div class="row"><label style="display:flex;align-items:center;gap:8px;flex:1"><input type="checkbox" id="gp-shared"> Use same password for all</label></div>' +
+      '<div class="row" style="gap:12px"><span style="flex:1">How many guests?</span><input type="number" id="gp-count" class="num" min="1" max="20" value="3"></div>' +
+      '<button class="btn primary" id="gp-generate" style="width:100%">Generate Guest Accounts</button>' +
+      '<div class="guest-list" id="guest-list"></div>' +
+    '</div>';
+    return html;
+  }
+
+  function renderGuestList(accounts, baseUrl){
+    var list = document.getElementById("guest-list");
+    if (!list) return;
+    if (!accounts.length){
+      list.innerHTML = "";
+      return;
+    }
+    var html = '<div style="font-weight:700;color:var(--text);margin:14px 0 8px">\u2705 ' + accounts.length + ' account' + (accounts.length === 1 ? '' : 's') + ' created</div>';
+    accounts.forEach(function(a){
+      var link = baseUrl + "#guest=" + encodeURIComponent(a.username) + ":" + encodeURIComponent(a.password);
+      html += '<div class="guest-item">' +
+        '<span class="id">' + a.username + '</span>' +
+        '<span class="pw">' + a.password + '</span>' +
+        '<button data-copy-text="' + a.username + ':' + a.password + '" title="Copy username:password">Copy</button>' +
+        '<button data-copy-link="' + link.replace(/"/g, '&quot;') + '" title="Copy share link">Link</button>' +
+      '</div>';
+    });
+    html += '<p style="font-size:11.5px;color:var(--text3);margin-top:10px;line-height:1.5">' +
+      'Send each guest their username and password. The "Link" button gives you a URL that auto-fills the login form and signs them in on open.</p>';
+    list.innerHTML = html;
+  }
+
+  document.addEventListener("click", async function(e){
+    var gen = e.target.closest("#gp-generate");
+    if (gen){
+      gen.disabled = true;
+      var orig = gen.textContent;
+      gen.textContent = "Generating\u2026";
+
+      var payload = {
+        count: parseInt(document.getElementById("gp-count").value, 10) || 1,
+        sharedPassword: document.getElementById("gp-shared").checked,
+        permissions: {
+          can_play_games:    document.getElementById("gp-games").checked,
+          can_use_voice:     document.getElementById("gp-voice").checked,
+          can_use_dms:       document.getElementById("gp-dms").checked,
+          can_send_messages: document.getElementById("gp-msgs").checked,
+          can_use_servers:   true,
+          allowed_server_ids: []
+        }
+      };
+
+      try {
+        var s = await sb.auth.getSession();
+        var token = s && s.data && s.data.session ? s.data.session.access_token : null;
+        if (!token) throw new Error("Not signed in");
+
+        var res = await fetch(SUPABASE_URL + "/functions/v1/create-guests", {
+          method: "POST",
+          headers: {
+            "Authorization": "Bearer " + token,
+            "apikey": SUPABASE_ANON_KEY,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok){
+          var text = await res.text();
+          throw new Error("Function " + res.status + ": " + text.slice(0, 120));
+        }
+
+        var data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        renderGuestList(data.accounts || [], location.origin + location.pathname);
+        window.toast("Created", data.accounts.length + " guest account(s) ready.", "ok");
+      } catch(err){
+        log("generate failed:", err.message);
+        window.toast("Could not create guests", err.message || String(err), "err");
+      } finally {
+        gen.disabled = false;
+        gen.textContent = orig;
+      }
+      return;
+    }
+
+    var copyBtn = e.target.closest("[data-copy-text]");
+    if (copyBtn){
+      navigator.clipboard.writeText(copyBtn.dataset.copyText);
+      window.toast("Copied", "Credentials copied.", "ok");
+      return;
+    }
+    var linkBtn = e.target.closest("[data-copy-link]");
+    if (linkBtn){
+      navigator.clipboard.writeText(linkBtn.dataset.copyLink);
+      window.toast("Copied", "Share link copied.", "ok");
+      return;
+    }
+  }, true);
+
+  // Inject the panel into the Settings modal
+  var origOpenSettings = window.openSettings;
+  if (typeof origOpenSettings === "function"){
+    window.openSettings = function(){
+      var r = origOpenSettings.apply(this, arguments);
+      setTimeout(async function(){
+        var body = document.getElementById("modal-body");
+        if (!body) return;
+        if (body.querySelector(".guest-panel")) return;
+        var me = window.PROFILES[window.ME.id] || window.ME;
+        if (me && me.is_guest) return;
+        var html = await buildOwnerPanel();
+        if (!html) return;
+        var holder = document.createElement("div");
+        holder.innerHTML = html;
+        while (holder.firstElementChild) body.appendChild(holder.firstElementChild);
+      }, 200);
+      return r;
+    };
+  }
+
+  // ============================================================
+  // 6. Boot
+  // ============================================================
+  async function boot(){
+    // Check URL for guest link
+    checkGuestLink();
+
+    // Wait for session
+    var tries = 0;
+    while (!window.ME && tries++ < 100){
+      await new Promise(function(r){ setTimeout(r, 120); });
+    }
+    if (!window.ME) return;
+
+    // Load guest state
+    await loadGuestState();
+    applyGuestGating();
+
+    // If guest, block the game room function entirely
+    if (GUEST_STATE && GUEST_STATE.is_guest && !GUEST_STATE.permissions.can_play_games){
+      window.openGameRoom = function(){ window.toast("Not allowed", "Your host has disabled games.", "err"); };
+      window.openGames = window.openGameRoom;
+      window.openFishing = window.openGameRoom;
+    }
+    if (GUEST_STATE && GUEST_STATE.is_guest && !GUEST_STATE.permissions.can_use_dms){
+      window.openDMWith = function(){ window.toast("Not allowed", "Your host has disabled DMs.", "err"); };
+    }
+    if (GUEST_STATE && GUEST_STATE.is_guest && !GUEST_STATE.permissions.can_use_voice){
+      window.joinVoice = function(){ window.toast("Not allowed", "Your host has disabled voice.", "err"); };
+    }
+    log("guest system online");
+  }
+  boot();
+})();
+</script>
+
 </body>
 </html>
