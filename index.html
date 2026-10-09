@@ -20228,5 +20228,789 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
 })();
 </script>
 
+<!-- SLEEPY_USERNAME_LOGIN_V1 -->
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyUsernameLogin) return;
+  window.__sleepyUsernameLogin = true;
+  function log(){ try{console.log.apply(console,["[UserLogin]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  var GUEST_DOMAIN = "@guest.sleepychat.local";
+
+  // ============================================================
+  // 1. Replace doLogin with one that accepts email OR username
+  // ============================================================
+  window.doLogin = async function(input, password){
+    input = String(input || "").trim();
+    if (!input) throw new Error("Enter your email or username.");
+    if (!password) throw new Error("Enter your password.");
+
+    // Email path: contains @ and doesn't look like a guest address
+    var looksLikeEmail = input.indexOf("@") >= 0;
+
+    if (looksLikeEmail){
+      var r = await sb.auth.signInWithPassword({ email: input, password: password });
+      if (r.error) throw r.error;
+      return r.data;
+    }
+
+    // Username path: hit the edge function
+    var username = input.toLowerCase();
+    if (!/^[a-z0-9_]{3,24}$/.test(username)){
+      throw new Error("Username must be 3-24 chars: a-z, 0-9, underscore.");
+    }
+
+    var res = await fetch(SUPABASE_URL + "/functions/v1/username-login", {
+      method: "POST",
+      headers: {
+        "apikey": SUPABASE_ANON_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ username: username, password: password })
+    });
+
+    var data = {};
+    try { data = await res.json(); } catch(e){}
+
+    if (!res.ok || !data.session){
+      var msg = data.error || ("Login failed (" + res.status + ")");
+      if (res.status === 404) msg = "No account with that username.";
+      if (res.status === 401) msg = "Incorrect password.";
+      throw new Error(msg);
+    }
+
+    var setRes = await sb.auth.setSession({
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token
+    });
+    if (setRes.error) throw setRes.error;
+    log("signed in as", username);
+    return data;
+  };
+
+  // ============================================================
+  // 2. Change the login form label to "Email or Username"
+  // ============================================================
+  function relabelForm(){
+    var liLabel = document.querySelector('label[for="li-email"]');
+    if (liLabel && liLabel.textContent.trim() !== "Email or Username"){
+      liLabel.textContent = "Email or Username";
+    }
+    var liInput = document.getElementById("li-email");
+    if (liInput && liInput.type === "email"){
+      liInput.type = "text";
+      liInput.setAttribute("autocomplete", "username");
+      liInput.placeholder = "you@example.com or username";
+    }
+  }
+  setInterval(relabelForm, 1500);
+  relabelForm();
+
+  // ============================================================
+  // 3. Guest link auto-login — use username directly
+  // ============================================================
+  function checkGuestLink(){
+    var hash = (location.hash || "").replace(/^#/, "");
+    if (!hash.startsWith("guest=")) return;
+    var rest = hash.slice(6);
+    var idx = rest.indexOf(":");
+    if (idx < 0) return;
+    var username = rest.slice(0, idx);
+    var password = decodeURIComponent(rest.slice(idx + 1));
+
+    var liUser = document.getElementById("li-email");
+    var liPass = document.getElementById("li-pass");
+    if (!liUser || !liPass) return;
+
+    liUser.value = username;
+    liPass.value = password;
+    relabelForm();
+
+    var card = document.querySelector(".auth-card");
+    if (card && !card.querySelector(".guest-login-hint")){
+      var hint = document.createElement("div");
+      hint.className = "guest-login-hint";
+      hint.style.cssText = "padding:8px 12px;background:rgba(180,74,255,.1);border:1px solid rgba(180,74,255,.3);border-radius:8px;font-size:12px;color:#c4b8ff;margin-bottom:14px;font-family:'JetBrains Mono',monospace";
+      hint.textContent = "\uD83D\uDD10 Guest link detected \u2014 signing you in as " + username;
+      card.insertBefore(hint, card.firstChild);
+    }
+
+    setTimeout(function(){
+      var form = document.getElementById("form-login");
+      if (form) form.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+    }, 300);
+
+    setTimeout(function(){
+      history.replaceState(null, "", location.pathname);
+    }, 800);
+  }
+
+  // Run on load and after a beat in case the DOM hasn't rendered yet
+  checkGuestLink();
+  setTimeout(checkGuestLink, 400);
+
+  // ============================================================
+  // 4. Also stop the signup form from rejecting guest-style addresses
+  // ============================================================
+  // (No change needed here — regular signups still require real email.
+  //  Guests are created through the edge function and never hit this form.)
+
+  log("username login ready");
+})();
+</script>
+<!-- SLEEPY_INVITE_LINKS_V2 -->
+<style>
+.ilink-overlay{position:fixed;inset:0;z-index:600;background:rgba(4,4,8,.82);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:20px}
+.ilink-modal{width:100%;max-width:560px;background:var(--surface);border:1px solid var(--border);border-radius:18px;box-shadow:0 30px 90px rgba(0,0,0,.75);max-height:88vh;display:flex;flex-direction:column;animation:mIn .26s var(--ease) both}
+.ilink-list{display:flex;flex-direction:column;gap:8px;margin:8px 0 18px}
+.ilink-row{padding:12px 14px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ilink-row.inactive{opacity:.5}
+.ilink-row .code{font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--cyan);word-break:break-all;flex:1;min-width:0}
+.ilink-row .meta{font-size:11px;color:var(--text3);width:100%;line-height:1.55}
+.ilink-row .perm-chips{display:flex;gap:4px;flex-wrap:wrap;width:100%;margin-top:4px}
+.perm-chip{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 7px;border-radius:99px;background:rgba(74,222,128,.15);color:var(--green)}
+.perm-chip.off{background:rgba(120,120,140,.2);color:var(--text3)}
+.ilink-row button{padding:6px 11px;border-radius:7px;font-size:11.5px;font-weight:600;border:1px solid var(--border);background:var(--surface2);color:var(--text2);cursor:pointer;transition:all .14s;font-family:inherit}
+.ilink-row button:hover{color:var(--text);border-color:var(--border2)}
+.ilink-row button.primary{background:linear-gradient(135deg,var(--cyan),#00c9b4);color:#04120f;border-color:transparent;font-weight:700}
+.ilink-row button.danger{color:#ff7aa2;border-color:rgba(255,45,111,.35);background:rgba(255,45,111,.1)}
+
+.perm-toggle{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:9px;background:rgba(255,255,255,.03);border:1px solid var(--border);margin-bottom:6px;cursor:pointer}
+.perm-toggle input{accent-color:var(--cyan);width:15px;height:15px;cursor:pointer}
+.perm-toggle .lbl{flex:1;font-size:13px;color:var(--text);font-weight:500}
+.perm-toggle .sub{font-size:11px;color:var(--text3);display:block;margin-top:1px;font-weight:400}
+
+/* Account switcher */
+.as-menu{position:fixed;z-index:640;min-width:280px;background:var(--surface2);border:1px solid var(--border);border-radius:12px;padding:6px;box-shadow:0 20px 55px rgba(0,0,0,.75);animation:mIn .15s var(--ease) both}
+.as-menu .as-head{padding:8px 10px 6px;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--text3);font-family:'JetBrains Mono',monospace}
+.as-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;font-size:13px;color:var(--text2);cursor:pointer;transition:all .12s;border:none;background:none;width:100%;text-align:left;font-family:inherit}
+.as-item:hover{background:rgba(255,255,255,.06);color:var(--text)}
+.as-item.active{background:rgba(94,231,215,.12);color:var(--cyan);box-shadow:inset 0 0 0 1px rgba(94,231,215,.3)}
+.as-item .as-av{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#5ee7d7,#8b7cff);color:#04120f;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex:none;font-family:'Space Grotesk',sans-serif}
+.as-item .as-body{flex:1;min-width:0}
+.as-item .as-name{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.as-item .as-user{font-size:11px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.as-item .as-del{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--text3);flex:none;font-size:14px}
+.as-item .as-del:hover{background:rgba(255,45,111,.15);color:#ff7aa2}
+.as-sep{height:1px;background:var(--border);margin:5px 2px}
+.as-add{color:var(--cyan)!important;font-weight:600}
+.as-add:hover{background:rgba(94,231,215,.1)!important}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyInviteLinksV2) return;
+  window.__sleepyInviteLinksV2 = true;
+  function log(){ try{console.log.apply(console,["[Link]"].concat([].slice.call(arguments)));}catch(e){} }
+  function esc(s){ return window.esc(s); }
+
+  // ============================================================
+  // 1. URL HANDLING — #invite=CODE
+  // ============================================================
+  var PENDING_INVITE_KEY = "sleepychat.pending_invite";
+
+  function readInviteFromHash(){
+    var h = (location.hash || "").replace(/^#/, "");
+    if (!h) return null;
+    var parts = h.split("&");
+    for (var i = 0; i < parts.length; i++){
+      var kv = parts[i].split("=");
+      if (kv[0] === "invite") return decodeURIComponent(kv[1] || "");
+    }
+    return null;
+  }
+
+  async function tryConsumeInvite(){
+    var code = readInviteFromHash();
+    if (!code){
+      try { code = localStorage.getItem(PENDING_INVITE_KEY); } catch(e){}
+    }
+    if (!code) return;
+
+    // Wait for the auth + boot to settle
+    if (!window.ME){
+      try { localStorage.setItem(PENDING_INVITE_KEY, code); } catch(e){}
+      return;
+    }
+
+    try {
+      var r = await sb.rpc("redeem_invite_link", { p_code: code });
+      if (r.error) throw r.error;
+      var data = r.data || {};
+      if (data.error) throw new Error(data.error);
+
+      // Clear pending + hash
+      try { localStorage.removeItem(PENDING_INVITE_KEY); } catch(e){}
+      try { history.replaceState(null, "", location.pathname); } catch(e){}
+
+      await window.loadServers();
+      window.renderRail && window.renderRail();
+      if (data.server_id && window.goServer){
+        await window.goServer(data.server_id);
+      }
+      window.toast("Joined", "You're in!", "ok");
+    } catch(e){
+      log("invite redeem failed:", e.message);
+      try { localStorage.removeItem(PENDING_INVITE_KEY); } catch(er){}
+      try { history.replaceState(null, "", location.pathname); } catch(er){}
+      window.toast("Invite failed", e.message || String(e), "err");
+    }
+  }
+
+  // ============================================================
+  // 2. PERMISSION GATING — server_member_permissions
+  // ============================================================
+  var PERMS_CACHE = {}; // serverId -> perms
+
+  async function loadPermsFor(serverId){
+    if (!serverId) return null;
+    if (PERMS_CACHE[serverId]) return PERMS_CACHE[serverId];
+    try {
+      var r = await sb.from("server_member_permissions").select("*")
+        .eq("server_id", serverId).eq("user_id", window.ME.id).maybeSingle();
+      PERMS_CACHE[serverId] = r.data || null;
+    } catch(e){ PERMS_CACHE[serverId] = null; }
+    return PERMS_CACHE[serverId];
+  }
+  window.__memberPerms = function(){
+    var sid = window.CURRENT && window.CURRENT.server ? window.CURRENT.server.id : null;
+    if (!sid) return null;
+    return PERMS_CACHE[sid] || null;
+  };
+
+  function gateUI(){
+    if (!window.ME) return;
+    var sid = window.CURRENT && window.CURRENT.server ? window.CURRENT.server.id : null;
+    var p = sid ? PERMS_CACHE[sid] : null;
+    var body = document.body;
+
+    // If we don't have perms for this server, treat as full access
+    var games = !p || p.can_play_games;
+    var voice = !p || p.can_use_voice;
+    var dms   = !p || p.can_use_dms;
+
+    // Rail buttons
+    document.querySelectorAll(".rail-btn.games-btn, .rail-btn.game-btn, .rail-btn.fishing-btn").forEach(function(b){
+      b.style.display = games ? "" : "none";
+    });
+    // DM / home rail
+    document.querySelectorAll('[data-rail="home"], [data-act="friends"], [data-act="newgroup"]').forEach(function(el){
+      el.style.display = dms ? "" : "none";
+    });
+    // Voice channels in sidebar
+    document.querySelectorAll('[data-channel]').forEach(function(b){
+      var ch = (window.CHANNELS || []).find(function(c){ return c.id === b.dataset.channel; });
+      if (ch && (ch.type === "voice" || ch.type === "video")){
+        b.style.display = voice ? "" : "none";
+      }
+    });
+  }
+
+  // Hook goServer to load permissions first
+  var origGoServer = window.goServer;
+  if (typeof origGoServer === "function"){
+    window.goServer = async function(sid){
+      if (window.ME) await loadPermsFor(sid);
+      var r = await origGoServer.apply(this, arguments);
+      setTimeout(gateUI, 40);
+      return r;
+    };
+  }
+  // Hook goHome
+  var origGoHome = window.goHome;
+  if (typeof origGoHome === "function"){
+    window.goHome = async function(){
+      var r = await origGoHome.apply(this, arguments);
+      setTimeout(gateUI, 40);
+      return r;
+    };
+  }
+  setInterval(gateUI, 900);
+
+  // Block clicks on forbidden actions
+  document.addEventListener("click", function(e){
+    var p = window.__memberPerms();
+    if (!p) return;
+
+    var gamesBtn = e.target.closest(".rail-btn.games-btn, .rail-btn.game-btn, .rail-btn.fishing-btn");
+    if (gamesBtn && !p.can_play_games){
+      e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+      window.toast("Not allowed", "Games are disabled for your account on this server.", "err");
+      return;
+    }
+    var voiceBtn = e.target.closest("[data-voice-action='join-voice'], [data-voice-action='join-video']");
+    if (voiceBtn && !p.can_use_voice){
+      e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+      window.toast("Not allowed", "Voice is disabled for your account on this server.", "err");
+      return;
+    }
+    var dmBtn = e.target.closest("[data-conv], [data-act='friends'], [data-act='newgroup']");
+    if (dmBtn && !p.can_use_dms){
+      e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+      window.toast("Not allowed", "Direct messages are disabled for your account on this server.", "err");
+      return;
+    }
+  }, true);
+
+  // Block message sending if can_send_messages is false
+  document.addEventListener("keydown", function(e){
+    if (e.key !== "Enter" || e.shiftKey) return;
+    var ta = e.target;
+    if (!ta || ta.id !== "composer-input") return;
+    var p = window.__memberPerms();
+    if (p && p.can_send_messages === false){
+      e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+      window.toast("Not allowed", "Sending messages is disabled for your account on this server.", "err");
+      ta.value = "";
+    }
+  }, true);
+  document.addEventListener("click", function(e){
+    var send = e.target.closest("#send-btn");
+    if (!send) return;
+    var p = window.__memberPerms();
+    if (p && p.can_send_messages === false){
+      e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+      window.toast("Not allowed", "Sending messages is disabled for your account on this server.", "err");
+      var ta = document.getElementById("composer-input");
+      if (ta) ta.value = "";
+    }
+  }, true);
+
+  // ============================================================
+  // 3. OWNER UI — Manage invite links
+  // ============================================================
+  async function openInviteLinksManager(){
+    if (!window.CURRENT || !window.CURRENT.server) return;
+    var srv = window.CURRENT.server;
+    if (srv.owner_id !== window.ME.id){
+      return window.toast("Owner only", "Only the server owner can manage invite links.", "err");
+    }
+    var sid = srv.id;
+
+    // Fetch current links
+    var r = await sb.from("server_invite_links").select("*")
+      .eq("server_id", sid).order("created_at", { ascending: false });
+    var links = r.data || [];
+
+    var body =
+      '<div style="font-size:12.5px;color:var(--text2);line-height:1.55;margin-bottom:14px">' +
+      'Generate a dedicated link. Anyone who opens it will join this server automatically with exactly the permissions you set. Server IDs are hidden — the link only shows an opaque random code.' +
+      '</div>' +
+      '<button class="btn primary block" id="ilink-new" style="margin-bottom:14px">+ Create new invite link</button>' +
+      '<div class="ilink-list" id="ilink-list"></div>';
+
+    window.openModal("Invite Links — " + esc(srv.name), body, {
+      wide: true,
+      footer: '<button class="btn" id="ilink-close">Done</button>',
+      onMount: function(){
+        document.getElementById("ilink-close").onclick = window.closeModal;
+        renderLinks(links, sid);
+        document.getElementById("ilink-new").onclick = function(){
+          openCreateLinkModal(sid, function(){
+            // Refresh
+            sb.from("server_invite_links").select("*").eq("server_id", sid).order("created_at", { ascending: false })
+              .then(function(resp){
+                renderLinks(resp.data || [], sid);
+              });
+          });
+        };
+      }
+    });
+  }
+
+  function renderLinks(links, sid){
+    var list = document.getElementById("ilink-list");
+    if (!list) return;
+    if (!links.length){
+      list.innerHTML = '<div style="padding:16px;text-align:center;color:var(--text3);font-size:12.5px;border:1px dashed var(--border);border-radius:10px">No links yet. Create one above.</div>';
+      return;
+    }
+    var baseUrl = location.origin + location.pathname;
+    list.innerHTML = links.map(function(l){
+      var p = l.permissions || {};
+      var expired = l.expires_at && new Date(l.expires_at) < new Date();
+      var capped = l.max_uses != null && l.uses >= l.max_uses;
+      var inactive = !l.active || expired || capped;
+      var share = baseUrl + "#invite=" + l.code;
+      var chips = "";
+      chips += '<span class="perm-chip' + (p.can_play_games ? "" : " off") + '">Games</span>';
+      chips += '<span class="perm-chip' + (p.can_use_voice ? "" : " off") + '">Voice</span>';
+      chips += '<span class="perm-chip' + (p.can_use_dms ? "" : " off") + '">DMs</span>';
+      chips += '<span class="perm-chip' + (p.can_send_messages === false ? " off" : "") + '">Chat</span>';
+      var uses = l.max_uses != null ? (l.uses + "/" + l.max_uses) : (l.uses + " uses");
+      var expiry = l.expires_at ? new Date(l.expires_at).toLocaleDateString() : "no expiry";
+      return '<div class="ilink-row' + (inactive ? " inactive" : "") + '">' +
+        '<span class="code">' + esc(l.code) + '</span>' +
+        '<button class="primary" data-copy-link="' + esc(share) + '">Copy link</button>' +
+        '<button data-copy-code="' + esc(l.code) + '">Copy code</button>' +
+        (l.active ? '<button class="danger" data-deactivate="' + esc(l.id) + '">Deactivate</button>'
+                  : '<button class="danger" data-delete="' + esc(l.id) + '">Delete</button>') +
+        '<div class="meta">' + uses + ' · ' + expiry + (inactive ? ' · <b style="color:#ff8aa2">inactive</b>' : '') + '</div>' +
+        '<div class="perm-chips">' + chips + '</div>' +
+      '</div>';
+    }).join("");
+
+    list.onclick = async function(e){
+      var cl = e.target.closest("[data-copy-link]");
+      if (cl){
+        navigator.clipboard.writeText(cl.dataset.copyLink);
+        window.toast("Copied", "Link copied to clipboard.", "ok");
+        return;
+      }
+      var cc = e.target.closest("[data-copy-code]");
+      if (cc){
+        navigator.clipboard.writeText(cc.dataset.copyCode);
+        window.toast("Copied", "Code copied.", "ok");
+        return;
+      }
+      var de = e.target.closest("[data-deactivate]");
+      if (de){
+        await sb.from("server_invite_links").update({ active: false }).eq("id", de.dataset.deactivate);
+        window.toast("Deactivated", "New users can't use this link.", "ok");
+        var resp = await sb.from("server_invite_links").select("*").eq("server_id", sid).order("created_at", { ascending: false });
+        renderLinks(resp.data || [], sid);
+        return;
+      }
+      var dl = e.target.closest("[data-delete]");
+      if (dl){
+        await sb.from("server_invite_links").delete().eq("id", dl.dataset.delete);
+        window.toast("Deleted", "", "ok");
+        var resp2 = await sb.from("server_invite_links").select("*").eq("server_id", sid).order("created_at", { ascending: false });
+        renderLinks(resp2.data || [], sid);
+      }
+    };
+  }
+
+  function openCreateLinkModal(sid, onDone){
+    var body =
+      '<div style="font-size:12.5px;color:var(--text2);margin-bottom:14px;line-height:1.55">' +
+      'Pick what people joining through this link are allowed to do. You can change this per link.' +
+      '</div>' +
+      '<label class="perm-toggle"><input type="checkbox" id="nl-games" checked><span class="lbl">Allow games<span class="sub">Play Daily Word, Fishing, Tic-Tac-Toe etc.</span></span></label>' +
+      '<label class="perm-toggle"><input type="checkbox" id="nl-voice" checked><span class="lbl">Allow voice chat<span class="sub">Join voice & video channels.</span></span></label>' +
+      '<label class="perm-toggle"><input type="checkbox" id="nl-dms" checked><span class="lbl">Allow DMs<span class="sub">Start new direct messages with people.</span></span></label>' +
+      '<label class="perm-toggle"><input type="checkbox" id="nl-msgs" checked><span class="lbl">Allow sending messages<span class="sub">Turn off to make them read-only.</span></span></label>' +
+      '<hr style="border:none;border-top:1px solid var(--border);margin:16px 0">' +
+      '<div class="field"><label>Maximum uses (optional)</label><input id="nl-max" type="number" min="1" placeholder="Leave blank for unlimited"></div>' +
+      '<div class="field"><label>Expires in days (optional)</label><input id="nl-days" type="number" min="1" placeholder="Leave blank for never"></div>';
+
+    window.openModal("Create Invite Link", body, {
+      footer: '<button class="btn" id="nl-cancel">Cancel</button><button class="btn primary" id="nl-create">Generate Link</button>',
+      onMount: function(){
+        document.getElementById("nl-cancel").onclick = window.closeModal;
+        document.getElementById("nl-create").onclick = async function(){
+          var btn = document.getElementById("nl-create");
+          btn.disabled = true; btn.textContent = "Creating…";
+          try {
+            var perms = {
+              can_play_games:    document.getElementById("nl-games").checked,
+              can_use_voice:     document.getElementById("nl-voice").checked,
+              can_use_dms:       document.getElementById("nl-dms").checked,
+              can_send_messages: document.getElementById("nl-msgs").checked
+            };
+            var maxUses = document.getElementById("nl-max").value;
+            var days = document.getElementById("nl-days").value;
+            var expires = days ? new Date(Date.now() + parseInt(days, 10) * 86400000).toISOString() : null;
+
+            var r = await sb.rpc("create_invite_link", {
+              p_server: sid,
+              p_permissions: perms,
+              p_max_uses: maxUses ? parseInt(maxUses, 10) : null,
+              p_expires_at: expires
+            });
+            if (r.error) throw new Error(r.error.message || String(r.error));
+            var data = r.data || {};
+            if (data.error) throw new Error(data.error);
+
+            var link = location.origin + location.pathname + "#invite=" + data.code;
+            try { await navigator.clipboard.writeText(link); } catch(e){}
+
+            window.closeModal();
+            window.toast("Link created & copied", "Share it with anyone you want in.", "ok");
+            if (onDone) onDone();
+          } catch(e){
+            window.toast("Failed to create", e.message || String(e), "err");
+            btn.disabled = false; btn.textContent = "Generate Link";
+          }
+        };
+      }
+    });
+  }
+
+  // Add "Invite Links" to the server menu (owner only)
+  var origOpenServerMenu = window.openServerMenu;
+  if (typeof origOpenServerMenu === "function"){
+    window.openServerMenu = function(x, y){
+      if (!window.CURRENT.server) return origOpenServerMenu.apply(this, arguments);
+      var srv = window.CURRENT.server;
+      if (srv.owner_id !== window.ME.id) return origOpenServerMenu.apply(this, arguments);
+
+      // Capture original items by hooking openMenu
+      var _origOpenMenu = window.openMenu;
+      window.openMenu = function(mx, my, items){
+        items.push({ sep: true });
+        items.push({
+          id: "ilink",
+          label: "Invite Links",
+          icon: window.SVG.users,
+          onClick: openInviteLinksManager
+        });
+        return _origOpenMenu.call(this, mx, my, items);
+      };
+      try {
+        return origOpenServerMenu.apply(this, arguments);
+      } finally {
+        // restore after one tick
+        setTimeout(function(){ window.openMenu = _origOpenMenu; }, 0);
+      }
+    };
+  }
+
+  // Also drop it in Server Settings
+  var origOpenServerSettings = window.openServerSettings;
+  if (typeof origOpenServerSettings === "function"){
+    window.openServerSettings = function(sid){
+      var r = origOpenServerSettings.apply(this, arguments);
+      setTimeout(function(){
+        var body = document.getElementById("ss-body");
+        if (!body) return;
+        var nav = body.querySelector(".ss-nav");
+        if (!nav || nav.querySelector('[data-tab="invite-links"]')) return;
+        var btn = document.createElement("button");
+        btn.dataset.tab = "invite-links";
+        btn.innerHTML =
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>' +
+          '<span>Invite Links</span>';
+        btn.onclick = function(){
+          window.closeModal();
+          setTimeout(openInviteLinksManager, 80);
+        };
+        nav.appendChild(btn);
+      }, 200);
+      return r;
+    };
+  }
+
+  // ============================================================
+  // 4. ACCOUNT SWITCHER
+  // ============================================================
+  var ACC_KEY = "sleepychat.accounts";
+
+  function loadAccounts(){
+    try { return JSON.parse(localStorage.getItem(ACC_KEY) || "[]"); }
+    catch(e){ return []; }
+  }
+  function saveAccounts(list){
+    try { localStorage.setItem(ACC_KEY, JSON.stringify(list)); } catch(e){}
+  }
+
+  // Remember current session
+  async function snapshotCurrent(){
+    if (!window.SESSION || !window.ME) return;
+    var s = window.SESSION;
+    var list = loadAccounts();
+    var entry = {
+      id: window.ME.id,
+      email: s.user && s.user.email,
+      username: window.ME.username,
+      display_name: window.ME.display_name,
+      access_token: s.access_token,
+      refresh_token: s.refresh_token,
+      saved_at: Date.now()
+    };
+    var idx = list.findIndex(function(a){ return a.id === entry.id; });
+    if (idx >= 0) list[idx] = entry;
+    else list.push(entry);
+    saveAccounts(list);
+  }
+
+  async function switchTo(accountId){
+    var list = loadAccounts();
+    var target = list.find(function(a){ return a.id === accountId; });
+    if (!target){ window.toast("Account missing", "Sign in again to save it.", "err"); return; }
+
+    await snapshotCurrent();
+    try {
+      var r = await sb.auth.setSession({
+        access_token: target.access_token,
+        refresh_token: target.refresh_token
+      });
+      if (r.error) throw r.error;
+      window.toast("Switched", "Now signed in as @" + target.username, "ok");
+      setTimeout(function(){ location.reload(); }, 500);
+    } catch(e){
+      window.toast("Could not switch", e.message || String(e) + " — try signing in manually.", "err");
+    }
+  }
+
+  function removeAccount(accountId, ev){
+    if (ev){ ev.preventDefault(); ev.stopPropagation(); }
+    var list = loadAccounts().filter(function(a){ return a.id !== accountId; });
+    saveAccounts(list);
+    if (window.ME && accountId === window.ME.id){
+      window.toast("Removed", "You removed the current account from the switcher. Sign out to fully leave.", "ok");
+    } else {
+      window.toast("Removed", "", "ok");
+    }
+    closeAccountMenu();
+  }
+
+  function closeAccountMenu(){
+    var m = document.getElementById("as-menu");
+    if (m) m.remove();
+  }
+
+  function openAccountMenu(anchor){
+    closeAccountMenu();
+    var list = loadAccounts();
+    var menu = document.createElement("div");
+    menu.className = "as-menu";
+    menu.id = "as-menu";
+    var h = '<div class="as-head">Accounts</div>';
+    if (!list.length){
+      h += '<div style="padding:10px;font-size:12px;color:var(--text3)">No saved accounts yet.</div>';
+    }
+    list.forEach(function(a){
+      var active = window.ME && a.id === window.ME.id;
+      h += '<button class="as-item' + (active ? " active" : "") + '" data-as-id="' + esc(a.id) + '">' +
+        '<span class="as-av">' + esc((a.display_name || a.username || "?").slice(0,2).toUpperCase()) + '</span>' +
+        '<span class="as-body">' +
+          '<div class="as-name">' + esc(a.display_name || a.username) + (active ? ' · current' : '') + '</div>' +
+          '<div class="as-user">@' + esc(a.username) + '</div>' +
+        '</span>' +
+        '<span class="as-del" data-as-del="' + esc(a.id) + '" title="Forget">×</span>' +
+      '</button>';
+    });
+    h += '<div class="as-sep"></div>';
+    h += '<button class="as-item as-add" id="as-add">+ Add another account</button>';
+    menu.innerHTML = h;
+    document.body.appendChild(menu);
+
+    var r = anchor.getBoundingClientRect();
+    menu.style.left = Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8)) + "px";
+    menu.style.top = Math.max(8, r.top - menu.offsetHeight - 6) + "px";
+    if (menu.getBoundingClientRect().top < 8){
+      menu.style.top = (r.bottom + 6) + "px";
+    }
+
+    menu.addEventListener("click", async function(e){
+      var del = e.target.closest("[data-as-del]");
+      if (del){ removeAccount(del.dataset.asDel, e); return; }
+      var add = e.target.closest("#as-add");
+      if (add){
+        closeAccountMenu();
+        await snapshotCurrent();
+        // Sign out but keep in-memory accounts
+        try { await sb.auth.signOut(); } catch(e){}
+        setTimeout(function(){ location.reload(); }, 200);
+        return;
+      }
+      var item = e.target.closest("[data-as-id]");
+      if (item){
+        var aid = item.dataset.asId;
+        closeAccountMenu();
+        if (window.ME && aid === window.ME.id) return;
+        switchTo(aid);
+      }
+    });
+
+    // Click-outside to close
+    setTimeout(function(){
+      document.addEventListener("mousedown", function h(ev){
+        if (!menu.contains(ev.target)){ closeAccountMenu(); document.removeEventListener("mousedown", h, true); }
+      }, true);
+    }, 0);
+  }
+
+  // Inject switcher button into the user bar
+  var origRenderUserBar = window.renderUserBar;
+  if (typeof origRenderUserBar === "function"){
+    window.renderUserBar = function(){
+      var r = origRenderUserBar.apply(this, arguments);
+      setTimeout(function(){
+        var bar = document.getElementById("user-bar");
+        if (!bar) return;
+        if (bar.querySelector('[data-as-trigger]')) return;
+        var trigger = document.createElement("button");
+        trigger.className = "ctl";
+        trigger.setAttribute("data-as-trigger", "1");
+        trigger.title = "Switch account";
+        trigger.style.cssText = "width:32px;height:32px;border-radius:7px;display:flex;align-items:center;justify-content:center;color:var(--text2);transition:all .15s";
+        trigger.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>';
+        trigger.onclick = function(e){
+          e.preventDefault(); e.stopPropagation();
+          openAccountMenu(trigger);
+        };
+        // Insert before the logout button
+        var logoutBtn = bar.querySelector('[data-act="logout"]');
+        if (logoutBtn) bar.insertBefore(trigger, logoutBtn);
+        else bar.appendChild(trigger);
+      }, 10);
+      return r;
+    };
+  }
+
+  // Also make sure the current account gets saved on login
+  var origBoot = window.boot;
+  if (typeof origBoot === "function"){
+    window.boot = async function(){
+      var r = await origBoot.apply(this, arguments);
+      // Save/refresh this account in the switcher list
+      setTimeout(snapshotCurrent, 800);
+      setTimeout(tryConsumeInvite, 1200);
+      return r;
+    };
+  }
+
+  // On page load: if a saved account exists and user is signed out, hint
+  setTimeout(function(){
+    if (!window.ME){
+      var list = loadAccounts();
+      if (list.length){
+        var hint = document.createElement("div");
+        hint.style.cssText = "padding:10px 14px;background:rgba(94,231,215,.08);border:1px solid rgba(94,231,215,.3);border-radius:10px;font-size:12.5px;color:var(--cyan);margin-top:14px;text-align:center;font-family:Inter,sans-serif;cursor:pointer";
+        hint.innerHTML = 'You have ' + list.length + ' saved account' + (list.length === 1 ? '' : 's') + '. <b>Tap here</b> to pick one.';
+        hint.onclick = function(){
+          var fake = { getBoundingClientRect: function(){ return { left: window.innerWidth/2 - 120, top: window.innerHeight/2 - 100, bottom: window.innerHeight/2 - 80, right: window.innerWidth/2 + 120 }; } };
+          openAccountMenu(fake);
+        };
+        var card = document.querySelector(".auth-card");
+        if (card) card.appendChild(hint);
+      }
+    }
+  }, 800);
+
+  // ============================================================
+  // 5. GUEST CLEANUP — remove permission rows + profiles
+  // ============================================================
+  window.__cleanupGuests = async function(){
+    // Delete permission rows first (FK safe)
+    try { await sb.from("server_member_permissions").delete().neq("server_id", "00000000-0000-0000-0000-000000000000"); } catch(e){}
+    // Delete guest profiles that are ours (owner = me)
+    try {
+      var r = await sb.from("profiles").select("id").eq("is_guest", true);
+      var ids = (r.data || []).map(function(x){ return x.id; });
+      if (ids.length){
+        // Remove from server_members
+        try { await sb.from("server_members").delete().in("user_id", ids); } catch(e){}
+        // Remove profiles
+        try { await sb.from("profiles").delete().in("id", ids); } catch(e){}
+      }
+      window.toast("Cleaned up", ids.length + " guest profile(s) removed.", "ok");
+    } catch(e){
+      window.toast("Cleanup error", e.message || String(e), "err");
+    }
+    // Note: auth.users rows still exist but are now orphaned.
+    // Delete them in Supabase Dashboard → Authentication → Users
+    // (filter by @guest.sleepychat.local).
+  };
+
+  // Expose the manager for testing
+  window.openInviteLinksManager = openInviteLinksManager;
+
+  log("invite links + account switcher + guest cleanup ready");
+})();
+</script>
 </body>
 </html>
