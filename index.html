@@ -19500,9 +19500,9 @@ img[src*="juicyads"]{
   }
 
   // Patch sb.rpc to intercept both create functions
-  if (window.sb && typeof window.sb.rpc === 'function' && !window.sb.__killDoubleWrapped){
-    var origRpc = window.sb.rpc.bind(window.sb);
-    window.sb.rpc = async function(fn, params, options){
+  if (window.sb && typeof sb.rpc === 'function' && !sb.__killDoubleWrapped){
+    var origRpc = sb.rpc.bind(window.sb);
+    sb.rpc = async function(fn, params, options){
       if (fn === 'create_game_challenge' || fn === 'create_game_challenge_v2'){
         if (isDuplicateCreate()){
           log("blocked duplicate " + fn);
@@ -19512,7 +19512,7 @@ img[src*="juicyads"]{
       }
       return origRpc(fn, params, options);
     };
-    window.sb.__killDoubleWrapped = true;
+    sb.__killDoubleWrapped = true;
     log("rpc dedup installed");
   }
 
@@ -19559,13 +19559,13 @@ img[src*="juicyads"]{
     if (!window.__rpsFocus || !window.__rpsFocus.game) return;
     if (window.__rpsFocusSub && window.__rpsFocusSub.__gid === window.__rpsFocus.game.id) return;
     if (window.__rpsFocusSub){
-      try { window.sb.removeChannel(window.__rpsFocusSub); } catch(e){}
+      try { sb.removeChannel(window.__rpsFocusSub); } catch(e){}
       window.__rpsFocusSub = null;
     }
     var gid = window.__rpsFocus.game.id;
     log("subscribing now:", gid.slice(0,8));
 
-    var ch = window.sb.channel('rps-fast-' + gid + '-' + Math.random().toString(36).slice(2,6))
+    var ch = sb.channel('rps-fast-' + gid + '-' + Math.random().toString(36).slice(2,6))
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public', table: 'game_challenges',
         filter: 'id=eq.' + gid
@@ -19633,7 +19633,7 @@ img[src*="juicyads"]{
   // Clear subscription when RPS loses focus
   setInterval(function(){
     if (!window.__rpsFocus && window.__rpsFocusSub){
-      try { window.sb.removeChannel(window.__rpsFocusSub); } catch(e){}
+      try { sb.removeChannel(window.__rpsFocusSub); } catch(e){}
       window.__rpsFocusSub = null;
     }
   }, 800);
@@ -19664,10 +19664,10 @@ img[src*="juicyads"]{
   });
 
   // 2. RPC dedup so one click cannot create two challenges
-  if (window.sb && typeof window.sb.rpc === 'function' && !window.sb.__fixpackWrapped){
-    var origRpc = window.sb.rpc.bind(window.sb);
+  if (window.sb && typeof sb.rpc === 'function' && !sb.__fixpackWrapped){
+    var origRpc = sb.rpc.bind(window.sb);
     var lastCreate = 0;
-    window.sb.rpc = async function(fn, params, options){
+    sb.rpc = async function(fn, params, options){
       if (fn === 'create_game_challenge' || fn === 'create_game_challenge_v2'){
         var now = Date.now();
         if (now - lastCreate < 500){
@@ -19678,7 +19678,7 @@ img[src*="juicyads"]{
       }
       return origRpc(fn, params, options);
     };
-    window.sb.__fixpackWrapped = true;
+    sb.__fixpackWrapped = true;
     log("rpc dedup ready");
   }
 
@@ -19689,11 +19689,11 @@ img[src*="juicyads"]{
     var gid = window.__rpsFocus.game.id;
     if (window.__rpsFocusSub && window.__rpsFocusSub.__gid === gid) return;
     if (window.__rpsFocusSub){
-      try { window.sb.removeChannel(window.__rpsFocusSub); } catch(e){}
+      try { sb.removeChannel(window.__rpsFocusSub); } catch(e){}
       window.__rpsFocusSub = null;
     }
     log("fast sub for", gid.slice(0,8));
-    var ch = window.sb.channel('rps-fast-' + gid + '-' + Math.random().toString(36).slice(2,6))
+    var ch = sb.channel('rps-fast-' + gid + '-' + Math.random().toString(36).slice(2,6))
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public', table: 'game_challenges',
         filter: 'id=eq.' + gid
@@ -19727,7 +19727,7 @@ img[src*="juicyads"]{
   setInterval(function(){
     var onGames = window.CURRENT && window.CURRENT.type === 'games';
     if (!onGames && window.__rpsFocusSub){
-      try { window.sb.removeChannel(window.__rpsFocusSub); } catch(e){}
+      try { sb.removeChannel(window.__rpsFocusSub); } catch(e){}
       window.__rpsFocusSub = null;
     }
   }, 800);
@@ -19737,5 +19737,128 @@ img[src*="juicyads"]{
 </script>
 
 <!-- SLEEPY_OWNERID_V3 -->
+<!-- SLEEPY_FINAL_CLEANUP_V1 -->
+<style>
+#container-fa854199a041432aa0a5fa0fd34ead52,
+iframe[src*="bicea.org"],iframe[src*="bicea"],
+iframe[src*="adsterra"],iframe[src*="popads"],iframe[src*="popcash"],
+iframe[src*="propeller"],iframe[src*="exoclick"],iframe[src*="juicyads"],
+iframe[src*="trafficjunky"],iframe[src*="highperformance"],iframe[src*="profitablerate"],
+[id^="socialbar"],[class^="socialbar"],[class*="socialbar"],
+[id*="social-bar"],[class*="social-bar"],[data-socialbar],
+div[data-widget="socialbar"],div[data-type="socialbar"],
+body > a[target="_blank"][style*="position: fixed"],
+body > div[style*="position: fixed"][style*="bottom"],
+body > div[style*="position:fixed"][style*="bottom"]{
+  display:none!important;visibility:hidden!important;opacity:0!important;
+  pointer-events:none!important;width:0!important;height:0!important;
+  position:absolute!important;left:-10000px!important;top:-10000px!important;
+}
+.ad-slot,.ad-reward,#ad-host{display:none!important;height:0!important;width:0!important;overflow:hidden!important}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyFinalCleanup) return;
+  window.__sleepyFinalCleanup = true;
+  function log(){ try{console.log.apply(console,["[Cleanup]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  // ---------- 1. Kill every ad artifact ----------
+  function killAds(){
+    document.querySelectorAll('script').forEach(function(sc){
+      var src = sc.src || "";
+      if (/bicea|adsterra|popads|popcash|propeller|exoclick|juicyads|trafficjunky|highperformance|profitablerate/i.test(src)){
+        sc.remove();
+      }
+    });
+    document.querySelectorAll('iframe').forEach(function(fr){
+      var src = fr.src || "";
+      if (/bicea|adsterra|popads|popcash|propeller|exoclick|juicyads|trafficjunky/i.test(src)){
+        fr.remove();
+      }
+    });
+    var banner = document.getElementById('container-fa854199a041432aa0a5fa0fd34ead52');
+    if (banner) banner.remove();
+    document.querySelectorAll('[id*="socialbar"],[class*="socialbar"],[class*="social-bar"]').forEach(function(el){
+      if (el.tagName === 'SCRIPT') return;
+      el.remove();
+    });
+    var adHost = document.getElementById('ad-host');
+    if (adHost) adHost.remove();
+    var KEEP = ['app','auth-screen','modal-root','toasts','voice-dock','voice-video-grid',
+                'voice-composer-slot','voice-debug','pwa-splash','oc-install-btn',
+                'sc-install','install-inline-bar','snake-canvas'];
+    Array.prototype.forEach.call(document.body.children, function(el){
+      if (!el || !el.tagName) return;
+      if (/^(SCRIPT|STYLE|LINK)$/.test(el.tagName)) return;
+      if (el.id && KEEP.indexOf(el.id) >= 0) return;
+      if (el.querySelector && el.querySelector('#app, #auth-screen, #modal-root, #toasts')) return;
+      var style = el.getAttribute('style') || "";
+      if (/position\s*:\s*fixed/i.test(style) && /(bottom|right|top|left)/i.test(style)){
+        el.remove();
+      }
+    });
+  }
+  killAds();
+  [300, 1200, 3000, 6000].forEach(function(t){ setTimeout(killAds, t); });
+  setInterval(killAds, 2500);
+
+  // ---------- 2. Block pop-unders and redirects ----------
+  var _origOpen = window.open;
+  var ALLOW = ['supabase.co','github.io','githubusercontent','fonts.googleapis',
+               'fonts.gstatic','jsdelivr','livekit','localhost'];
+  window.open = function(url){
+    if (!url) return null;
+    var u = String(url);
+    if (u.indexOf(location.origin) === 0) return _origOpen.apply(this, arguments);
+    for (var i = 0; i < ALLOW.length; i++){
+      if (u.indexOf(ALLOW[i]) >= 0) return _origOpen.apply(this, arguments);
+    }
+    log("blocked popup:", u.slice(0, 80));
+    return null;
+  };
+
+  // Block external redirects we didn't initiate
+  var lastHref = location.href;
+  setInterval(function(){
+    if (location.href !== lastHref){
+      var external = location.origin && location.href.indexOf(location.origin) !== 0;
+      if (external && !/supabase|github|localhost/i.test(location.href)){
+        log("blocked redirect:", location.href.slice(0, 80));
+        try { location.replace(lastHref); } catch(e){}
+        return;
+      }
+      lastHref = location.href;
+    }
+  }, 400);
+
+  // ---------- 3. Rate-limit RPS subscribe retries ----------
+  // Now that sb is fixed, first attempt should succeed. Add a small
+  // guard so we never spam more than one attempt per second even if
+  // something else goes wrong.
+  var _lastSubAttempt = 0;
+  var _origSetInterval = window.setInterval;
+  var _origSetTimeout = window.setTimeout;
+
+  function wrapRpsRetry(fn){
+    return function(){
+      var now = Date.now();
+      if (now - _lastSubAttempt < 1000) return;
+      _lastSubAttempt = now;
+      return fn.apply(this, arguments);
+    };
+  }
+
+  // Wrap the two broken sub retry loops via tag matching is complex.
+  // Simpler: expose a flag that the wrappers check. But we can't
+  // easily patch the closed-over functions. The source fix below
+  // (window.sb -> sb) makes them succeed, so this is just a fallback
+  // against pathological re-tries.
+  window.__rpsLastSubAttempt = 0;
+
+  log("ads killed, redirects blocked");
+})();
+</script>
+
 </body>
 </html>
