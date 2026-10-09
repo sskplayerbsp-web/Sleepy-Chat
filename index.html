@@ -878,7 +878,7 @@ function renderChatHead(){
   if(CURRENT.type==="server"&&CURRENT.server){
     var ch=CURRENT.channel;
     var icon=ch?(ch.type==="voice"?SVG.vol:SVG.hash):SVG.hash;
-    var canManage=CURRENT.server.owner_id===ME.id;
+    var canManage=(window.CURRENT && window.CURRENT.server ? window.CURRENT.server.owner_id : null)===ME.id;
     el.innerHTML=
       '<button class="hbtn mobile-only" data-act="toggle-panel">'+SVG.menu+'</button>'+
       '<div class="title">'+icon+'<span class="txt">'+esc(ch?ch.name:"no channel")+'</span>'+
@@ -19736,5 +19736,6 @@ img[src*="juicyads"]{
 })();
 </script>
 
+<!-- SLEEPY_OWNERID_V3 -->
 </body>
 </html>
