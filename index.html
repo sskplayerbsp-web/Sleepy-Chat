@@ -20536,5 +20536,621 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
 })();
 </script>
 
+<!-- SLEEPY_SHOP_GUI_V5 -->
+<style id="shop-gui-v5-css">
+#shopv5 *{box-sizing:border-box}
+#shopv5{max-width:720px;margin:0 auto;padding:20px 16px 60px;font-family:'Inter',system-ui,sans-serif;color:#eef2f8}
+#shopv5 .shopv5-header{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 18px;border-radius:16px;
+  background:linear-gradient(135deg,rgba(255,200,87,.14),rgba(139,124,255,.08));
+  border:1px solid rgba(255,200,87,.35);margin-bottom:20px;position:relative;overflow:hidden}
+#shopv5 .shopv5-header::before{content:'';position:absolute;inset:0;
+  background:radial-gradient(circle at 90% 10%,rgba(255,200,87,.18),transparent 45%);pointer-events:none}
+#shopv5 .shopv5-bal{display:flex;align-items:center;gap:10px;position:relative;z-index:1}
+#shopv5 .shopv5-bal .icon{width:44px;height:44px;border-radius:12px;flex:none;
+  background:linear-gradient(135deg,#ffc857,#ff9f1c);display:flex;align-items:center;justify-content:center;
+  font-size:22px;box-shadow:0 6px 20px rgba(255,200,87,.45)}
+#shopv5 .shopv5-bal .num{font:800 26px system-ui;color:#ffd166;line-height:1;text-shadow:0 0 20px rgba(255,200,87,.4)}
+#shopv5 .shopv5-bal .lbl{font:700 10px system-ui;letter-spacing:.14em;text-transform:uppercase;color:#8f8fa8;margin-top:3px}
+#shopv5 .shopv5-equipped{display:flex;gap:6px;align-items:center;position:relative;z-index:1;flex-wrap:wrap;justify-content:flex-end}
+#shopv5 .shopv5-equipped .chip{padding:5px 10px;border-radius:99px;font:600 10.5px system-ui;
+  letter-spacing:.05em;text-transform:uppercase;background:rgba(74,222,128,.14);
+  border:1px solid rgba(74,222,128,.4);color:#4ade80}
+#shopv5 .shopv5-tabs{display:flex;gap:6px;background:#0a0a0f;padding:5px;border-radius:12px;border:1px solid #2a2a3a;margin-bottom:18px;overflow-x:auto}
+#shopv5 .shopv5-tabs button{flex:1;min-width:80px;padding:11px 8px;border-radius:9px;font:700 12px system-ui;
+  color:#5f6c85;cursor:pointer;border:none;background:transparent;transition:all .15s;white-space:nowrap}
+#shopv5 .shopv5-tabs button:hover{color:#9aa8c0;background:rgba(255,255,255,.03)}
+#shopv5 .shopv5-tabs button.active{background:linear-gradient(135deg,rgba(139,124,255,.22),rgba(94,231,215,.1));
+  color:#fff;box-shadow:0 0 16px rgba(139,124,255,.25),inset 0 0 0 1px rgba(139,124,255,.4)}
+#shopv5 .shopv5-tabs button .em{font-size:15px;margin-right:5px;vertical-align:-1px}
+
+#shopv5 .shopv5-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+#shopv5 .shopv5-card{position:relative;padding:14px 12px 12px;border-radius:14px;background:rgba(255,255,255,.03);
+  border:1px solid #2a2a3a;text-align:center;transition:all .18s;display:flex;flex-direction:column;overflow:hidden}
+#shopv5 .shopv5-card::before{content:'';position:absolute;inset:0;opacity:0;transition:opacity .18s;
+  background:linear-gradient(135deg,rgba(139,124,255,.08),transparent 60%);pointer-events:none}
+#shopv5 .shopv5-card:hover{transform:translateY(-3px);border-color:#3a3a4d;box-shadow:0 12px 32px rgba(0,0,0,.4)}
+#shopv5 .shopv5-card:hover::before{opacity:1}
+#shopv5 .shopv5-card.common{border-color:rgba(120,120,140,.35)}
+#shopv5 .shopv5-card.rare{border-color:rgba(94,231,215,.5);box-shadow:0 0 20px rgba(94,231,215,.1)}
+#shopv5 .shopv5-card.epic{border-color:rgba(139,124,255,.6);box-shadow:0 0 24px rgba(139,124,255,.15)}
+#shopv5 .shopv5-card.legendary{border-color:rgba(255,200,87,.7);box-shadow:0 0 28px rgba(255,200,87,.2)}
+#shopv5 .shopv5-card.mythic{border-color:rgba(255,45,111,.7);box-shadow:0 0 32px rgba(255,45,111,.25);
+  background:linear-gradient(135deg,rgba(255,45,111,.06),rgba(139,124,255,.06))}
+
+#shopv5 .shopv5-card .rarity{position:absolute;top:8px;right:8px;font:800 9px system-ui;letter-spacing:.1em;
+  text-transform:uppercase;padding:3px 8px;border-radius:99px;background:#1a1a26;z-index:2}
+#shopv5 .shopv5-card.common .rarity{color:#9aa8c0}
+#shopv5 .shopv5-card.rare .rarity{color:#5ee7d7}
+#shopv5 .shopv5-card.epic .rarity{color:#c4b8ff}
+#shopv5 .shopv5-card.legendary .rarity{color:#ffd166}
+#shopv5 .shopv5-card.mythic .rarity{color:#ff8aa8}
+
+#shopv5 .shopv5-card .preview{height:64px;display:flex;align-items:center;justify-content:center;
+  font-size:38px;line-height:1;margin-bottom:10px;position:relative;z-index:1}
+#shopv5 .shopv5-card .name{font:700 13.5px system-ui;color:#eef2f8;margin-bottom:4px;position:relative;z-index:1}
+#shopv5 .shopv5-card .desc{font-size:11px;color:#8f8fa8;line-height:1.45;margin-bottom:10px;
+  min-height:32px;flex:1;position:relative;z-index:1}
+#shopv5 .shopv5-card .price{font:800 14px monospace;color:#ffd166;margin-bottom:9px;position:relative;z-index:1}
+#shopv5 .shopv5-card button{width:100%;padding:10px 8px;border-radius:9px;font:700 12px system-ui;
+  border:none;cursor:pointer;transition:all .15s;position:relative;z-index:1}
+#shopv5 .shopv5-card .buy{background:linear-gradient(135deg,#ffc857,#ff9f1c);color:#1a0f00;font-weight:800}
+#shopv5 .shopv5-card .buy:hover{transform:scale(1.03);box-shadow:0 6px 22px rgba(255,200,87,.5)}
+#shopv5 .shopv5-card .buy:disabled{background:#22222f;color:#5a5a72;cursor:not-allowed;transform:none;box-shadow:none}
+#shopv5 .shopv5-card .equip{background:rgba(94,231,215,.16);color:#5ee7d7;border:1px solid rgba(94,231,215,.4)}
+#shopv5 .shopv5-card .equip:hover{background:rgba(94,231,215,.26)}
+#shopv5 .shopv5-card .unequip{background:rgba(74,222,128,.16);color:#4ade80;border:1px solid rgba(74,222,128,.4)}
+#shopv5 .shopv5-card .unequip:hover{background:rgba(74,222,128,.26)}
+#shopv5 .shopv5-card .owned{background:rgba(120,120,140,.14);color:#9aa8c0;border:1px solid #2a2a3a;cursor:default}
+
+/* Previews — actual colors/animations shown in the swatch */
+#shopv5 .np{display:inline-block;padding:3px 10px;border-radius:6px;font:800 13px system-ui}
+#shopv5 .np-gold{background:linear-gradient(90deg,#ffc857,#ff9f1c);color:#1a0f00}
+#shopv5 .np-rose{background:linear-gradient(90deg,#ff7f9f,#ff4d70);color:#1a0008}
+#shopv5 .np-teal{background:linear-gradient(90deg,#5ee7d7,#3bb8aa);color:#04211d}
+#shopv5 .np-amber{background:linear-gradient(90deg,#fbbf24,#d97706);color:#1a0e00}
+#shopv5 .np-lime{background:linear-gradient(90deg,#a3e635,#65a30d);color:#0a1a00}
+#shopv5 .np-ice{background:linear-gradient(90deg,#a5f3fc,#06b6d4);color:#001a2e}
+#shopv5 .np-neon{background:linear-gradient(90deg,#ff2df9,#b44aff);color:#fff;text-shadow:0 0 8px #ff2df9}
+#shopv5 .np-toxic{background:linear-gradient(90deg,#a3ff00,#00e676);color:#001a00;text-shadow:0 0 6px #a3ff00}
+#shopv5 .np-blood{background:linear-gradient(90deg,#ff0033,#8b0000);color:#fff;text-shadow:0 0 6px #ff0033}
+#shopv5 .np-galaxy{background:linear-gradient(90deg,#4a00e0,#8e2de2,#4a00e0);background-size:200%;color:#fff;animation:shopSlide 3s linear infinite}
+#shopv5 .np-rainbow{background:linear-gradient(90deg,#ff2d6f,#ffc857,#4ade80,#5ee7d7,#8b7cff,#ff2d6f);background-size:300%;color:#0a0a0f;animation:shopSlide 3s linear infinite}
+@keyframes shopSlide{to{background-position:200% 0}}
+
+#shopv5 .frame-demo{position:relative;width:44px;height:44px;border-radius:50%;
+  background:linear-gradient(135deg,#8b7cff,#5ee7d7);display:inline-block}
+#shopv5 .frame-demo::after{content:'';position:absolute;inset:-4px;border-radius:50%;pointer-events:none}
+#shopv5 .frame-demo.gold::after{border:2.5px solid #ffd166;box-shadow:0 0 14px rgba(255,200,87,.65)}
+#shopv5 .frame-demo.glow::after{border:2.5px solid #5ee7d7;box-shadow:0 0 18px rgba(94,231,215,.75);animation:shopGlow 2.4s ease-in-out infinite}
+@keyframes shopGlow{0%,100%{opacity:.7}50%{opacity:1}}
+#shopv5 .frame-demo.neon::after{border:2.5px solid #ff2df9;box-shadow:0 0 20px #ff2df9,inset 0 0 10px rgba(255,45,249,.4)}
+#shopv5 .frame-demo.ember::after{border:2.5px solid #ff6b1c;box-shadow:0 0 20px rgba(255,107,28,.7)}
+#shopv5 .frame-demo.void::after{border:2.5px solid #b44aff;box-shadow:0 0 22px #b44aff;animation:shopPulse 3s ease-in-out infinite}
+@keyframes shopPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+#shopv5 .frame-demo.crystal::after{border:2.5px dashed #a5f3fc;box-shadow:0 0 18px rgba(165,243,252,.7);animation:shopSpin 4s linear infinite}
+@keyframes shopSpin{to{transform:rotate(360deg)}}
+#shopv5 .frame-demo.rainbow::after{
+  background:conic-gradient(from 0deg,#ff2d6f,#ffc857,#4ade80,#5ee7d7,#8b7cff,#ff2d6f);
+  -webkit-mask:radial-gradient(circle,transparent 62%,#000 64%,#000 76%,transparent 78%);
+          mask:radial-gradient(circle,transparent 62%,#000 64%,#000 76%,transparent 78%);
+  animation:shopSpin 3s linear infinite}
+#shopv5 .frame-demo.legend::after{border:2.5px solid #ffd166;
+  box-shadow:0 0 24px #ffd166,0 0 40px rgba(255,209,102,.5),inset 0 0 12px rgba(255,209,102,.4);
+  animation:shopGlow 2s ease-in-out infinite}
+
+#shopv5 .effect-demo{width:100%;height:44px;border-radius:10px;position:relative;overflow:hidden;
+  background:linear-gradient(135deg,rgba(139,124,255,.15),rgba(94,231,215,.15))}
+#shopv5 .effect-demo.sparkle::before{content:'';position:absolute;inset:0;
+  background-image:radial-gradient(circle,rgba(0,255,224,.9) 1px,transparent 2px),
+                   radial-gradient(circle,rgba(180,74,255,.9) 1px,transparent 2px);
+  background-size:20px 20px,30px 30px;animation:shopSlide2 3s linear infinite}
+@keyframes shopSlide2{to{background-position:0 -20px,0 -30px}}
+#shopv5 .effect-demo.grid::before{content:'';position:absolute;inset:0;
+  background-image:linear-gradient(rgba(0,255,224,.35) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(0,255,224,.35) 1px,transparent 1px);
+  background-size:14px 14px;animation:shopSlide2 4s linear infinite}
+#shopv5 .effect-demo.aurora::before{content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(0,255,224,.5),rgba(180,74,255,.5),rgba(255,45,111,.5));
+  background-size:300% 300%;animation:shopSlide3 4s ease-in-out infinite}
+@keyframes shopSlide3{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}
+#shopv5 .effect-demo.frost::before{content:'';position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(165,243,252,.6),transparent);animation:shopGlow 3s ease-in-out infinite}
+#shopv5 .effect-demo.flames::before{content:'';position:absolute;inset:0;
+  background:linear-gradient(0deg,rgba(255,69,0,.7),rgba(255,200,87,.4),transparent);
+  animation:shopGlow 1.4s ease-in-out infinite}
+#shopv5 .effect-demo.matrix::before{content:'';position:absolute;inset:0;
+  background:repeating-linear-gradient(0deg,rgba(0,230,118,.6) 0 2px,transparent 2px 12px);animation:shopSlide2 2s linear infinite}
+
+#shopv5 .rod-demo{font-size:34px;display:inline-block}
+#shopv5 .rod-demo.silver{filter:brightness(1.2) drop-shadow(0 0 6px silver)}
+#shopv5 .rod-demo.gold{filter:brightness(1.1) drop-shadow(0 0 8px gold)}
+#shopv5 .rod-demo.diamond{filter:drop-shadow(0 0 10px cyan)}
+#shopv5 .rod-demo.mythic{filter:drop-shadow(0 0 12px #ff2df9) drop-shadow(0 0 20px #b44aff)}
+
+#shopv5 .title-demo{display:inline-block;padding:3px 12px;border-radius:99px;font:800 11px system-ui;
+  letter-spacing:.08em;text-transform:uppercase;
+  background:linear-gradient(135deg,rgba(139,124,255,.24),rgba(94,231,215,.14));
+  border:1px solid rgba(139,124,255,.5);color:#c4b8ff}
+#shopv5 .title-demo.gold{background:linear-gradient(135deg,rgba(255,200,87,.3),rgba(255,159,28,.14));
+  border-color:rgba(255,200,87,.6);color:#ffd166}
+#shopv5 .title-demo.mythic{background:linear-gradient(135deg,rgba(255,45,111,.3),rgba(180,74,255,.2));
+  border-color:rgba(255,45,111,.6);color:#ffb3c7;text-shadow:0 0 8px #ff2d6f}
+
+/* Tabs on mobile */
+@media (max-width:600px){
+  #shopv5{padding:14px 10px 40px}
+  #shopv5 .shopv5-header{flex-direction:column;align-items:flex-start}
+  #shopv5 .shopv5-equipped{justify-content:flex-start}
+  #shopv5 .shopv5-grid{grid-template-columns:repeat(2,1fr);gap:9px}
+  #shopv5 .shopv5-card{padding:12px 9px 10px}
+  #shopv5 .shopv5-card .preview{height:52px;font-size:32px}
+  #shopv5 .shopv5-card .name{font-size:12.5px}
+  #shopv5 .shopv5-card .desc{font-size:10px;min-height:28px}
+  #shopv5 .shopv5-card button{padding:11px 6px;font-size:12px;min-height:42px}
+}
+</style>
+
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyShopGuiV5) return;
+  window.__sleepyShopGuiV5 = true;
+  try { console.log("%c[Shop v5] armed — full GUI with rarity + effects", "color:#0ff;font-weight:bold"); } catch(e){}
+
+  var E = function(s){ return String(s==null?"":s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;").replace(/'/g,"&#39;"); };
+
+  var onGames = function(){ return window.CURRENT && window.CURRENT.type === 'games'; };
+  var activeTab = function(){
+    var b = document.getElementById('chat-body'); if (!b) return null;
+    var a = b.querySelector('[data-gr].active');
+    return a ? a.dataset.gr : null;
+  };
+
+  // ==========================================================
+  // FULL SHOP CATALOG (with rarity tiers)
+  // ==========================================================
+  // Categories: name_color, title, frame, effect, rod
+  // Rarity:     common, rare, epic, legendary, mythic
+  var SHOP = [
+    // ----- NAME COLORS -----
+    { id:'name_color_gold',    price:500,   cat:'name_color', rar:'common',    name:'Gold Name',    desc:'Shiny gold in chat',
+      prev:'<span class="np np-gold">Aa</span>' },
+    { id:'name_color_rose',    price:500,   cat:'name_color', rar:'common',    name:'Rose Name',    desc:'Warm rose gradient',
+      prev:'<span class="np np-rose">Aa</span>' },
+    { id:'name_color_teal',    price:500,   cat:'name_color', rar:'common',    name:'Teal Name',    desc:'Cool teal gradient',
+      prev:'<span class="np np-teal">Aa</span>' },
+    { id:'name_color_amber',   price:750,   cat:'name_color', rar:'rare',      name:'Amber Name',   desc:'Warm amber glow',
+      prev:'<span class="np np-amber">Aa</span>' },
+    { id:'name_color_lime',    price:750,   cat:'name_color', rar:'rare',      name:'Lime Name',    desc:'Bright lime green',
+      prev:'<span class="np np-lime">Aa</span>' },
+    { id:'name_color_ice',     price:1200,  cat:'name_color', rar:'epic',      name:'Ice Name',     desc:'Frosted cool blue',
+      prev:'<span class="np np-ice">Aa</span>' },
+    { id:'name_color_neon',    price:2500,  cat:'name_color', rar:'epic',      name:'Neon Pink',    desc:'Glowing neon pink',
+      prev:'<span class="np np-neon">Aa</span>' },
+    { id:'name_color_toxic',   price:2500,  cat:'name_color', rar:'epic',      name:'Toxic Green',  desc:'Radioactive glow',
+      prev:'<span class="np np-toxic">Aa</span>' },
+    { id:'name_color_blood',   price:3500,  cat:'name_color', rar:'legendary', name:'Blood Red',    desc:'Deep red glow',
+      prev:'<span class="np np-blood">Aa</span>' },
+    { id:'name_color_galaxy',  price:5000,  cat:'name_color', rar:'legendary', name:'Galaxy Name',  desc:'Animated purple nebula',
+      prev:'<span class="np np-galaxy">Aa</span>' },
+    { id:'name_color_rainbow', price:7500,  cat:'name_color', rar:'mythic',    name:'Rainbow Name', desc:'Animated rainbow',
+      prev:'<span class="np np-rainbow">Aa</span>' },
+
+    // ----- TITLES -----
+    { id:'title_angler',       price:500,   cat:'title',      rar:'common',    name:'Angler',       desc:'Profile title',
+      prev:'<span class="title-demo">Angler</span>' },
+    { id:'title_champion',     price:1000,  cat:'title',      rar:'common',    name:'Champion',     desc:'Profile title',
+      prev:'<span class="title-demo">Champion</span>' },
+    { id:'title_gamer',        price:1000,  cat:'title',      rar:'common',    name:'Gamer',        desc:'Profile title',
+      prev:'<span class="title-demo">🎮 Gamer</span>' },
+    { id:'title_fisher',       price:1500,  cat:'title',      rar:'rare',      name:'Fisher',       desc:'Profile title',
+      prev:'<span class="title-demo">🎣 Fisher</span>' },
+    { id:'title_tycoon',       price:2000,  cat:'title',      rar:'rare',      name:'Tycoon',       desc:'Profile title',
+      prev:'<span class="title-demo">💼 Tycoon</span>' },
+    { id:'title_reeler',       price:3000,  cat:'title',      rar:'rare',      name:'Reeler',       desc:'Profile title',
+      prev:'<span class="title-demo">🎣 Reeler</span>' },
+    { id:'title_grinder',      price:4000,  cat:'title',      rar:'epic',      name:'Grinder',      desc:'Profile title',
+      prev:'<span class="title-demo">⚙️ Grinder</span>' },
+    { id:'title_legend',       price:5000,  cat:'title',      rar:'epic',      name:'Legend',       desc:'Profile title',
+      prev:'<span class="title-demo gold">⭐ Legend</span>' },
+    { id:'title_boss',         price:8000,  cat:'title',      rar:'legendary', name:'Boss',         desc:'Profile title',
+      prev:'<span class="title-demo gold">👑 Boss</span>' },
+    { id:'title_phantom',      price:10000, cat:'title',      rar:'legendary', name:'Phantom',      desc:'Profile title',
+      prev:'<span class="title-demo">👻 Phantom</span>' },
+    { id:'title_sleeper',      price:15000, cat:'title',      rar:'mythic',    name:'Sleeper',      desc:'Profile title',
+      prev:'<span class="title-demo mythic">🌙 Sleeper</span>' },
+    { id:'title_god',          price:25000, cat:'title',      rar:'mythic',    name:'God',          desc:'Profile title',
+      prev:'<span class="title-demo mythic">⚡ God</span>' },
+
+    // ----- AVATAR FRAMES -----
+    { id:'frame_gold',         price:1000,  cat:'frame',      rar:'common',    name:'Gold Frame',   desc:'Gold ring',
+      prev:'<span class="frame-demo gold"></span>' },
+    { id:'frame_glow',         price:1500,  cat:'frame',      rar:'common',    name:'Glow Frame',   desc:'Cyan glow',
+      prev:'<span class="frame-demo glow"></span>' },
+    { id:'frame_neon',         price:2000,  cat:'frame',      rar:'rare',      name:'Neon Frame',   desc:'Bright neon pink',
+      prev:'<span class="frame-demo neon"></span>' },
+    { id:'frame_ember',        price:2500,  cat:'frame',      rar:'rare',      name:'Ember Frame',  desc:'Warm fire glow',
+      prev:'<span class="frame-demo ember"></span>' },
+    { id:'frame_crystal',      price:3500,  cat:'frame',      rar:'epic',      name:'Crystal Frame',desc:'Spinning ice ring',
+      prev:'<span class="frame-demo crystal"></span>' },
+    { id:'frame_void',         price:5000,  cat:'frame',      rar:'epic',      name:'Void Frame',   desc:'Purple aura',
+      prev:'<span class="frame-demo void"></span>' },
+    { id:'frame_rainbow',      price:12000, cat:'frame',      rar:'legendary', name:'Rainbow Frame',desc:'Animated rainbow ring',
+      prev:'<span class="frame-demo rainbow"></span>' },
+    { id:'frame_legend',       price:30000, cat:'frame',      rar:'mythic',    name:'Legend Frame', desc:'Divine golden aura',
+      prev:'<span class="frame-demo legend"></span>' },
+
+    // ----- PROFILE EFFECTS -----
+    { id:'effect_sparkle',     price:800,   cat:'effect',     rar:'common',    name:'Sparkles',     desc:'Drifting sparkles',
+      prev:'<div class="effect-demo sparkle"></div>' },
+    { id:'effect_grid',        price:1200,  cat:'effect',     rar:'common',    name:'Cyber Grid',   desc:'Scrolling grid',
+      prev:'<div class="effect-demo grid"></div>' },
+    { id:'effect_frost',       price:1800,  cat:'effect',     rar:'rare',      name:'Frost',        desc:'Icy shimmer',
+      prev:'<div class="effect-demo frost"></div>' },
+    { id:'effect_aurora',      price:2500,  cat:'effect',     rar:'rare',      name:'Aurora',       desc:'Flowing aurora',
+      prev:'<div class="effect-demo aurora"></div>' },
+    { id:'effect_matrix',      price:4000,  cat:'effect',     rar:'epic',      name:'Matrix',       desc:'Green code rain',
+      prev:'<div class="effect-demo matrix"></div>' },
+    { id:'effect_flames',      price:6000,  cat:'effect',     rar:'legendary', name:'Flames',       desc:'Burning fire effect',
+      prev:'<div class="effect-demo flames"></div>' },
+
+    // ----- FISHING RODS -----
+    { id:'rod_bamboo',         price:300,   cat:'rod',        rar:'common',    name:'Bamboo Rod',   desc:'+2% rare fish',
+      prev:'<span class="rod-demo">🎋</span>' },
+    { id:'rod_silver',         price:2000,  cat:'rod',        rar:'rare',      name:'Silver Rod',   desc:'+5% rare fish',
+      prev:'<span class="rod-demo silver">🎣</span>' },
+    { id:'rod_carbon',         price:3500,  cat:'rod',        rar:'rare',      name:'Carbon Rod',   desc:'+8% rare fish',
+      prev:'<span class="rod-demo">⚫</span>' },
+    { id:'rod_gold',           price:5000,  cat:'rod',        rar:'epic',      name:'Gold Rod',     desc:'+10% rare fish',
+      prev:'<span class="rod-demo gold">🎣</span>' },
+    { id:'rod_diamond',        price:15000, cat:'rod',        rar:'legendary', name:'Diamond Rod',  desc:'+20% rare fish',
+      prev:'<span class="rod-demo diamond">💎</span>' },
+    { id:'rod_mythic',         price:30000, cat:'rod',        rar:'mythic',    name:'Mythic Rod',   desc:'+30% rare fish + secret',
+      prev:'<span class="rod-demo mythic">🌟</span>' }
+  ];
+
+  var CATEGORIES = [
+    { id:'all',        label:'All',            em:'✨' },
+    { id:'name_color', label:'Name Colors',    em:'🎨' },
+    { id:'title',      label:'Titles',         em:'🏷️' },
+    { id:'frame',      label:'Frames',         em:'🖼️' },
+    { id:'effect',     label:'Effects',        em:'✨' },
+    { id:'rod',        label:'Rods',           em:'🎣' }
+  ];
+
+  // ==========================================================
+  // STATE
+  // ==========================================================
+  var SH = {
+    account: null,
+    inventory: [],
+    equipped: { name_color: null, title: null, profile_frame: null, profile_effect: null },
+    activeCat: 'all',
+    loading: false
+  };
+
+  async function shopLoad(){
+    if (!window.ME) return;
+    SH.loading = true;
+    try {
+      var r = await sb.from('bank_accounts').select('*').eq('user_id', window.ME.id).maybeSingle();
+      SH.account = r.data || { balance: 0 };
+      var inv = await sb.from('shop_inventory').select('item_id').eq('user_id', window.ME.id);
+      SH.inventory = (inv.data || []).map(function(x){ return x.item_id; });
+      var eq = await sb.from('shop_equipped').select('*').eq('user_id', window.ME.id).maybeSingle();
+      SH.equipped = Object.assign(
+        { name_color: null, title: null, profile_frame: null, profile_effect: null },
+        eq.data || {}
+      );
+    } catch(e){
+      console.warn("[Shop v5] load:", e.message);
+    }
+    SH.loading = false;
+  }
+
+  function equippedChips(){
+    var chips = [];
+    if (SH.equipped.name_color){
+      var it1 = SHOP.filter(function(x){ return x.id === SH.equipped.name_color; })[0];
+      if (it1) chips.push('<span class="chip">🎨 ' + E(it1.name) + '</span>');
+    }
+    if (SH.equipped.title){
+      var it2 = SHOP.filter(function(x){ return x.id === SH.equipped.title; })[0];
+      if (it2) chips.push('<span class="chip">🏷️ ' + E(it2.name) + '</span>');
+    }
+    if (SH.equipped.profile_frame){
+      var it3 = SHOP.filter(function(x){ return x.id === SH.equipped.profile_frame; })[0];
+      if (it3) chips.push('<span class="chip">🖼️ ' + E(it3.name) + '</span>');
+    }
+    if (SH.equipped.profile_effect){
+      var it4 = SHOP.filter(function(x){ return x.id === SH.equipped.profile_effect; })[0];
+      if (it4) chips.push('<span class="chip">✨ ' + E(it4.name) + '</span>');
+    }
+    if (!chips.length) chips.push('<span class="chip" style="background:rgba(120,120,140,.14);border-color:#2a2a3a;color:#8f8fa8">Nothing equipped</span>');
+    return chips.join('');
+  }
+
+  function buildShop(){
+    var bal = SH.account ? SH.account.balance : 0;
+    var h = '<div id="shopv5">';
+
+    // Header
+    h += '<div class="shopv5-header">' +
+      '<div class="shopv5-bal">' +
+        '<div class="icon">🪙</div>' +
+        '<div>' +
+          '<div class="num">' + bal.toLocaleString() + '</div>' +
+          '<div class="lbl">Your coins</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="shopv5-equipped">' + equippedChips() + '</div>' +
+    '</div>';
+
+    // Tabs
+    h += '<div class="shopv5-tabs">';
+    CATEGORIES.forEach(function(c){
+      h += '<button data-shcat="' + c.id + '"' + (SH.activeCat === c.id ? ' class="active"' : '') + '>' +
+        '<span class="em">' + c.em + '</span>' + c.label +
+      '</button>';
+    });
+    h += '</div>';
+
+    // Grid
+    var list = SH.activeCat === 'all' ? SHOP : SHOP.filter(function(x){ return x.cat === SH.activeCat; });
+    h += '<div class="shopv5-grid">';
+    list.forEach(function(item){
+      var owned = SH.inventory.indexOf(item.id) >= 0;
+      var equipped = (item.cat === 'name_color' && SH.equipped.name_color === item.id) ||
+                     (item.cat === 'title'      && SH.equipped.title === item.id) ||
+                     (item.cat === 'frame'      && SH.equipped.profile_frame === item.id) ||
+                     (item.cat === 'effect'     && SH.equipped.profile_effect === item.id);
+      var canEquip = item.cat !== 'rod';
+      var afford = bal >= item.price;
+
+      h += '<div class="shopv5-card ' + item.rar + '">' +
+        '<div class="rarity">' + item.rar + '</div>' +
+        '<div class="preview">' + item.prev + '</div>' +
+        '<div class="name">' + E(item.name) + '</div>' +
+        '<div class="desc">' + E(item.desc) + '</div>' +
+        '<div class="price">🪙 ' + item.price.toLocaleString() + '</div>';
+
+      if (owned){
+        if (equipped){
+          h += '<button class="unequip" data-shuneq="' + item.cat + '">Equipped · Unequip</button>';
+        } else if (canEquip){
+          h += '<button class="equip" data-sheq="' + item.id + '" data-shcat="' + item.cat + '">Equip</button>';
+        } else {
+          h += '<button class="owned" disabled>Owned</button>';
+        }
+      } else {
+        h += '<button class="buy" data-shbuy="' + item.id + '"' + (afford ? '' : ' disabled') + '>' +
+          (afford ? 'Buy' : 'Need ' + (item.price - bal).toLocaleString() + ' more') +
+        '</button>';
+      }
+      h += '</div>';
+    });
+    h += '</div>';
+
+    h += '</div>';
+    return h;
+  }
+
+  // ==========================================================
+  // ACTIONS
+  // ==========================================================
+  async function doBuy(itemId){
+    var item = SHOP.filter(function(x){ return x.id === itemId; })[0];
+    if (!item) return;
+    var bal = SH.account ? SH.account.balance : 0;
+    if (bal < item.price){ window.toast("Not enough coins", "", "err"); return; }
+
+    try {
+      // Try the RPC first
+      var r = await sb.rpc('purchase_shop_item', { p_item: itemId });
+      if (!r.error){ /* success */ }
+      else {
+        // Fallback: direct DB
+        var upd = await sb.from('bank_accounts').update({ balance: bal - item.price }).eq('user_id', window.ME.id);
+        if (upd.error) throw upd.error;
+        var ins = await sb.from('shop_inventory').insert({ user_id: window.ME.id, item_id: itemId });
+        if (ins.error && ins.error.code !== '23505') throw ins.error;
+      }
+      window.toast("Purchased!", item.name + ' unlocked', "ok");
+      await shopLoad();
+      renderShop();
+    } catch(e){
+      window.toast("Purchase failed", e.message || String(e), "err");
+    }
+  }
+
+  async function doEquip(itemId, cat){
+    try {
+      var r = await sb.rpc('equip_shop_item', { p_item: itemId });
+      if (r.error){
+        // Fallback direct update
+        var col = cat === 'name_color' ? 'name_color'
+                : cat === 'title' ? 'title'
+                : cat === 'frame' ? 'profile_frame'
+                : cat === 'effect' ? 'profile_effect' : null;
+        if (!col) throw r.error;
+        var ex = await sb.from('shop_equipped').select('user_id').eq('user_id', window.ME.id).maybeSingle();
+        if (ex.data){
+          var u = await sb.from('shop_equipped').update({ [col]: itemId }).eq('user_id', window.ME.id);
+          if (u.error) throw u.error;
+        } else {
+          var ins = await sb.from('shop_equipped').insert({ user_id: window.ME.id, [col]: itemId });
+          if (ins.error) throw ins.error;
+        }
+      }
+      window.toast("Equipped", "", "ok");
+      await shopLoad();
+      renderShop();
+      if (window.renderAll) window.renderAll();
+    } catch(e){
+      window.toast("Equip failed", e.message || String(e), "err");
+    }
+  }
+
+  async function doUnequip(cat){
+    try {
+      var r = await sb.rpc('unequip_shop_item', { p_kind: cat });
+      if (r.error){
+        var col = cat === 'name_color' ? 'name_color'
+                : cat === 'title' ? 'title'
+                : cat === 'frame' ? 'profile_frame'
+                : cat === 'effect' ? 'profile_effect' : null;
+        if (!col) throw r.error;
+        var u = await sb.from('shop_equipped').update({ [col]: null }).eq('user_id', window.ME.id);
+        if (u.error) throw u.error;
+      }
+      window.toast("Unequipped", "", "ok");
+      await shopLoad();
+      renderShop();
+      if (window.renderAll) window.renderAll();
+    } catch(e){
+      window.toast("Failed", e.message || String(e), "err");
+    }
+  }
+
+  // ==========================================================
+  // RENDER HOOKS
+  // ==========================================================
+  function renderShop(){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+    // Find the V3 wrapper that has the tabs
+    var wrapper = body.querySelector('div[style*="max-width:600px"]') || body.querySelector('div[style*="max-width: 600px"]');
+    if (!wrapper){
+      // Fallback: replace everything with the tabs + shop
+      var tabsEl = body.querySelector('.gr-tabs');
+      var tabsHTML = tabsEl ? tabsEl.outerHTML : '';
+      body.innerHTML = tabsHTML + buildShop();
+      wrapper = body;
+    } else {
+      var tabsEl = wrapper.querySelector('.gr-tabs');
+      var tabsHTML = tabsEl ? tabsEl.outerHTML : '';
+      wrapper.innerHTML = tabsHTML + buildShop();
+    }
+    wireShop();
+  }
+
+  function wireShop(){
+    // Category tabs
+    document.querySelectorAll('[data-shcat]').forEach(function(b){
+      // Skip if this is also an equip button
+      if (b.hasAttribute('data-sheq')) return;
+      b.onclick = function(){
+        SH.activeCat = b.dataset.shcat;
+        renderShop();
+      };
+    });
+    // Buy
+    document.querySelectorAll('[data-shbuy]').forEach(function(b){
+      b.onclick = function(){ doBuy(b.dataset.shbuy); };
+    });
+    // Equip
+    document.querySelectorAll('[data-sheq]').forEach(function(b){
+      b.onclick = function(){ doEquip(b.dataset.sheq, b.dataset.shcat); };
+    });
+    // Unequip
+    document.querySelectorAll('[data-shuneq]').forEach(function(b){
+      b.onclick = function(){ doUnequip(b.dataset.shuneq); };
+    });
+  }
+
+  function tryRenderShop(){
+    if (!onGames()) return false;
+    if (activeTab() !== 'shop') return false;
+    var body = document.getElementById('chat-body');
+    if (!body) return false;
+
+    // If we're already showing our shop, don't re-render on every tick
+    var already = document.getElementById('shopv5');
+    var emptyMount = document.getElementById('fish-mount');
+    if (emptyMount){
+      // V3 put an empty mount for fishing — nuke it if we're on shop
+      emptyMount.remove();
+    }
+    if (already) return true;
+
+    // Strip V3's "Opening shop..." stub text
+    body.querySelectorAll('div').forEach(function(el){
+      if (el.children.length > 0) return;
+      var t = (el.textContent || '').trim();
+      if (t === 'Opening shop...' || t === 'Loading Shop...' || t === 'Loading...') el.remove();
+    });
+
+    if (!SH.account && !SH.loading){
+      shopLoad().then(renderShop);
+    } else {
+      renderShop();
+    }
+    return true;
+  }
+
+  // Watcher 1: interval
+  setInterval(function(){
+    if (onGames() && activeTab() === 'shop'){
+      var already = document.getElementById('shopv5');
+      if (!already) tryRenderShop();
+    }
+  }, 150);
+
+  // Watcher 2: capture-phase click on shop tab
+  document.addEventListener('click', function(e){
+    var t = e.target.closest('[data-gr]');
+    if (!t) return;
+    if (t.dataset.gr !== 'shop') return;
+    if (!SH.account) shopLoad().then(function(){
+      setTimeout(renderShop, 30);
+    });
+    setTimeout(renderShop, 50);
+    setTimeout(renderShop, 200);
+    setTimeout(renderShop, 500);
+  }, true);
+
+  // Watcher 3: MutationObserver
+  function watchBody(){
+    var body = document.getElementById('chat-body');
+    if (!body) return setTimeout(watchBody, 300);
+    var mo = new MutationObserver(function(){
+      if (!onGames()) return;
+      if (activeTab() !== 'shop') return;
+      if (document.getElementById('shopv5')) return;
+      tryRenderShop();
+    });
+    mo.observe(body, { childList: true, subtree: true });
+  }
+  watchBody();
+
+  // Watcher 4: when CURRENT.type changes to games, if shop tab is already active
+  var lastType = null;
+  setInterval(function(){
+    var cur = window.CURRENT ? window.CURRENT.type : null;
+    if (cur !== lastType){
+      lastType = cur;
+      if (cur === 'games') setTimeout(tryRenderShop, 50);
+    }
+  }, 200);
+
+  // Manual escape hatch
+  window.__forceShop = function(){
+    shopLoad().then(renderShop);
+  };
+
+  // Boot
+  setTimeout(function(){
+    if (!window.ME) return;
+    shopLoad().then(function(){
+      console.log("[Shop v5] ready — items:", SHOP.length, "balance:", SH.account && SH.account.balance);
+    });
+  }, 4400);
+
+  console.log("[Shop v5] armed — " + SHOP.length + " items across " + CATEGORIES.length + " categories");
+})();
+</script>
+
 </body>
 </html>
