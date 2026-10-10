@@ -19901,13 +19901,13 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
 })();
 </script>
 
-<!-- SLEEPY_GAMES_CLEAN_V3 -->
+<!-- SLEEPY_GAMES_CLEAN_V4 -->
 <script>
 (function(){
   "use strict";
-  if (window.__sleepyGamesClean) return;
-  window.__sleepyGamesClean = true;
-  try { console.log("%c[Games] clean v3 armed", "color:#0ff;font-weight:bold"); } catch(e){}
+  if (window.__sleepyGamesCleanV4) return;
+  window.__sleepyGamesCleanV4 = true;
+  try { console.log("%c[Games v4] armed — instant timing bar", "color:#0ff;font-weight:bold"); } catch(e){}
 
   var E = function(s){ return String(s == null ? "" : s)
     .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
@@ -19922,15 +19922,18 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
   };
 
   // ==========================================================
-  // FAST FISHING (cast 250-500ms, bite window 700ms, marker 1500ms)
+  // FAST FISHING — bar appears instantly on bite tap
   // ==========================================================
   var FF = {
     account: null, phase: 'idle',
     caught: null, quality: null, mult: 1,
     biteT: null, missT: null, raf: null,
     pos: 0, start: 0,
-    WIN_MS: 1500, CAST_MIN: 250, CAST_MAX: 500,
-    BITE_WIN: 700, RESULT_HOLD: 1000
+    WIN_MS: 1000,
+    CAST_MIN: 200,
+    CAST_MAX: 400,
+    BITE_WIN: 900,
+    RESULT_HOLD: 1000
   };
 
   var FISH_POOL = [
@@ -19969,7 +19972,7 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
       if (r.data){ FF.account = r.data; return r.data; }
       var ins = await sb.from('bank_accounts').insert({ user_id: window.ME.id, balance: 100 }).select().single();
       FF.account = ins.data;
-    } catch(e){ console.warn("[Games] fish load:", e.message); }
+    } catch(e){ console.warn("[Games v4] fish load:", e.message); }
     return FF.account;
   }
 
@@ -19983,11 +19986,11 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
       stage = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,10,15,.4)">' +
         '<div style="font:700 15px system-ui;color:#5ee7d7">🎣 Casting…</div></div>';
     } else if (FF.phase === 'bite'){
-      stage = '<div id="ffs-bite" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,10,15,.55);cursor:pointer">' +
-        '<div style="font-size:72px;line-height:1">❗</div>' +
-        '<div style="font:800 22px system-ui;color:#5ee7d7;margin-top:6px">TAP!</div></div>';
+      stage = '<div id="ffs-bite" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,10,15,.55);cursor:pointer;user-select:none">' +
+        '<div style="font-size:80px;line-height:1;pointer-events:none">❗</div>' +
+        '<div style="font:800 24px system-ui;color:#5ee7d7;margin-top:4px;pointer-events:none">TAP!</div></div>';
     } else if (FF.phase === 'timing'){
-      stage = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,10,15,.5)">' +
+      stage = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,10,15,.5);pointer-events:none">' +
         '<div style="font:700 15px system-ui;color:#5ee7d7">Reel it in!</div></div>';
     } else if (FF.phase === 'result' && FF.caught){
       var c = FF.caught;
@@ -20026,10 +20029,10 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
       '</div>';
     }
 
-    h += '<div id="ffs-stage" style="position:relative;height:220px;border-radius:14px;background:linear-gradient(180deg,rgba(0,80,140,.5),rgba(0,40,90,.7));border:1px solid rgba(0,200,255,.3);overflow:hidden;margin-bottom:14px">';
+    h += '<div id="ffs-stage" style="position:relative;height:220px;border-radius:14px;background:linear-gradient(180deg,rgba(0,80,140,.5),rgba(0,40,90,.7));border:1px solid rgba(0,200,255,.3);overflow:hidden;margin-bottom:14px' + (FF.phase === 'timing' ? ';cursor:pointer' : '') + '">';
     var posns = [{t:'20%',l:'10%'},{t:'50%',l:'70%'},{t:'75%',l:'25%'},{t:'35%',l:'50%'},{t:'65%',l:'80%'},{t:'15%',l:'45%'}];
     ['🐟','🐠','🐟','🐡','🐠','🐟'].forEach(function(e, i){
-      h += '<div style="position:absolute;top:' + posns[i].t + ';left:' + posns[i].l + ';font-size:22px;opacity:.7">' + e + '</div>';
+      h += '<div style="position:absolute;top:' + posns[i].t + ';left:' + posns[i].l + ';font-size:22px;opacity:.7;pointer-events:none">' + e + '</div>';
     });
     h += stage + '</div>';
 
@@ -20048,18 +20051,31 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
     return h;
   }
 
+  // *** THE FIX — bar renders in the SAME FRAME as the tap ***
   function startTimingBar(){
+    if (FF.phase !== 'bite') return;
+
+    // Kill the miss timer so it can never steal this tap
+    if (FF.missT){ clearTimeout(FF.missT); FF.missT = null; }
+    if (FF.biteT){ clearTimeout(FF.biteT); FF.biteT = null; }
+
     FF.phase = 'timing';
     FF.start = Date.now();
     FF.pos = 0;
-    function tick(){
+
+    // *** Immediately rebuild the mount so #ffs-mark exists NOW ***
+    refillFish();
+
+    // Kick off the RAF loop
+    var tick = function(){
+      if (FF.phase !== 'timing') return;
       var e = Date.now() - FF.start;
       var t = (e % (FF.WIN_MS * 2)) / FF.WIN_MS;
       FF.pos = t <= 1 ? t * 100 : (2 - t) * 100;
       var m = document.getElementById('ffs-mark');
       if (m) m.style.left = 'calc(' + FF.pos + '% - 2px)';
       FF.raf = requestAnimationFrame(tick);
-    }
+    };
     tick();
   }
 
@@ -20154,39 +20170,64 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
     wireFish();
   }
 
-  // Aggressive mount watcher
-  var _fishWatcher = setInterval(function(){
+  // Capture-phase handler on the bite overlay so we win the click race
+  document.addEventListener('click', function(e){
+    if (!onGames()) return;
+    if (activeTab() !== 'fishing') return;
+    var bite = e.target.closest('#ffs-bite');
+    if (!bite) return;
+    // Ensure phase change runs at the earliest possible moment
+    if (FF.phase === 'bite') startTimingBar();
+  }, true);
+  document.addEventListener('touchstart', function(e){
+    if (!onGames()) return;
+    if (activeTab() !== 'fishing') return;
+    var bite = e.target.closest('#ffs-bite');
+    if (!bite) return;
+    if (FF.phase === 'bite') startTimingBar();
+  }, { capture: true, passive: true });
+
+  // Watcher — refill if the mount is missing our markers
+  setInterval(function(){
     if (!onGames()) return;
     if (activeTab() !== 'fishing') return;
     var mount = document.getElementById('fish-mount');
     if (!mount) return;
-    var isMine = mount.querySelector('.gsf-fish') && mount.querySelector('#ffs-cast') || mount.querySelector('#ffs-stage');
-    if (!isMine){
+    var hasOurStuff = mount.querySelector('#ffs-stage') || mount.querySelector('#ffs-cast') || mount.querySelector('#ffs-bite') || mount.querySelector('#ffs-mark');
+    if (!hasOurStuff){
       if (!FF.account) fishLoad().then(refillFish);
       else refillFish();
     }
   }, 150);
 
-  // MutationObserver on the mount itself
-  function watchFishMount(){
+  var mo = new MutationObserver(function(){
+    if (!onGames()) return;
+    if (activeTab() !== 'fishing') return;
+    var mount = document.getElementById('fish-mount');
+    if (!mount) return;
+    if (mount.querySelector('#ffs-stage')) return;
+    if (!FF.account) fishLoad().then(refillFish);
+    else refillFish();
+  });
+  function watchBody(){
     var body = document.getElementById('chat-body');
-    if (!body) return setTimeout(watchFishMount, 300);
-    var mo = new MutationObserver(function(){
-      if (!onGames()) return;
-      if (activeTab() !== 'fishing') return;
-      var mount = document.getElementById('fish-mount');
-      if (!mount) return;
-      var ours = mount.querySelector('#ffs-stage');
-      if (ours) return;
-      if (!FF.account) fishLoad().then(refillFish);
-      else refillFish();
-    });
+    if (!body) return setTimeout(watchBody, 300);
     mo.observe(body, { childList: true, subtree: true });
   }
-  watchFishMount();
+  watchBody();
+
+  // Expose manual controls
+  window.__forceFish = function(){
+    if (!FF.account) fishLoad().then(refillFish);
+    else refillFish();
+  };
+  window.__forceTiming = function(){
+    if (FF.phase === 'bite') startTimingBar();
+    else console.log("not in bite phase, current:", FF.phase);
+  };
 
   // ==========================================================
-  // FAST SNAKE with working reward
+  // FAST SNAKE with working reward (unchanged)
   // ==========================================================
   var SN = {
     running: false, timer: null,
@@ -20198,14 +20239,10 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
   async function creditSnake(score){
     var reward = Math.min(Math.floor(score / 2), 1000);
     if (reward <= 0 && score <= 0) return { reward: 0 };
-
-    // Try RPC
     try {
       var r = await sb.rpc('submit_snake_score', { p_score: score });
       if (!r.error && r.data && r.data.ok) return r.data;
     } catch(e){}
-
-    // Fallback: direct DB
     try {
       var acc = await sb.from('bank_accounts').select('balance').eq('user_id', window.ME.id).maybeSingle();
       var curBal = acc.data ? acc.data.balance : 0;
@@ -20325,7 +20362,6 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
     if (el) el.textContent = SN.score;
   }
 
-  // Intercept snake-start click
   document.addEventListener('click', function(e){
     var start = e.target.closest('#snake-start');
     if (start){
@@ -20354,7 +20390,7 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
   });
 
   // ==========================================================
-  // LEADERBOARD (works without SQL)
+  // LEADERBOARD
   // ==========================================================
   async function loadLB(tab){
     var out = { tab: tab, rows: [], fallback: false };
@@ -20370,7 +20406,6 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
           return out;
         }
       } catch(e){}
-      // Fallback to wealth
       out.fallback = true;
       try {
         var r2 = await sb.from('bank_accounts').select('user_id, balance').order('balance', { ascending: false }).limit(20);
@@ -20399,6 +20434,7 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
   async function renderLB(tab){
     var body = document.getElementById('chat-body');
     if (!body) return;
+    window.__lastLBTab = tab;
     var tabs = '<div style="display:flex;gap:4px;background:#0a0a0f;padding:4px;border-radius:10px;margin-bottom:14px">';
     ['chess','ttt','snake'].forEach(function(t){
       var lbl = t === 'chess' ? '♟️ Chess' : t === 'ttt' ? '⭕ X-O' : '🐍 Snake';
@@ -20429,7 +20465,7 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
     if (!el) return;
     if (!data.rows.length){
       el.innerHTML = '<div style="padding:30px;text-align:center;color:#5f6c85;font-size:13px">' +
-        (data.fallback ? 'Showing coin leaderboard (snake scores table not set up).<br><br>' : '') + 'No entries yet.</div>';
+        (data.fallback ? 'Showing coin leaderboard (snake table not set up).<br><br>' : '') + 'No entries yet.</div>';
       return;
     }
     el.innerHTML = data.rows.map(function(r, i){
@@ -20447,7 +20483,6 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
     }).join('');
   }
 
-  // Intercept snake-lb click
   document.addEventListener('click', function(e){
     var lb = e.target.closest('#snake-lb');
     if (lb){
@@ -20465,13 +20500,11 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
     }
   }, true);
 
-  // Override openLeaderboards
   window.openLeaderboards = function(){
     window.CURRENT = Object.assign({}, window.CURRENT, { type: 'leaderboards' });
-    renderLB('chess');
+    renderLB(window.__lastLBTab || 'chess');
   };
 
-  // Hook renderChat for leaderboards view
   var _rc = window.renderChat;
   if (typeof _rc === 'function'){
     window.renderChat = function(){
@@ -20495,16 +20528,11 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
     };
   }
 
-  // ==========================================================
-  // BOOT
-  // ==========================================================
   setTimeout(function(){
     if (!window.ME) return;
     fishLoad();
-    console.log("[Games] clean v3 ready");
+    console.log("[Games v4] ready — bar renders instantly on bite tap");
   }, 4400);
-
-  console.log("[Games] clean v3 armed");
 })();
 </script>
 
