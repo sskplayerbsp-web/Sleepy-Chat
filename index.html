@@ -20616,5 +20616,455 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
 })();
 </script>
 
+<!-- SLEEPY_FISH_SHOP_FORCE_V1 -->
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyFishShopForce) return;
+  window.__sleepyFishShopForce = true;
+  function log(){ try{console.log.apply(console,["[Force]"].concat([].slice.call(arguments)));}catch(e){} }
+  function esc(s){ return window.esc ? window.esc(s) : String(s); }
+
+  // Strip stub text V3 appends
+  function stripStub(){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+    body.querySelectorAll('div').forEach(function(el){
+      if (el.children.length > 0) return;
+      var t = (el.textContent || '').trim();
+      if (/^(Fishing is loading|Loading fishing|Opening shop|Loading Shop|Loading Play)/.test(t)){
+        el.remove();
+      }
+    });
+  }
+
+  // ============================================================
+  // FISHING
+  // ============================================================
+  var FISH_TABLE = [
+    { name:'Minnow',         emoji:'🐟', tier:'common',    value:10   },
+    { name:'Sardine',        emoji:'🐟', tier:'common',    value:15   },
+    { name:'Bass',           emoji:'🐟', tier:'common',    value:25   },
+    { name:'Trout',          emoji:'🐠', tier:'uncommon',  value:50   },
+    { name:'Salmon',         emoji:'🐠', tier:'uncommon',  value:75   },
+    { name:'Tuna',           emoji:'🐟', tier:'uncommon',  value:100  },
+    { name:'Clownfish',      emoji:'🐠', tier:'rare',      value:150  },
+    { name:'Swordfish',      emoji:'🐟', tier:'rare',      value:250  },
+    { name:'Golden Koi',     emoji:'🐠', tier:'legendary', value:500  },
+    { name:'Mythic Arowana', emoji:'🐉', tier:'legendary', value:1000 },
+    { name:'Pufferfish',     emoji:'🐡', tier:'puffer',    value:0    }
+  ];
+  var FW = { common: 10, uncommon: 6, rare: 3, legendary: 1, puffer: 5 };
+
+  var fish = {
+    account: null, phase:'idle', caught:null, quality:null, mult:1,
+    biteTimer:null, missTimer:null, raf:null, pos:0, start:0, window:2600
+  };
+
+  async function fishLoadAccount(){
+    if (!window.ME) return null;
+    try {
+      var r = await sb.from('bank_accounts').select('*').eq('user_id', window.ME.id).maybeSingle();
+      if (r.data){ fish.account = r.data; return r.data; }
+      var ins = await sb.from('bank_accounts').insert({ user_id: window.ME.id, balance: 100 }).select().single();
+      fish.account = ins.data;
+    } catch(e){ log("load:", e.message); }
+    return fish.account;
+  }
+
+  function clearFishTimers(){
+    if (fish.biteTimer){ clearTimeout(fish.biteTimer); fish.biteTimer = null; }
+    if (fish.missTimer){ clearTimeout(fish.missTimer); fish.missTimer = null; }
+    if (fish.raf){ cancelAnimationFrame(fish.raf); fish.raf = null; }
+  }
+
+  function buildFishHTML(){
+    var bal = fish.account ? fish.account.balance : 0;
+    var poisoned = fish.account && fish.account.poisoned;
+    var h = '<div class="gsf-fish">';
+    h += '<div class="gsf-bal"><div class="amt">🪙 ' + bal.toLocaleString() + '</div><div class="lbl">Your balance</div></div>';
+    if (poisoned){
+      h += '<div class="gsf-poison"><span class="em">🐡</span><div class="info"><div class="t">POISONED</div><div class="d">-10 coins per minute</div></div>' +
+        '<button id="gsf-cure"' + (bal < 100 ? ' disabled' : '') + '>Cure -100</button></div>';
+    }
+    h += '<div class="gsf-stage" id="gsf-stage">';
+    var pos = [{t:'20%',l:'10%'},{t:'50%',l:'70%'},{t:'75%',l:'25%'},{t:'35%',l:'50%'},{t:'65%',l:'80%'},{t:'15%',l:'45%'}];
+    ['🐟','🐠','🐟','🐡','🐠','🐟'].forEach(function(e, i){
+      h += '<div class="gsf-swim" style="top:' + pos[i].t + ';left:' + pos[i].l + ';animation-duration:' + (4 + i * .3) + 's">' + e + '</div>';
+    });
+    if (fish.phase === 'casting'){
+      h += '<div class="gsf-overlay"><div class="m">Casting…</div><div class="hint">Wait for a bite…</div></div>';
+    }
+    if (fish.phase === 'bite'){
+      h += '<div class="gsf-overlay bite" id="gsf-bite"><div class="bite-em">❗</div><div class="m">Tap now!</div><div class="hint">Hook the fish before it escapes</div></div>';
+    }
+    if (fish.phase === 'timing'){
+      h += '<div class="gsf-overlay"><div class="m">Reel it in!</div><div class="hint">Tap the stage when the bar is in the middle</div></div>';
+    }
+    if (fish.phase === 'result' && fish.caught){
+      var c = fish.caught;
+      var cls = c.tier === 'legendary' ? 'legendary' : c.tier === 'rare' ? 'rare' : c.tier === 'puffer' ? 'puffer' : '';
+      var valLine = c.tier === 'puffer' ? '<div class="val bad">+ POISON</div>' :
+        '<div class="val">+' + Math.round(c.value * fish.mult) + ' 🪙' + (fish.mult > 1 ? ' (x' + fish.mult + ')' : '') + '</div>';
+      var qLine = fish.quality ? '<div class="q ' + fish.quality + '">' + (fish.quality === 'perfect' ? '🌟 PERFECT!' : fish.quality === 'great' ? '✨ Great!' : '👍 Nice') + '</div>' : '';
+      h += '<div class="gsf-result"><div class="gsf-card ' + cls + '"><div class="em">' + c.emoji + '</div><div class="nm">' + esc(c.name) + '</div>' +
+        '<div class="tier">' + esc(c.tier === 'puffer' ? 'HAZARD' : c.tier) + '</div>' + valLine + qLine + '</div></div>';
+    }
+    h += '</div>';
+    if (fish.phase === 'timing'){
+      h += '<div class="gsf-timing"><div class="gsf-timing-bar"><div class="gsf-mark" id="gsf-mark" style="left:0"></div></div>' +
+        '<div class="gsf-timing-lbl"><span>Miss</span><span>OK</span><span class="c">PERFECT</span><span>OK</span><span>Miss</span></div></div>';
+      setTimeout(startTiming, 0);
+    }
+    if (fish.phase === 'idle'){
+      h += '<button class="gsf-cast-btn" id="gsf-cast"' + (poisoned ? ' disabled' : '') + '>' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px"><path d="M4 20 12 12M12 12l8-8M12 12H4M12 12v8"/></svg>' +
+        (poisoned ? 'Cure first to fish' : 'Cast Line') + '</button>';
+    }
+    h += '<div class="gsf-recent" id="gsf-recent"><h3>Recent catches</h3><div id="gsf-rc-list">Loading…</div></div>';
+    h += '</div>';
+    return h;
+  }
+
+  function startTiming(){
+    fish.phase = 'timing';
+    fish.start = Date.now();
+    fish.pos = 0;
+    var tick = function(){
+      var e = Date.now() - fish.start;
+      var t = (e % (fish.window * 2)) / fish.window;
+      fish.pos = t <= 1 ? t * 100 : (2 - t) * 100;
+      var m = document.getElementById('gsf-mark');
+      if (m) m.style.left = 'calc(' + fish.pos + '% - 2px)';
+      fish.raf = requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  function hookTiming(){
+    if (fish.phase !== 'timing') return;
+    clearFishTimers();
+    var d = Math.abs(fish.pos - 50);
+    var q = d <= 6 ? 'perfect' : d <= 14 ? 'great' : d <= 28 ? 'ok' : 'miss';
+    finishCast(q);
+  }
+
+  async function doCast(){
+    if (fish.phase !== 'idle') return;
+    if (!fish.account) await fishLoadAccount();
+    if (fish.account && fish.account.poisoned){
+      window.toast("You're poisoned", "Cure first.", "err"); return;
+    }
+    fish.phase = 'casting'; fish.caught = null; fish.quality = null; fish.mult = 1;
+    refreshFishMount();
+    var wait = 1400 + Math.random() * 2400;
+    fish.biteTimer = setTimeout(function(){
+      if (fish.phase !== 'casting') return;
+      fish.phase = 'bite';
+      refreshFishMount();
+      if (navigator.vibrate) try { navigator.vibrate(60); } catch(e){}
+      fish.missTimer = setTimeout(function(){
+        if (fish.phase === 'bite') finishCast('miss');
+      }, 1600);
+    }, wait);
+  }
+
+  async function finishCast(quality){
+    fish.phase = 'result'; fish.quality = quality;
+    if (quality === 'miss'){
+      fish.caught = null;
+      refreshFishMount();
+      setTimeout(function(){ fish.phase = 'idle'; refreshFishMount(); loadRecentCatches(); }, 1200);
+      window.toast("Missed", "The fish got away.", "err");
+      return;
+    }
+    var totalW = 0;
+    FISH_TABLE.forEach(function(f){ totalW += FW[f.tier] || 1; });
+    var r = Math.random() * totalW, acc = 0, caught = FISH_TABLE[0];
+    for (var i = 0; i < FISH_TABLE.length; i++){
+      acc += FW[FISH_TABLE[i].tier] || 1;
+      if (r < acc){ caught = FISH_TABLE[i]; break; }
+    }
+    try {
+      var pr = await sb.from('fishing_catches').select('fish_tier')
+        .eq('user_id', window.ME.id).order('caught_at', { ascending: false }).limit(20);
+      var rows = pr.data || [];
+      var lastIdx = -1;
+      for (var j = 0; j < rows.length; j++)
+        if (rows[j].fish_tier === 'puffer'){ lastIdx = j; break; }
+      var nonPuff = lastIdx < 0 ? rows.length : lastIdx;
+      if (nonPuff >= 10 && caught.tier !== 'puffer'){
+        caught = { name:'Pufferfish', emoji:'🐡', tier:'puffer', value:0 };
+      }
+    } catch(e){}
+    var mult = quality === 'perfect' ? 2 : quality === 'great' ? 1.5 : 1;
+    fish.mult = mult; fish.caught = caught;
+    try {
+      var r2 = await sb.rpc('record_catch', {
+        fish_name: caught.name, fish_emoji: caught.emoji,
+        fish_tier: caught.tier, fish_value: Math.round(caught.value * mult)
+      });
+      if (r2.error) throw r2.error;
+      await fishLoadAccount();
+      refreshFishMount();
+      loadRecentCatches();
+      setTimeout(function(){
+        if (fish.phase === 'result'){ fish.phase = 'idle'; refreshFishMount(); }
+      }, 2600);
+    } catch(e){
+      log("catch:", e.message);
+      window.toast("Error", e.message || String(e), "err");
+      fish.phase = 'idle'; refreshFishMount();
+    }
+  }
+
+  async function doCure(){
+    try {
+      var r = await sb.rpc('cure_poison');
+      if (r.error) throw r.error;
+      await fishLoadAccount();
+      window.toast("Cured", "You're healthy again.", "ok");
+      refreshFishMount();
+    } catch(e){ window.toast("Error", e.message || String(e), "err"); }
+  }
+
+  async function loadRecentCatches(){
+    var el = document.getElementById('gsf-rc-list');
+    if (!el || !window.ME) return;
+    try {
+      var r = await sb.from('fishing_catches').select('*')
+        .eq('user_id', window.ME.id).order('caught_at', { ascending: false }).limit(6);
+      var rows = r.data || [];
+      if (!rows.length){ el.innerHTML = '<div style="color:var(--text3);font-size:12.5px">No catches yet. Cast your line!</div>'; return; }
+      el.innerHTML = rows.map(function(c){
+        var v = c.fish_tier === 'puffer' ? '<span class="val bad">POISON</span>' : '<span class="val">+' + c.value + '</span>';
+        return '<div class="gsf-rc"><span class="em">' + c.fish_emoji + '</span><span class="nm">' + esc(c.fish_name) + '</span>' +
+          '<span class="tier">' + esc(c.fish_tier) + '</span>' + v + '</div>';
+      }).join('');
+    } catch(e){}
+  }
+
+  function refreshFishMount(){
+    var mount = document.getElementById('fish-mount');
+    if (!mount) return;
+    mount.innerHTML = buildFishHTML();
+    wireFish();
+  }
+
+  function wireFish(){
+    var cast = document.getElementById('gsf-cast'); if (cast) cast.onclick = doCast;
+    var cure = document.getElementById('gsf-cure'); if (cure && !cure.disabled) cure.onclick = doCure;
+    var bite = document.getElementById('gsf-bite'); if (bite) bite.onclick = startTiming;
+    var stage = document.getElementById('gsf-stage');
+    if (stage && fish.phase === 'timing'){ stage.style.cursor = 'pointer'; stage.onclick = hookTiming; }
+    if (fish.phase === 'idle') loadRecentCatches();
+  }
+
+  function tryFillFishing(){
+    if (!window.CURRENT || window.CURRENT.type !== 'games') return false;
+    var body = document.getElementById('chat-body'); if (!body) return false;
+    var active = body.querySelector('[data-gr].active');
+    if (!active || active.dataset.gr !== 'fishing') return false;
+    var mount = document.getElementById('fish-mount');
+    if (!mount) return false;
+    if (mount.querySelector('.gsf-fish')) { stripStub(); return true; }
+    refreshFishMount();
+    stripStub();
+    return true;
+  }
+
+  // ============================================================
+  // SHOP
+  // ============================================================
+  var SHOP_ACCOUNT = null, SHOP_INV = [], SHOP_EQ = { name_color:null, title:null, profile_frame:null };
+  var SHOP_ITEMS = [
+    { id:'name_color_gold',    price:500,   category:'name_color', name:'Gold Name',    desc:'Shiny gold name',      preview:'<span class="preview-sample sample-gold">Aa</span>' },
+    { id:'name_color_rose',    price:500,   category:'name_color', name:'Rose Name',    desc:'Warm rose gradient',   preview:'<span class="preview-sample sample-rose">Aa</span>' },
+    { id:'name_color_teal',    price:500,   category:'name_color', name:'Teal Name',    desc:'Cool teal gradient',   preview:'<span class="preview-sample sample-teal">Aa</span>' },
+    { id:'name_color_amber',   price:750,   category:'name_color', name:'Amber Name',   desc:'Warm amber gradient',  preview:'<span class="preview-sample sample-amber">Aa</span>' },
+    { id:'name_color_lime',    price:750,   category:'name_color', name:'Lime Name',    desc:'Bright lime green',    preview:'<span class="preview-sample sample-lime">Aa</span>' },
+    { id:'name_color_ice',     price:1200,  category:'name_color', name:'Ice Name',     desc:'Frosted cool blue',    preview:'<span class="preview-sample sample-ice">Aa</span>' },
+    { id:'name_color_rainbow', price:2000,  category:'name_color', name:'Rainbow Name', desc:'Animated rainbow',     preview:'<span class="preview-sample sample-rainbow">Aa</span>' },
+    { id:'title_angler',       price:500,   category:'title',      name:'Angler',       desc:'Show "Angler"',        preview:'🎣' },
+    { id:'title_champion',     price:1000,  category:'title',      name:'Champion',     desc:'Show "Champion"',      preview:'🏆' },
+    { id:'title_legend',       price:5000,  category:'title',      name:'Legend',       desc:'Show "Legend"',        preview:'⭐' },
+    { id:'title_tycoon',       price:2000,  category:'title',      name:'Tycoon',       desc:'Show "Tycoon"',        preview:'💼' },
+    { id:'title_reeler',       price:3000,  category:'title',      name:'Reeler',       desc:'Show "Reeler"',        preview:'🎣' },
+    { id:'title_boss',         price:8000,  category:'title',      name:'Boss',         desc:'Show "Boss"',          preview:'👑' },
+    { id:'title_sleeper',      price:15000, category:'title',      name:'Sleeper',      desc:'Show "Sleeper"',       preview:'🌙' },
+    { id:'frame_gold',         price:1000,  category:'frame',      name:'Gold Frame',   desc:'Gold ring',            preview:'🟡' },
+    { id:'frame_glow',         price:1500,  category:'frame',      name:'Glow Frame',   desc:'Cyan glow',            preview:'✨' },
+    { id:'frame_neon',         price:2000,  category:'frame',      name:'Neon Frame',   desc:'Bright cyan',          preview:'🟦' },
+    { id:'frame_ember',        price:2500,  category:'frame',      name:'Ember Frame',  desc:'Warm orange',          preview:'🔥' },
+    { id:'frame_void',         price:5000,  category:'frame',      name:'Void Frame',   desc:'Purple aura',          preview:'🟪' },
+    { id:'rod_bamboo',         price:300,   category:'rod',        name:'Bamboo Rod',   desc:'+2% rare',             preview:'🎋' },
+    { id:'rod_silver',         price:2000,  category:'rod',        name:'Silver Rod',   desc:'+5% rare',             preview:'🥈' },
+    { id:'rod_carbon',         price:3500,  category:'rod',        name:'Carbon Rod',   desc:'+8% rare',             preview:'⚫' },
+    { id:'rod_gold',           price:5000,  category:'rod',        name:'Gold Rod',     desc:'+10% rare',            preview:'🥇' },
+    { id:'rod_diamond',        price:15000, category:'rod',        name:'Diamond Rod',  desc:'+20% rare',            preview:'💎' },
+    { id:'rod_mythic',         price:25000, category:'rod',        name:'Mythic Rod',   desc:'+30% rare',            preview:'🌟' }
+  ];
+
+  async function shopLoad(){
+    if (!window.ME) return;
+    try {
+      var r = await sb.from('bank_accounts').select('*').eq('user_id', window.ME.id).maybeSingle();
+      SHOP_ACCOUNT = r.data || { balance: 0 };
+      var inv = await sb.from('shop_inventory').select('item_id').eq('user_id', window.ME.id);
+      SHOP_INV = (inv.data || []).map(function(x){ return x.item_id; });
+      var eq = await sb.from('shop_equipped').select('*').eq('user_id', window.ME.id).maybeSingle();
+      SHOP_EQ = eq.data || { name_color:null, title:null, profile_frame:null };
+    } catch(e){ log("shop load:", e.message); }
+  }
+
+  function buildShopHTML(){
+    var bal = SHOP_ACCOUNT ? SHOP_ACCOUNT.balance : 0;
+    var h = '<div class="gsf-shop">';
+    h += '<div class="gsf-shop-head"><div class="amt">🪙 ' + bal.toLocaleString() + '</div><div class="lbl">Spend on cosmetics</div></div>';
+    [['name_color','Name Colors'], ['title','Titles'], ['frame','Avatar Frames'], ['rod','Fishing Rods']].forEach(function(cat){
+      var items = SHOP_ITEMS.filter(function(x){ return x.category === cat[0]; });
+      if (!items.length) return;
+      h += '<div class="gsf-cat">' + cat[1] + '</div><div class="gsf-shop-grid">';
+      items.forEach(function(item){
+        var owned = SHOP_INV.indexOf(item.id) >= 0;
+        var isColor = item.category === 'name_color';
+        var isTitle = item.category === 'title';
+        var isFrame = item.category === 'frame';
+        var equipped = (isColor && SHOP_EQ.name_color === item.id) ||
+                       (isTitle && SHOP_EQ.title === item.id) ||
+                       (isFrame && SHOP_EQ.profile_frame === item.id);
+        var canEquip = isColor || isTitle || isFrame;
+        var afford = bal >= item.price;
+        h += '<div class="gsf-item"><div class="prev">' + item.preview + '</div>' +
+          '<div class="n">' + esc(item.name) + '</div><div class="d">' + esc(item.desc) + '</div>' +
+          '<div class="p">🪙 ' + item.price.toLocaleString() + '</div>';
+        if (owned){
+          if (equipped) h += '<button class="owned" data-gsf-unequip="' + item.category + '">Equipped · tap to remove</button>';
+          else if (canEquip) h += '<button class="equip" data-gsf-equip="' + item.id + '">Equip</button>';
+          else h += '<button class="owned" style="cursor:default">Owned</button>';
+        } else {
+          h += '<button class="buy" data-gsf-buy="' + item.id + '"' + (afford ? '' : ' disabled') + '>' +
+            (afford ? 'Buy' : 'Need ' + (item.price - bal) + ' more') + '</button>';
+        }
+        h += '</div>';
+      });
+      h += '</div>';
+    });
+    h += '</div>';
+    return h;
+  }
+
+  function wireShop(){
+    document.querySelectorAll('[data-gsf-buy]').forEach(function(b){
+      b.onclick = async function(){
+        try {
+          var r = await sb.rpc('purchase_shop_item', { p_item: b.dataset.gsfBuy });
+          if (r.error) throw r.error;
+          window.toast("Purchased", "Enjoy!", "ok");
+          await shopLoad();
+          refreshShopMount();
+        } catch(e){ window.toast("Purchase failed", e.message || String(e), "err"); }
+      };
+    });
+    document.querySelectorAll('[data-gsf-equip]').forEach(function(b){
+      b.onclick = async function(){
+        try {
+          await sb.rpc('equip_shop_item', { p_item: b.dataset.gsfEquip });
+          await shopLoad();
+          window.toast("Equipped", "", "ok");
+          refreshShopMount();
+          if (window.renderAll) window.renderAll();
+        } catch(e){ window.toast("Equip failed", e.message || String(e), "err"); }
+      };
+    });
+    document.querySelectorAll('[data-gsf-unequip]').forEach(function(b){
+      b.onclick = async function(){
+        try {
+          await sb.rpc('unequip_shop_item', { p_kind: b.dataset.gsfUnequip });
+          await shopLoad();
+          window.toast("Removed", "", "ok");
+          refreshShopMount();
+          if (window.renderAll) window.renderAll();
+        } catch(e){ window.toast("Failed", e.message || String(e), "err"); }
+      };
+    });
+  }
+
+  function refreshShopMount(){
+    var body = document.getElementById('chat-body'); if (!body) return;
+    var wrapper = body.querySelector('div[style*="max-width:600px"]') || body.querySelector('div[style*="max-width: 600px"]');
+    if (!wrapper) return;
+    var tabsEl = wrapper.querySelector('.gr-tabs');
+    var tabsHTML = tabsEl ? tabsEl.outerHTML : '';
+    wrapper.innerHTML = tabsHTML + buildShopHTML();
+    wrapper.querySelectorAll('[data-gr]').forEach(function(b){
+      var old = b.onclick;
+      b.onclick = function(e){
+        if (old) try { old.call(this, e); } catch(_){}
+        setTimeout(tryFillCurrent, 40);
+        setTimeout(tryFillCurrent, 150);
+      };
+    });
+    wireShop();
+  }
+
+  function tryFillShop(){
+    if (!window.CURRENT || window.CURRENT.type !== 'games') return false;
+    var body = document.getElementById('chat-body'); if (!body) return false;
+    var active = body.querySelector('[data-gr].active');
+    if (!active || active.dataset.gr !== 'shop') return false;
+    var wrapper = body.querySelector('div[style*="max-width:600px"]');
+    if (!wrapper) return false;
+    if (wrapper.querySelector('.gsf-shop')) { stripStub(); return true; }
+    refreshShopMount();
+    stripStub();
+    return true;
+  }
+
+  function tryFillCurrent(){ tryFillFishing(); tryFillShop(); }
+
+  // ---------- Watchers ----------
+  var _rc = window.renderChat;
+  if (typeof _rc === 'function'){
+    window.renderChat = function(){
+      var r = _rc.apply(this, arguments);
+      setTimeout(tryFillCurrent, 60);
+      setTimeout(tryFillCurrent, 200);
+      return r;
+    };
+  }
+
+  document.addEventListener('click', function(e){
+    var tab = e.target.closest('[data-gr]');
+    if (!tab) return;
+    if (!window.CURRENT || window.CURRENT.type !== 'games') return;
+    var which = tab.dataset.gr;
+    if (which === 'fishing'){
+      if (!fish.account) fishLoadAccount().then(function(){ setTimeout(tryFillFishing, 30); });
+      else setTimeout(tryFillFishing, 30);
+      setTimeout(tryFillFishing, 100);
+      setTimeout(tryFillFishing, 300);
+    } else if (which === 'shop'){
+      if (!SHOP_ACCOUNT) shopLoad().then(function(){ setTimeout(tryFillShop, 30); });
+      else setTimeout(tryFillShop, 30);
+      setTimeout(tryFillShop, 100);
+      setTimeout(tryFillShop, 300);
+    }
+  }, true);
+
+  setInterval(tryFillCurrent, 500);
+
+  setTimeout(async function(){
+    if (!window.ME) return;
+    await fishLoadAccount();
+    await shopLoad();
+    tryFillCurrent();
+    log("force fill ready");
+  }, 4400);
+
+  log("loaded");
+})();
+</script>
+
 </body>
 </html>
