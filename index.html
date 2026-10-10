@@ -19293,887 +19293,6 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
 })();
 </script>
 
-<!-- SLEEPY_GAME_SHOP_FIX_V1 -->
-<style>
-/* Fishing mini-game (self-contained) */
-.gsf-fish{padding:0 0 40px}
-.gsf-bal{text-align:center;padding:14px;border-radius:14px;
-  background:linear-gradient(135deg,rgba(255,200,87,.1),rgba(0,230,118,.06));
-  border:1px solid rgba(255,200,87,.3);margin-bottom:18px}
-.gsf-bal .amt{font-family:'Space Grotesk',sans-serif;font-size:32px;font-weight:700;
-  color:#ffd166;line-height:1;text-shadow:0 0 24px rgba(255,200,87,.4)}
-.gsf-bal .lbl{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--text3);margin-top:5px}
-.gsf-poison{display:flex;align-items:center;gap:12px;padding:14px;border-radius:12px;
-  background:rgba(255,45,111,.08);border:1px solid rgba(255,45,111,.4);margin-bottom:16px}
-.gsf-poison .em{font-size:24px;animation:gsfShake 1.5s ease-in-out infinite}
-@keyframes gsfShake{0%,100%{transform:rotate(0)}25%{transform:rotate(-8deg)}75%{transform:rotate(8deg)}}
-.gsf-poison .info{flex:1}
-.gsf-poison .t{font-weight:700;font-size:13px;color:#ff8aa8}
-.gsf-poison .d{font-size:11.5px;color:var(--text3);margin-top:2px}
-.gsf-poison button{padding:9px 16px;border-radius:8px;
-  background:linear-gradient(135deg,#ff2d6f,#c41d54);color:#fff;border:none;
-  font-weight:700;font-size:12.5px;cursor:pointer;font-family:inherit}
-.gsf-poison button:disabled{opacity:.5;cursor:not-allowed}
-.gsf-stage{position:relative;height:260px;border-radius:16px;
-  background:linear-gradient(180deg,rgba(0,80,140,.5),rgba(0,40,90,.7));
-  border:1px solid rgba(0,200,255,.3);overflow:hidden;margin-bottom:16px}
-.gsf-stage::before{content:'';position:absolute;inset:0;
-  background:repeating-linear-gradient(90deg,transparent 0 40px,rgba(0,255,224,.05) 40px 42px);
-  animation:gsfWater 8s linear infinite}
-@keyframes gsfWater{from{background-position:0 0}to{background-position:80px 0}}
-.gsf-swim{position:absolute;font-size:24px;filter:drop-shadow(0 0 6px rgba(0,200,255,.5));
-  opacity:.75;animation:gsfSwim 4s ease-in-out infinite}
-@keyframes gsfSwim{0%,100%{transform:translate(0,0) rotate(-5deg)}
-  25%{transform:translate(18px,-8px) rotate(6deg)}
-  50%{transform:translate(-10px,10px) rotate(-3deg)}
-  75%{transform:translate(-18px,-5px) rotate(4deg)}}
-.gsf-overlay{position:absolute;inset:0;display:flex;flex-direction:column;
-  align-items:center;justify-content:center;gap:12px;z-index:5;
-  background:rgba(10,10,15,.55);backdrop-filter:blur(4px)}
-.gsf-overlay .m{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;
-  color:var(--cyan);letter-spacing:.06em;text-transform:uppercase;
-  text-shadow:0 0 12px rgba(94,231,215,.6)}
-.gsf-overlay .hint{font-size:12px;color:var(--text3);text-align:center;max-width:280px;line-height:1.5}
-.gsf-overlay.bite{cursor:pointer}
-.gsf-overlay .bite-em{font-size:60px;animation:gsfPop .3s ease}
-@keyframes gsfPop{0%{transform:scale(0) rotate(-20deg)}
-  70%{transform:scale(1.3) rotate(10deg)}
-  100%{transform:scale(1) rotate(0)}}
-.gsf-timing{margin-top:6px}
-.gsf-timing-bar{position:relative;height:36px;border-radius:10px;overflow:hidden;
-  background:linear-gradient(90deg,
-    rgba(255,45,111,.4) 0%,rgba(255,171,0,.4) 20%,
-    rgba(74,222,128,.5) 40%,rgba(94,231,215,.75) 48%,
-    rgba(94,231,215,.75) 52%,rgba(74,222,128,.5) 60%,
-    rgba(255,171,0,.4) 80%,rgba(255,45,111,.4) 100%);
-  border:1px solid rgba(94,231,215,.4)}
-.gsf-mark{position:absolute;top:-3px;bottom:-3px;left:0;width:4px;
-  background:#fff;border-radius:2px;box-shadow:0 0 12px #fff,0 0 24px rgba(94,231,215,.9)}
-.gsf-timing-lbl{display:flex;justify-content:space-between;margin-top:6px;
-  font-size:10.5px;color:var(--text3);font-family:monospace}
-.gsf-timing-lbl .c{color:var(--cyan);font-weight:700}
-.gsf-cast-btn{width:100%;margin-top:16px;padding:16px;border-radius:14px;
-  background:linear-gradient(135deg,#5ee7d7,#0096ff);color:#04120f;
-  font-weight:800;font-size:15px;letter-spacing:.04em;border:none;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;gap:10px;font-family:inherit;
-  transition:all .15s}
-.gsf-cast-btn:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,200,255,.5)}
-.gsf-cast-btn:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
-.gsf-result{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-  background:rgba(10,10,15,.9);z-index:6;animation:gsfIn .35s ease}
-@keyframes gsfIn{from{opacity:0}to{opacity:1}}
-.gsf-card{text-align:center;padding:26px;border-radius:16px;min-width:220px;
-  font-family:'Space Grotesk',sans-serif;
-  border:1px solid rgba(255,200,87,.4);
-  background:linear-gradient(135deg,rgba(255,200,87,.12),rgba(139,124,255,.08))}
-.gsf-card.rare{background:linear-gradient(135deg,rgba(94,231,215,.2),rgba(139,124,255,.12));
-  border-color:rgba(94,231,215,.5)}
-.gsf-card.legendary{background:linear-gradient(135deg,rgba(255,200,87,.25),rgba(255,45,111,.18));
-  border-color:rgba(255,200,87,.7)}
-.gsf-card.puffer{background:linear-gradient(135deg,rgba(255,45,111,.22),rgba(255,45,111,.1));
-  border-color:rgba(255,45,111,.6)}
-.gsf-card .em{font-size:72px;line-height:1;margin-bottom:10px;animation:gsfBounce .6s ease}
-@keyframes gsfBounce{0%{transform:scale(0) rotate(-30deg)}
-  60%{transform:scale(1.2) rotate(10deg)}100%{transform:scale(1) rotate(0)}}
-.gsf-card .nm{font-size:20px;font-weight:700;color:var(--text);margin-bottom:6px}
-.gsf-card .tier{font-size:10px;letter-spacing:.14em;text-transform:uppercase;
-  font-weight:700;padding:3px 11px;border-radius:99px;display:inline-block;
-  background:rgba(0,0,0,.3);color:var(--text2);margin-bottom:10px}
-.gsf-card .val{font-size:26px;font-weight:700;color:#ffd166;margin-top:4px}
-.gsf-card .val.bad{color:#ff8aa8}
-.gsf-card .q{font-size:13px;font-weight:700;margin-top:12px}
-.gsf-card .q.perfect{color:#ffd166}
-.gsf-card .q.great{color:#4ade80}
-.gsf-card .q.ok{color:#ffc857}
-.gsf-recent{margin-top:22px}
-.gsf-recent h3{font-size:10.5px;font-weight:700;letter-spacing:.14em;
-  text-transform:uppercase;color:var(--text3);margin-bottom:10px;
-  font-family:'JetBrains Mono',monospace}
-.gsf-rc{display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:9px;
-  background:rgba(255,255,255,.03);font-size:13px;margin-bottom:5px}
-.gsf-rc .em{font-size:20px}
-.gsf-rc .nm{flex:1;font-weight:600;color:var(--text)}
-.gsf-rc .tier{font-size:10.5px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase}
-.gsf-rc .val{font-family:monospace;font-weight:700;color:#ffd166}
-.gsf-rc .val.bad{color:#ff8aa8}
-
-/* Shop */
-.gsf-shop{padding:0 0 40px}
-.gsf-shop-head{text-align:center;padding:14px;border-radius:14px;
-  background:linear-gradient(135deg,rgba(255,200,87,.1),rgba(0,230,118,.06));
-  border:1px solid rgba(255,200,87,.3);margin-bottom:18px}
-.gsf-shop-head .amt{font-family:'Space Grotesk',sans-serif;font-size:28px;
-  font-weight:700;color:#ffd166;line-height:1}
-.gsf-shop-head .lbl{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
-  color:var(--text3);margin-top:5px}
-.gsf-cat{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
-  color:var(--text3);margin:20px 0 10px;padding:0 4px;
-  font-family:'JetBrains Mono',monospace}
-.gsf-shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
-.gsf-item{padding:14px;border-radius:12px;background:rgba(255,255,255,.03);
-  border:1px solid var(--border);text-align:center;transition:all .15s;
-  display:flex;flex-direction:column}
-.gsf-item:hover{border-color:var(--border2);transform:translateY(-2px)}
-.gsf-item .prev{font-size:34px;line-height:1;margin-bottom:8px;height:42px;
-  display:flex;align-items:center;justify-content:center}
-.gsf-item .n{font-weight:600;font-size:13px;margin-bottom:3px}
-.gsf-item .d{font-size:10.5px;color:var(--text3);line-height:1.45;margin-bottom:10px;
-  min-height:30px;flex:1}
-.gsf-item .p{font-family:monospace;font-weight:700;color:var(--gold);
-  font-size:14px;margin-bottom:10px}
-.gsf-item button{width:100%;padding:9px;border-radius:8px;font-size:12px;
-  font-weight:700;border:none;cursor:pointer;font-family:inherit;transition:all .15s}
-.gsf-item .buy{background:linear-gradient(135deg,#ffc857,#ff9f1c);color:#1a0f00}
-.gsf-item .buy:hover{box-shadow:0 4px 16px rgba(255,200,87,.5)}
-.gsf-item .buy:disabled{background:var(--surface3);color:var(--text3);
-  cursor:not-allowed;box-shadow:none}
-.gsf-item .equip{background:rgba(94,231,215,.14);color:var(--cyan);
-  border:1px solid rgba(94,231,215,.35)}
-.gsf-item .owned{background:rgba(74,222,128,.14);color:var(--green);
-  border:1px solid rgba(74,222,128,.35)}
-.gsf-item .unequip{background:transparent;color:var(--text3);
-  border:1px solid var(--border)}
-.preview-sample{display:inline-block;padding:2px 8px;border-radius:6px;
-  font-weight:700;font-size:13px}
-.sample-gold{background:linear-gradient(90deg,#ffc857,#ff9f1c);color:#1a0f00}
-.sample-rose{background:linear-gradient(90deg,#ff7f9f,#ff4d70);color:#1a0008}
-.sample-teal{background:linear-gradient(90deg,#5ee7d7,#3bb8aa);color:#04211d}
-.sample-amber{background:linear-gradient(90deg,#fbbf24,#d97706);color:#1a0e00}
-.sample-lime{background:linear-gradient(90deg,#a3e635,#65a30d);color:#0a1a00}
-.sample-ice{background:linear-gradient(90deg,#a5f3fc,#06b6d4);color:#001a2e}
-.sample-rainbow{background:linear-gradient(90deg,#ff2d6f,#ffc857,#4ade80,#5ee7d7,#8b7cff);
-  background-size:200%;color:#0a0a0f;animation:gsfRb 3s linear infinite}
-@keyframes gsfRb{to{background-position:200% 0}}
-
-/* Bank quick actions */
-.bank-quick{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-.bank-quick button{padding:6px 12px;border-radius:99px;
-  background:rgba(255,200,87,.1);border:1px solid rgba(255,200,87,.35);
-  color:var(--gold);font-size:11.5px;font-weight:600;cursor:pointer;
-  transition:all .15s;font-family:inherit}
-.bank-quick button:hover{background:rgba(255,200,87,.2);transform:translateY(-1px)}
-.bank-quick button.primary{background:linear-gradient(135deg,#ffc857,#ff9f1c);
-  color:#1a0f00;border-color:transparent}
-
-/* Account switcher in settings */
-.as-section{padding:14px;border-radius:12px;background:rgba(255,255,255,.03);
-  border:1px solid var(--border);margin-top:14px}
-.as-section h4{font-size:11px;font-weight:700;letter-spacing:.1em;
-  text-transform:uppercase;color:var(--text3);margin-bottom:10px;
-  font-family:'JetBrains Mono',monospace}
-.as-row{display:flex;align-items:center;gap:10px;padding:8px 10px;
-  border-radius:9px;background:rgba(0,0,0,.15);margin-bottom:6px}
-.as-row.active{border:1px solid rgba(94,231,215,.4);
-  background:rgba(94,231,215,.06)}
-.as-row .av{width:32px;height:32px;border-radius:50%;flex:none;
-  background:linear-gradient(135deg,#5ee7d7,#8b7cff);color:#04120f;
-  display:flex;align-items:center;justify-content:center;font-weight:700;
-  font-size:12px;font-family:'Space Grotesk',sans-serif}
-.as-row .body{flex:1;min-width:0}
-.as-row .name{font-weight:600;font-size:13px;color:var(--text)}
-.as-row .user{font-size:11px;color:var(--text3)}
-.as-row button{padding:6px 12px;border-radius:7px;font-size:11.5px;
-  font-weight:600;border:1px solid var(--border);background:var(--surface2);
-  color:var(--text2);cursor:pointer;font-family:inherit}
-.as-row button:hover{color:var(--text);border-color:var(--border2)}
-.as-row button.primary{background:linear-gradient(135deg,var(--cyan),#00c9b4);
-  color:#04120f;border-color:transparent;font-weight:700}
-.as-row button.danger{color:#ff8aa2;background:rgba(255,45,111,.1);
-  border-color:rgba(255,45,111,.3)}
-.as-add{display:block;width:100%;padding:10px;border-radius:9px;
-  background:rgba(94,231,215,.1);border:1px dashed rgba(94,231,215,.4);
-  color:var(--cyan);font-weight:600;font-size:13px;cursor:pointer;
-  font-family:inherit;margin-top:6px}
-.as-add:hover{background:rgba(94,231,215,.16)}
-
-@media (max-width:760px){
-  .gsf-shop-grid{grid-template-columns:repeat(2,1fr);gap:8px}
-  .gsf-item{padding:12px}
-  .gsf-item .prev{font-size:30px;height:36px}
-  .gsf-item .n{font-size:12.5px}
-  .gsf-item .d{font-size:10px}
-  .gsf-item button{padding:11px;font-size:12.5px;min-height:44px}
-  .gsf-stage{height:220px}
-  .gsf-cast-btn{min-height:54px;font-size:16px}
-  .gsf-poison button{min-height:44px;padding:11px 16px}
-}
-</style>
-<script>
-(function(){
-  "use strict";
-  if (window.__sleepyGameShopFix) return;
-  window.__sleepyGameShopFix = true;
-  function log(){ try{console.log.apply(console,["[GSF]"].concat([].slice.call(arguments)));}catch(e){} }
-  function esc(s){ return window.esc(s); }
-
-  // ============================================================
-  // EXTRA SHOP ITEMS
-  // ============================================================
-  var EXTRA_SHOP = [
-    { id:'name_color_amber',   price:750,   category:'name_color', name:'Amber Name',    desc:'Warm amber gradient', preview:'<span class="preview-sample sample-amber">Aa</span>' },
-    { id:'name_color_lime',    price:750,   category:'name_color', name:'Lime Name',     desc:'Bright lime green',   preview:'<span class="preview-sample sample-lime">Aa</span>' },
-    { id:'name_color_ice',     price:1200,  category:'name_color', name:'Ice Name',      desc:'Frosted cool blue',   preview:'<span class="preview-sample sample-ice">Aa</span>' },
-    { id:'title_tycoon',       price:2000,  category:'title',      name:'Tycoon Title',  desc:'Show "Tycoon" on your profile',  preview:'💼' },
-    { id:'title_reeler',       price:3000,  category:'title',      name:'Reeler Title',  desc:'Show "Reeler" on your profile',  preview:'🎣' },
-    { id:'title_boss',         price:8000,  category:'title',      name:'Boss Title',    desc:'Show "Boss" on your profile',    preview:'👑' },
-    { id:'title_sleeper',      price:15000, category:'title',      name:'Sleeper Title', desc:'Show "Sleeper" on your profile', preview:'🌙' },
-    { id:'frame_neon',         price:2000,  category:'frame',      name:'Neon Frame',    desc:'Bright cyan ring around avatar', preview:'🟦' },
-    { id:'frame_ember',        price:2500,  category:'frame',      name:'Ember Frame',   desc:'Warm orange glow',               preview:'🔥' },
-    { id:'frame_void',         price:5000,  category:'frame',      name:'Void Frame',    desc:'Purple animated aura',           preview:'🟪' },
-    { id:'rod_bamboo',         price:300,   category:'rod',        name:'Bamboo Rod',    desc:'+2% rare fish chance',           preview:'🎋' },
-    { id:'rod_carbon',         price:3500,  category:'rod',        name:'Carbon Rod',    desc:'+8% rare fish chance',           preview:'⚫' },
-    { id:'rod_mythic',         price:25000, category:'rod',        name:'Mythic Rod',    desc:'+30% rare fish chance',          preview:'🌟' }
-  ];
-
-  // ============================================================
-  // FISHING ENGINE
-  // ============================================================
-  var FISH = [
-    { name:'Minnow',         emoji:'🐟', tier:'common',    value:10,   weight:25 },
-    { name:'Sardine',        emoji:'🐟', tier:'common',    value:15,   weight:20 },
-    { name:'Bass',           emoji:'🐟', tier:'common',    value:25,   weight:15 },
-    { name:'Trout',          emoji:'🐠', tier:'uncommon',  value:50,   weight:10 },
-    { name:'Salmon',         emoji:'🐠', tier:'uncommon',  value:75,   weight:8 },
-    { name:'Tuna',           emoji:'🐟', tier:'uncommon',  value:100,  weight:7 },
-    { name:'Clownfish',      emoji:'🐠', tier:'rare',      value:150,  weight:4 },
-    { name:'Swordfish',      emoji:'🐟', tier:'rare',      value:250,  weight:3 },
-    { name:'Golden Koi',     emoji:'🐠', tier:'legendary', value:500,  weight:1 },
-    { name:'Mythic Arowana', emoji:'🐉', tier:'legendary', value:1000, weight:0.5 },
-    { name:'Pufferfish',     emoji:'🐡', tier:'puffer',    value:0,    weight:6.5 }
-  ];
-
-  var fish = {
-    phase:'idle', biteTimer:null, missTimer:null,
-    raf:null, pos:0, start:0, window:2600,
-    quality:null, caught:null, mult:1
-  };
-  var FISH_ACCOUNT = null;
-
-  function clearFishTimers(){
-    if (fish.biteTimer){ clearTimeout(fish.biteTimer); fish.biteTimer = null; }
-    if (fish.missTimer){ clearTimeout(fish.missTimer); fish.missTimer = null; }
-    if (fish.raf){ cancelAnimationFrame(fish.raf); fish.raf = null; }
-  }
-
-  async function loadFishAccount(){
-    if (!window.ME) return null;
-    try {
-      var r = await sb.from('bank_accounts').select('*').eq('user_id', window.ME.id).maybeSingle();
-      if (r.data){ FISH_ACCOUNT = r.data; return r.data; }
-      var ins = await sb.from('bank_accounts').insert({ user_id: window.ME.id, balance: 100 }).select().single();
-      FISH_ACCOUNT = ins.data;
-    } catch(e){ log("account:", e.message); }
-    return FISH_ACCOUNT;
-  }
-
-  function rollFish(){
-    var total = FISH.reduce(function(s,f){ return s + f.weight; }, 0);
-    var r = Math.random() * total, acc = 0;
-    for (var i = 0; i < FISH.length; i++){
-      acc += FISH[i].weight;
-      if (r < acc) return FISH[i];
-    }
-    return FISH[0];
-  }
-
-  function buildFishing(){
-    var bal = FISH_ACCOUNT ? FISH_ACCOUNT.balance : 0;
-    var poisoned = FISH_ACCOUNT && FISH_ACCOUNT.poisoned;
-
-    var h = '<div class="gsf-fish">';
-
-    h += '<div class="gsf-bal">' +
-      '<div class="amt">🪙 ' + bal.toLocaleString() + '</div>' +
-      '<div class="lbl">Your balance</div>' +
-    '</div>';
-
-    if (poisoned){
-      h += '<div class="gsf-poison">' +
-        '<span class="em">🐡</span>' +
-        '<div class="info"><div class="t">POISONED</div>' +
-          '<div class="d">-10 coins per minute</div></div>' +
-        '<button id="gsf-cure"' + (bal < 100 ? ' disabled' : '') + '>Cure -100</button>' +
-      '</div>';
-    }
-
-    h += '<div class="gsf-stage" id="gsf-stage">';
-    var positions = [
-      {t:'20%',l:'10%'},{t:'50%',l:'70%'},{t:'75%',l:'25%'},
-      {t:'35%',l:'50%'},{t:'65%',l:'80%'},{t:'15%',l:'45%'}
-    ];
-    var swimmers = ['🐟','🐠','🐟','🐡','🐠','🐟'];
-    swimmers.forEach(function(e, i){
-      var p = positions[i];
-      h += '<div class="gsf-swim" style="top:' + p.t + ';left:' + p.l + ';' +
-        'animation-duration:' + (4 + i * .3) + 's">' + e + '</div>';
-    });
-
-    if (fish.phase === 'casting'){
-      h += '<div class="gsf-overlay">' +
-        '<div class="m">Casting…</div>' +
-        '<div class="hint">Wait for a bite…</div>' +
-      '</div>';
-    }
-    if (fish.phase === 'bite'){
-      h += '<div class="gsf-overlay bite" id="gsf-bite">' +
-        '<div class="bite-em">❗</div>' +
-        '<div class="m">Tap now!</div>' +
-        '<div class="hint">Hook the fish before it escapes</div>' +
-      '</div>';
-    }
-    if (fish.phase === 'timing'){
-      h += '<div class="gsf-overlay">' +
-        '<div class="m">Reel it in!</div>' +
-        '<div class="hint">Tap the stage when the bar is in the middle</div>' +
-      '</div>';
-    }
-    if (fish.phase === 'result' && fish.caught){
-      var c = fish.caught;
-      var cls = c.tier === 'legendary' ? 'legendary' :
-                c.tier === 'rare' ? 'rare' :
-                c.tier === 'puffer' ? 'puffer' : '';
-      var valLine = c.tier === 'puffer'
-        ? '<div class="val bad">+ POISON</div>'
-        : '<div class="val">+' + Math.round(c.value * fish.mult) + ' 🪙' +
-          (fish.mult > 1 ? ' (x' + fish.mult + ')' : '') + '</div>';
-      var qLine = '';
-      if (fish.quality){
-        qLine = '<div class="q ' + fish.quality + '">' +
-          (fish.quality === 'perfect' ? '🌟 PERFECT!' :
-           fish.quality === 'great' ? '✨ Great!' :
-           fish.quality === 'ok' ? '👍 Nice' : '💨 Missed') + '</div>';
-      }
-      h += '<div class="gsf-result"><div class="gsf-card ' + cls + '">' +
-        '<div class="em">' + c.emoji + '</div>' +
-        '<div class="nm">' + esc(c.name) + '</div>' +
-        '<div class="tier">' + esc(c.tier === 'puffer' ? 'HAZARD' : c.tier) + '</div>' +
-        valLine + qLine +
-      '</div></div>';
-    }
-    h += '</div>';
-
-    if (fish.phase === 'timing'){
-      h += '<div class="gsf-timing">' +
-        '<div class="gsf-timing-bar">' +
-          '<div class="gsf-mark" id="gsf-mark" style="left:0"></div>' +
-        '</div>' +
-        '<div class="gsf-timing-lbl">' +
-          '<span>Miss</span><span>OK</span><span class="c">PERFECT</span><span>OK</span><span>Miss</span>' +
-        '</div>' +
-      '</div>';
-      setTimeout(startTiming, 0);
-    }
-
-    if (fish.phase === 'idle'){
-      h += '<button class="gsf-cast-btn" id="gsf-cast"' + (poisoned ? ' disabled' : '') + '>' +
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" ' +
-        'stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px">' +
-          '<path d="M4 20 12 12M12 12l8-8M12 12H4M12 12v8"/>' +
-        '</svg>' +
-        (poisoned ? 'Cure first to fish' : 'Cast Line') +
-      '</button>';
-    }
-
-    h += '<div class="gsf-recent" id="gsf-recent">' +
-      '<h3>Recent catches</h3><div id="gsf-rc-list">Loading…</div>' +
-    '</div>';
-
-    h += '</div>';
-    return h;
-  }
-
-  function startTiming(){
-    fish.phase = 'timing';
-    fish.start = Date.now();
-    fish.pos = 0;
-    var tick = function(){
-      var elapsed = Date.now() - fish.start;
-      var t = (elapsed % (fish.window * 2)) / fish.window;
-      fish.pos = t <= 1 ? t * 100 : (2 - t) * 100;
-      var m = document.getElementById('gsf-mark');
-      if (m) m.style.left = 'calc(' + fish.pos + '% - 2px)';
-      fish.raf = requestAnimationFrame(tick);
-    };
-    tick();
-  }
-
-  function hookTiming(){
-    if (fish.phase !== 'timing') return;
-    clearFishTimers();
-    var d = Math.abs(fish.pos - 50);
-    var q = d <= 6 ? 'perfect' : d <= 14 ? 'great' : d <= 28 ? 'ok' : 'miss';
-    finishCast(q);
-  }
-
-  async function doCast(){
-    if (fish.phase !== 'idle') return;
-    if (!FISH_ACCOUNT) await loadFishAccount();
-    if (FISH_ACCOUNT && FISH_ACCOUNT.poisoned){
-      window.toast("You're poisoned", "Cure first.", "err");
-      return;
-    }
-    fish.phase = 'casting';
-    fish.caught = null;
-    fish.quality = null;
-    fish.mult = 1;
-    refreshFishingView();
-
-    var wait = 1400 + Math.random() * 2400;
-    fish.biteTimer = setTimeout(function(){
-      if (fish.phase !== 'casting') return;
-      fish.phase = 'bite';
-      refreshFishingView();
-      if (navigator.vibrate) try { navigator.vibrate(60); } catch(e){}
-
-      fish.missTimer = setTimeout(function(){
-        if (fish.phase === 'bite') finishCast('miss');
-      }, 1600);
-    }, wait);
-  }
-
-  async function finishCast(quality){
-    fish.phase = 'result';
-    fish.quality = quality;
-    if (quality === 'miss'){
-      fish.caught = null;
-      refreshFishingView();
-      setTimeout(function(){ fish.phase = 'idle'; refreshFishingView(); loadRecent(); }, 1200);
-      window.toast("Missed", "The fish got away.", "err");
-      return;
-    }
-
-    var caught = rollFish();
-
-    // Hidden puffer cycle
-    try {
-      var pr = await sb.from('fishing_catches').select('fish_tier')
-        .eq('user_id', window.ME.id).order('caught_at', { ascending: false }).limit(20);
-      var rows = pr.data || [];
-      var lastIdx = -1;
-      for (var i = 0; i < rows.length; i++)
-        if (rows[i].fish_tier === 'puffer'){ lastIdx = i; break; }
-      var nonPuff = lastIdx < 0 ? rows.length : lastIdx;
-      if (nonPuff >= 10 && caught.tier !== 'puffer'){
-        caught = { name:'Pufferfish', emoji:'🐡', tier:'puffer', value:0 };
-      }
-    } catch(e){}
-
-    var mult = quality === 'perfect' ? 2 : quality === 'great' ? 1.5 : 1;
-    fish.mult = mult;
-    fish.caught = caught;
-
-    try {
-      var r = await sb.rpc('record_catch', {
-        fish_name: caught.name,
-        fish_emoji: caught.emoji,
-        fish_tier: caught.tier,
-        fish_value: Math.round(caught.value * mult)
-      });
-      if (r.error) throw r.error;
-      await loadFishAccount();
-      refreshFishingView();
-      loadRecent();
-      setTimeout(function(){
-        if (fish.phase === 'result'){ fish.phase = 'idle'; refreshFishingView(); }
-      }, 2600);
-    } catch(e){
-      log("catch failed:", e.message);
-      window.toast("Error", e.message || String(e), "err");
-      fish.phase = 'idle';
-      refreshFishingView();
-    }
-  }
-
-  async function doCure(){
-    try {
-      var r = await sb.rpc('cure_poison');
-      if (r.error) throw r.error;
-      await loadFishAccount();
-      window.toast("Cured", "You're healthy again.", "ok");
-      refreshFishingView();
-    } catch(e){ window.toast("Error", e.message || String(e), "err"); }
-  }
-
-  async function loadRecent(){
-    var el = document.getElementById('gsf-rc-list');
-    if (!el || !window.ME) return;
-    try {
-      var r = await sb.from('fishing_catches').select('*')
-        .eq('user_id', window.ME.id).order('caught_at', { ascending: false }).limit(6);
-      var rows = r.data || [];
-      if (!rows.length){
-        el.innerHTML = '<div style="color:var(--text3);font-size:12.5px">No catches yet. Cast your line!</div>';
-        return;
-      }
-      el.innerHTML = rows.map(function(c){
-        var v = c.fish_tier === 'puffer'
-          ? '<span class="val bad">POISON</span>'
-          : '<span class="val">+' + c.value + '</span>';
-        return '<div class="gsf-rc">' +
-          '<span class="em">' + c.fish_emoji + '</span>' +
-          '<span class="nm">' + esc(c.fish_name) + '</span>' +
-          '<span class="tier">' + esc(c.fish_tier) + '</span>' + v +
-        '</div>';
-      }).join('');
-    } catch(e){}
-  }
-
-  function refreshFishingView(){
-    var mount = document.getElementById('fish-mount');
-    if (!mount) return;
-    mount.innerHTML = buildFishing();
-    wireFishing();
-  }
-
-  function wireFishing(){
-    var cast = document.getElementById('gsf-cast');
-    if (cast) cast.onclick = doCast;
-    var cure = document.getElementById('gsf-cure');
-    if (cure && !cure.disabled) cure.onclick = doCure;
-    var bite = document.getElementById('gsf-bite');
-    if (bite) bite.onclick = startTiming;
-    var stage = document.getElementById('gsf-stage');
-    if (stage && fish.phase === 'timing'){
-      stage.style.cursor = 'pointer';
-      stage.onclick = hookTiming;
-    }
-    if (fish.phase === 'idle') loadRecent();
-  }
-
-  // ============================================================
-  // SHOP ENGINE
-  // ============================================================
-  var SHOP_ACCOUNT = null;
-  var SHOP_INVENTORY = [];
-  var SHOP_EQUIPPED = { name_color:null, title:null, profile_frame:null };
-  var BASE_SHOP = [
-    { id:'name_color_gold',    price:500,   category:'name_color', name:'Gold Name',    desc:'Shiny gold name',         preview:'<span class="preview-sample sample-gold">Aa</span>' },
-    { id:'name_color_rose',    price:500,   category:'name_color', name:'Rose Name',    desc:'Warm rose gradient',      preview:'<span class="preview-sample sample-rose">Aa</span>' },
-    { id:'name_color_teal',    price:500,   category:'name_color', name:'Teal Name',    desc:'Cool teal gradient',      preview:'<span class="preview-sample sample-teal">Aa</span>' },
-    { id:'name_color_rainbow', price:2000,  category:'name_color', name:'Rainbow Name', desc:'Animated rainbow',        preview:'<span class="preview-sample sample-rainbow">Aa</span>' },
-    { id:'title_angler',       price:500,   category:'title',      name:'Angler Title',  desc:'Show "Angler" on profile', preview:'🎣' },
-    { id:'title_champion',     price:1000,  category:'title',      name:'Champion Title',desc:'Show "Champion" on profile', preview:'🏆' },
-    { id:'title_legend',       price:5000,  category:'title',      name:'Legend Title',  desc:'Show "Legend" on profile', preview:'⭐' },
-    { id:'frame_gold',         price:1000,  category:'frame',      name:'Gold Frame',    desc:'Gold ring around avatar',  preview:'🟡' },
-    { id:'frame_glow',         price:1500,  category:'frame',      name:'Glow Frame',    desc:'Cyan glowing ring',        preview:'✨' },
-    { id:'rod_silver',         price:2000,  category:'rod',        name:'Silver Rod',    desc:'+5% rare fish chance',     preview:'🥈' },
-    { id:'rod_gold',           price:5000,  category:'rod',        name:'Gold Rod',      desc:'+10% rare fish chance',    preview:'🥇' },
-    { id:'rod_diamond',        price:15000, category:'rod',        name:'Diamond Rod',   desc:'+20% rare fish chance',    preview:'💎' }
-  ];
-  var ALL_SHOP = BASE_SHOP.concat(EXTRA_SHOP);
-
-  async function loadShopData(){
-    if (!window.ME) return;
-    try {
-      var r = await sb.from('bank_accounts').select('*').eq('user_id', window.ME.id).maybeSingle();
-      SHOP_ACCOUNT = r.data || { balance: 0 };
-      var inv = await sb.from('shop_inventory').select('item_id').eq('user_id', window.ME.id);
-      SHOP_INVENTORY = (inv.data || []).map(function(x){ return x.item_id; });
-      var eq = await sb.from('shop_equipped').select('*').eq('user_id', window.ME.id).maybeSingle();
-      SHOP_EQUIPPED = eq.data || { name_color:null, title:null, profile_frame:null };
-    } catch(e){ log("shop load:", e.message); }
-  }
-
-  function buildShop(){
-    var bal = SHOP_ACCOUNT ? SHOP_ACCOUNT.balance : 0;
-    var h = '<div class="gsf-shop">';
-
-    h += '<div class="gsf-shop-head">' +
-      '<div class="amt">🪙 ' + bal.toLocaleString() + '</div>' +
-      '<div class="lbl">Spend on cosmetics</div>' +
-    '</div>';
-
-    var categories = [
-      { key:'name_color', label:'Name Colors' },
-      { key:'title',      label:'Titles' },
-      { key:'frame',      label:'Avatar Frames' },
-      { key:'rod',        label:'Fishing Rods' }
-    ];
-
-    categories.forEach(function(cat){
-      var items = ALL_SHOP.filter(function(x){ return x.category === cat.key; });
-      if (!items.length) return;
-      h += '<div class="gsf-cat">' + cat.label + '</div>';
-      h += '<div class="gsf-shop-grid">';
-      items.forEach(function(item){
-        var owned = SHOP_INVENTORY.indexOf(item.id) >= 0;
-        var isColor = item.category === 'name_color';
-        var isTitle = item.category === 'title';
-        var isFrame = item.category === 'frame';
-        var equipped = (isColor && SHOP_EQUIPPED.name_color === item.id) ||
-                       (isTitle && SHOP_EQUIPPED.title === item.id) ||
-                       (isFrame && SHOP_EQUIPPED.profile_frame === item.id);
-        var canEquip = isColor || isTitle || isFrame;
-        var afford = bal >= item.price;
-
-        h += '<div class="gsf-item">' +
-          '<div class="prev">' + item.preview + '</div>' +
-          '<div class="n">' + esc(item.name) + '</div>' +
-          '<div class="d">' + esc(item.desc) + '</div>' +
-          '<div class="p">🪙 ' + item.price.toLocaleString() + '</div>';
-        if (owned){
-          if (equipped){
-            h += '<button class="owned" data-gsf-unequip="' + item.category + '">Equipped · tap to remove</button>';
-          } else if (canEquip){
-            h += '<button class="equip" data-gsf-equip="' + item.id + '">Equip</button>';
-          } else {
-            h += '<button class="owned" style="cursor:default">Owned</button>';
-          }
-        } else {
-          h += '<button class="buy" data-gsf-buy="' + item.id + '"' +
-            (afford ? '' : ' disabled') + '>' +
-            (afford ? 'Buy' : 'Need ' + (item.price - bal) + ' more') + '</button>';
-        }
-        h += '</div>';
-      });
-      h += '</div>';
-    });
-
-    h += '</div>';
-    return h;
-  }
-
-  function wireShop(){
-    document.querySelectorAll('[data-gsf-buy]').forEach(function(b){
-      b.onclick = async function(){
-        try {
-          var r = await sb.rpc('purchase_shop_item', { p_item: b.dataset.gsfBuy });
-          if (r.error) throw r.error;
-          window.toast("Purchased", "Enjoy your new item!", "ok");
-          await loadShopData();
-          refreshShopView();
-        } catch(e){ window.toast("Purchase failed", e.message || String(e), "err"); }
-      };
-    });
-    document.querySelectorAll('[data-gsf-equip]').forEach(function(b){
-      b.onclick = async function(){
-        try {
-          await sb.rpc('equip_shop_item', { p_item: b.dataset.gsfEquip });
-          await loadShopData();
-          window.toast("Equipped", "", "ok");
-          refreshShopView();
-          if (window.renderAll) window.renderAll();
-        } catch(e){ window.toast("Equip failed", e.message || String(e), "err"); }
-      };
-    });
-    document.querySelectorAll('[data-gsf-unequip]').forEach(function(b){
-      b.onclick = async function(){
-        try {
-          await sb.rpc('unequip_shop_item', { p_kind: b.dataset.gsfUnequip });
-          await loadShopData();
-          window.toast("Removed", "", "ok");
-          refreshShopView();
-          if (window.renderAll) window.renderAll();
-        } catch(e){ window.toast("Failed", e.message || String(e), "err"); }
-      };
-    });
-  }
-
-  function refreshShopView(){
-    var wrapper = document.querySelector('#chat-body div[style*="max-width:600px"]');
-    if (!wrapper) return;
-    var active = wrapper.querySelector('[data-gr].active');
-    var tab = active ? active.dataset.gr : null;
-    if (tab !== 'shop') return;
-    // Replace the stub content but keep the tabs
-    var tabsHTML = wrapper.querySelector('.gr-tabs').outerHTML;
-    wrapper.innerHTML = tabsHTML + buildShop();
-    wireTabs(wrapper);
-    wireShop();
-  }
-
-  // ============================================================
-  // GAME ROOM PATCHER — runs after V3 renders
-  // ============================================================
-  function patchGameRoom(){
-    if (!window.CURRENT || window.CURRENT.type !== 'games') return;
-    var body = document.getElementById('chat-body');
-    if (!body) return;
-
-    var active = body.querySelector('[data-gr].active');
-    var tab = active ? active.dataset.gr : null;
-
-    // ---- FISHING ----
-    if (tab === 'fishing'){
-      var mount = document.getElementById('fish-mount');
-      if (mount && !mount.querySelector('.gsf-fish')){
-        if (!FISH_ACCOUNT) loadFishAccount().then(function(){
-          mount.innerHTML = buildFishing();
-          wireFishing();
-        });
-      }
-    }
-
-    // ---- SHOP ----
-    if (tab === 'shop'){
-      var wrapper = body.querySelector('div[style*="max-width:600px"]');
-      if (wrapper && !wrapper.querySelector('.gsf-shop')){
-        if (!SHOP_ACCOUNT) loadShopData().then(function(){
-          var tabsHTML = wrapper.querySelector('.gr-tabs') ? wrapper.querySelector('.gr-tabs').outerHTML : '';
-          wrapper.innerHTML = tabsHTML + buildShop();
-          wireTabs(wrapper);
-          wireShop();
-        });
-      }
-    }
-  }
-
-  function wireTabs(scope){
-    scope = scope || document;
-    scope.querySelectorAll('[data-gr]').forEach(function(b){
-      var old = b.onclick;
-      b.onclick = function(e){
-        // Let the original handler fire (V3 tab logic)
-        if (old) old.call(this, e);
-        // Then re-patch the body
-        setTimeout(patchGameRoom, 80);
-      };
-    });
-  }
-
-  var origRC = window.renderChat;
-  if (typeof origRC === 'function'){
-    window.renderChat = function(){
-      var r = origRC.apply(this, arguments);
-      setTimeout(patchGameRoom, 60);
-      setTimeout(patchGameRoom, 200);
-      return r;
-    };
-  }
-  setInterval(patchGameRoom, 500);
-
-  // ============================================================
-  // /pay QUICK ACTIONS in Bank DM
-  // ============================================================
-  function addBankQuickActions(){
-    document.querySelectorAll('[data-msg]').forEach(function(el){
-      if (el.querySelector('.bank-quick')) return;
-      var author = el.querySelector('.author');
-      if (!author) return;
-      if (!/bank|sleepybank/i.test(author.textContent)) return;
-      var body = el.querySelector('.content');
-      if (!body) return;
-      var actions = document.createElement('div');
-      actions.className = 'bank-quick';
-      actions.innerHTML =
-        '<button data-bank-quick="balance">💰 Balance</button>' +
-        '<button data-bank-quick="fish" class="primary">🎣 Fish</button>' +
-        '<button data-bank-quick="badges">🏅 Badges</button>' +
-        '<button data-bank-quick="top">🏆 Top</button>' +
-        '<button data-bank-quick="help">❓ Help</button>';
-      body.appendChild(actions);
-    });
-  }
-  setInterval(addBankQuickActions, 1200);
-
-  // ============================================================
-  // ACCOUNT SWITCHER in Settings modal
-  // ============================================================
-  var ACC_KEY = "sleepychat.accounts";
-  function loadAccounts(){
-    try { return JSON.parse(localStorage.getItem(ACC_KEY) || "[]"); }
-    catch(e){ return []; }
-  }
-
-  async function switchToAccount(id){
-    var list = loadAccounts();
-    var t = list.find(function(a){ return a.id === id; });
-    if (!t){ window.toast("Missing", "Sign in again.", "err"); return; }
-    try {
-      var r = await sb.auth.setSession({
-        access_token: t.access_token,
-        refresh_token: t.refresh_token
-      });
-      if (r.error) throw r.error;
-      window.toast("Switched", "Loading as @" + t.username, "ok");
-      setTimeout(function(){ location.reload(); }, 400);
-    } catch(e){
-      window.toast("Could not switch", e.message || String(e), "err");
-    }
-  }
-
-  function buildAccountSection(){
-    var list = loadAccounts();
-    var h = '<div class="as-section">' +
-      '<h4>Accounts on this device</h4>';
-    if (!list.length){
-      h += '<div style="font-size:12px;color:var(--text3);padding:6px 0">No other accounts saved.</div>';
-    }
-    list.forEach(function(a){
-      var active = window.ME && a.id === window.ME.id;
-      var initials = (a.display_name || a.username || "?").slice(0, 2).toUpperCase();
-      h += '<div class="as-row' + (active ? ' active' : '') + '">' +
-        '<div class="av">' + esc(initials) + '</div>' +
-        '<div class="body"><div class="name">' +
-          esc(a.display_name || a.username) + (active ? ' · current' : '') + '</div>' +
-          '<div class="user">@' + esc(a.username) + '</div></div>' +
-        (active
-          ? '<button class="owned" disabled style="background:rgba(74,222,128,.14);color:var(--green);border:1px solid rgba(74,222,128,.35)">Active</button>'
-          : '<button class="primary" data-as-switch="' + esc(a.id) + '">Switch</button>') +
-      '</div>';
-    });
-    h += '<button class="as-add" id="as-add-account">+ Add another account</button>';
-    h += '</div>';
-    return h;
-  }
-
-  var origOpenSettings = window.openSettings;
-  if (typeof origOpenSettings === "function"){
-    window.openSettings = function(){
-      var r = origOpenSettings.apply(this, arguments);
-      setTimeout(function(){
-        var body = document.getElementById("modal-body");
-        if (!body) return;
-        if (body.querySelector(".as-section")) return;
-        var holder = document.createElement("div");
-        holder.innerHTML = buildAccountSection();
-        while (holder.firstElementChild) body.appendChild(holder.firstElementChild);
-
-        body.querySelectorAll("[data-as-switch]").forEach(function(b){
-          b.onclick = function(){ switchToAccount(b.dataset.asSwitch); };
-        });
-        var add = document.getElementById("as-add-account");
-        if (add) add.onclick = async function(){
-          // Snapshot current, then sign out to add
-          if (window.SESSION && window.ME){
-            var list = loadAccounts();
-            var entry = {
-              id: window.ME.id,
-              email: window.SESSION.user && window.SESSION.user.email,
-              username: window.ME.username,
-              display_name: window.ME.display_name,
-              access_token: window.SESSION.access_token,
-              refresh_token: window.SESSION.refresh_token,
-              saved_at: Date.now()
-            };
-            var idx = list.findIndex(function(a){ return a.id === entry.id; });
-            if (idx >= 0) list[idx] = entry; else list.push(entry);
-            try { localStorage.setItem(ACC_KEY, JSON.stringify(list)); } catch(e){}
-          }
-          window.closeModal();
-          try { await sb.auth.signOut(); } catch(e){}
-          setTimeout(function(){ location.reload(); }, 300);
-        };
-      }, 220);
-      return r;
-    };
-  }
-
-  // ============================================================
-  // BOOT
-  // ============================================================
-  setTimeout(function(){
-    if (!window.ME) return;
-    loadFishAccount();
-    loadShopData();
-    log("game + shop fix ready");
-  }, 4000);
-
-  log("loaded");
-})();
-</script>
-
 <!-- SLEEPY_FORGOT_PASS_FIX_V1 -->
 <script>
 (function(){
@@ -20332,290 +19451,6 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
   log("forgot password flow ready");
 })();
 </script>
-<!-- SLEEPY_COIN_FIX_V1 -->
-<style>
-.arcade-hud{
-  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
-  padding:12px 14px;border-radius:12px;margin:0 auto 16px;max-width:480px;
-  background:linear-gradient(135deg,rgba(255,200,87,.1),rgba(139,124,255,.06));
-  border:1px solid rgba(255,200,87,.35);
-}
-.arcade-hud .bal{
-  font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;
-  color:#ffd166;flex:1;min-width:100px;
-}
-.arcade-hud .btn-mini{
-  padding:8px 14px;border-radius:9px;font-size:12px;font-weight:700;
-  border:none;cursor:pointer;font-family:inherit;transition:all .15s;
-}
-.arcade-hud .btn-mini.primary{
-  background:linear-gradient(135deg,#ffc857,#ff9f1c);color:#1a0f00;
-}
-.arcade-hud .btn-mini.primary:hover{
-  box-shadow:0 4px 14px rgba(255,200,87,.5);transform:translateY(-1px)
-}
-.arcade-hud .btn-mini.primary:disabled{
-  background:var(--surface3);color:var(--text3);cursor:not-allowed;
-  transform:none;box-shadow:none;
-}
-.earn-card{
-  max-width:480px;margin:0 auto 16px;padding:14px;border-radius:12px;
-  background:rgba(255,255,255,.03);border:1px solid var(--border);
-}
-.earn-card h4{
-  font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
-  color:var(--text3);margin-bottom:10px;font-family:'JetBrains Mono',monospace;
-}
-.earn-row{
-  display:flex;align-items:center;gap:10px;padding:8px 0;
-  font-size:12.5px;color:var(--text2);
-  border-bottom:1px solid rgba(255,255,255,.04);
-}
-.earn-row:last-child{border-bottom:none}
-.earn-row .em{font-size:18px;width:24px;text-align:center;flex:none}
-.earn-row .lbl{flex:1;line-height:1.4}
-.earn-row .lbl b{color:var(--text);font-weight:600;display:block;margin-bottom:1px}
-.earn-row .amt{
-  font-family:'JetBrains Mono',monospace;font-weight:700;color:#ffd166;
-  font-size:11.5px;flex:none;
-}
-.earn-row code{
-  background:rgba(0,0,0,.35);padding:1px 6px;border-radius:4px;
-  font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cyan);
-}
-</style>
-<script>
-(function(){
-  "use strict";
-  if (window.__sleepyCoinFix) return;
-  window.__sleepyCoinFix = true;
-  function log(){ try{console.log.apply(console,["[Coin]"].concat([].slice.call(arguments)));}catch(e){} }
-
-  // ============================================================
-  // 1. Wrap submit_snake_score — big obvious reward feedback
-  // ============================================================
-  if (window.sb && typeof window.sb.rpc === "function" && !window.sb.__snakeWrapped){
-    var origRpc = window.sb.rpc.bind(window.sb);
-    window.sb.rpc = async function(fn, params, opts){
-      var r;
-      try { r = await origRpc(fn, params, opts); }
-      catch(e){ r = { error: e, data: null }; }
-
-      if (fn === "submit_snake_score"){
-        var score = params && params.p_score;
-        if (r.error){
-          var msg = (r.error && r.error.message) || String(r.error);
-          var missing = msg.indexOf("does not exist") >= 0 ||
-                        msg.indexOf("Could not find") >= 0 ||
-                        (r.error && r.error.code === "42883");
-          if (missing){
-            window.toast("Snake reward off",
-              "Run the SQL fix in Supabase once — see the console for the exact SQL.",
-              "err");
-            log("RPC missing. Run the SQL printed by the patch script.");
-          } else {
-            window.toast("Could not credit snake reward", msg, "err");
-          }
-        } else if (r.data && r.data.ok){
-          log("snake rewarded:", r.data.reward, "balance:", r.data.balance);
-          try { if (typeof window.refreshAccount === "function") window.refreshAccount(); } catch(e){}
-          try { if (typeof window.loadAccount === "function") window.loadAccount(); } catch(e){}
-
-          var el = document.getElementById("arcade-bal");
-          if (el && r.data.balance != null){
-            el.textContent = "🪙 " + Number(r.data.balance).toLocaleString();
-          }
-
-          // Big centered pop
-          if (r.data.reward > 0){
-            var big = document.createElement("div");
-            big.style.cssText =
-              "position:fixed;left:50%;top:22%;transform:translate(-50%,-50%);" +
-              "z-index:9998;padding:18px 28px;border-radius:18px;" +
-              "background:linear-gradient(135deg,rgba(255,200,87,.96),rgba(255,159,28,.96));" +
-              "color:#1a0f00;font-family:'Space Grotesk',sans-serif;font-weight:800;" +
-              "font-size:26px;box-shadow:0 20px 60px rgba(255,200,87,.65);" +
-              "animation:__coinPop .4s cubic-bezier(.22,.61,.36,1) both;" +
-              "text-align:center;pointer-events:none";
-            big.innerHTML =
-              "+" + r.data.reward + " 🪙" +
-              '<div style="font-size:12px;font-weight:600;opacity:.75;margin-top:4px;letter-spacing:.06em">SNAKE REWARD · SCORE ' + score + '</div>';
-            document.body.appendChild(big);
-            setTimeout(function(){
-              big.style.transition = "opacity .45s, transform .45s";
-              big.style.opacity = "0";
-              big.style.transform = "translate(-50%, -160%)";
-              setTimeout(function(){ big.remove(); }, 500);
-            }, 1400);
-          }
-        }
-      }
-      return r;
-    };
-    window.sb.__snakeWrapped = true;
-    log("snake rpc wrapped");
-  }
-
-  // Keyframe for pop
-  if (!document.getElementById("__coinPopStyle")){
-    var st = document.createElement("style");
-    st.id = "__coinPopStyle";
-    st.textContent =
-      "@keyframes __coinPop{" +
-      "0%{opacity:0;transform:translate(-50%,-50%) scale(.55)}" +
-      "65%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}" +
-      "100%{opacity:1;transform:translate(-50%,-50%) scale(1)}}";
-    document.head.appendChild(st);
-  }
-
-  // ============================================================
-  // 2. Balance + daily bonus HUD on arcade page
-  // ============================================================
-  async function getMyBalance(){
-    if (!window.ME) return null;
-    try {
-      var r = await sb.from("bank_accounts").select("balance").eq("user_id", window.ME.id).maybeSingle();
-      return r.data ? r.data.balance : null;
-    } catch(e){ return null; }
-  }
-
-  async function checkDailyStatus(){
-    if (!window.ME) return { can_claim:false, missing:true };
-    try {
-      var r = await sb.rpc("daily_bonus_status");
-      if (r.error) return { can_claim:false, missing:true };
-      if (!r.data) return { can_claim:false, missing:true };
-      return r.data;
-    } catch(e){ return { can_claim:false, missing:true }; }
-  }
-
-  async function patchArcade(){
-    if (!window.CURRENT || window.CURRENT.type !== "games") return;
-    var body = document.getElementById("chat-body");
-    if (!body) return;
-    var active = body.querySelector("[data-gr].active");
-    if (!active || active.dataset.gr !== "arcade") return;
-    var wrap = body.querySelector(".snake-wrap");
-    if (!wrap) return;
-
-    // ---------- HUD strip ----------
-    if (!wrap.querySelector("#arcade-hud")){
-      var bal = await getMyBalance();
-      var daily = await checkDailyStatus();
-
-      var hud = document.createElement("div");
-      hud.className = "arcade-hud";
-      hud.id = "arcade-hud";
-
-      var rightSide = "";
-      if (daily && !daily.missing){
-        if (daily.can_claim){
-          rightSide = '<button class="btn-mini primary" id="arcade-daily">🎁 Claim Daily +' + (daily.next_reward || 50) + '</button>';
-        } else {
-          rightSide = '<span style="font-size:11px;color:var(--text3);font-family:monospace">Daily claimed · ' + (daily.streak || 0) + ' day streak</span>';
-        }
-      } else {
-        rightSide = '<button class="btn-mini primary" id="arcade-daily-fix" title="Setup required">🎁 Enable Daily</button>';
-      }
-
-      hud.innerHTML =
-        '<span class="bal" id="arcade-bal">🪙 ' + (bal == null ? "…" : Number(bal).toLocaleString()) + '</span>' +
-        rightSide;
-
-      wrap.insertBefore(hud, wrap.firstChild);
-
-      var btn = document.getElementById("arcade-daily");
-      if (btn){
-        btn.onclick = async function(){
-          btn.disabled = true; btn.textContent = "Claiming…";
-          try {
-            var r = await sb.rpc("claim_daily_bonus");
-            if (r.error) throw r.error;
-            var d = r.data || {};
-            if (d.error) throw new Error(d.error);
-            window.toast("Daily bonus", "+" + d.reward + " 🪙 · " + d.streak + " day streak", "ok");
-            var el = document.getElementById("arcade-bal");
-            if (el && d.balance != null) el.textContent = "🪙 " + Number(d.balance).toLocaleString();
-            if (typeof window.refreshAccount === "function") window.refreshAccount();
-            btn.outerHTML = '<span style="font-size:11px;color:var(--text3);font-family:monospace">Daily claimed · ' + d.streak + ' day streak</span>';
-          } catch(e){
-            window.toast("Could not claim", e.message || String(e), "err");
-            btn.disabled = false; btn.textContent = "🎁 Claim Daily";
-          }
-        };
-      }
-      var fix = document.getElementById("arcade-daily-fix");
-      if (fix){
-        fix.onclick = function(){
-          window.toast("Setup needed", "Run the daily-bonus SQL printed by the patch script.", "err");
-          log("daily_bonus_status missing — run the SQL.");
-        };
-      }
-    }
-
-    // ---------- How to Earn card ----------
-    if (!wrap.querySelector(".earn-card")){
-      var card = document.createElement("div");
-      card.className = "earn-card";
-      card.innerHTML =
-        '<h4>How to earn coins</h4>' +
-        '<div class="earn-row"><span class="em">🎣</span><span class="lbl"><b>Fishing</b>Cast, hook, time the reel — perfect timing doubles it</span><span class="amt">10–2,000</span></div>' +
-        '<div class="earn-row"><span class="em">🐍</span><span class="lbl"><b>Snake</b>1 coin per 5 points, capped per game</span><span class="amt">up to 500</span></div>' +
-        '<div class="earn-row"><span class="em">🎁</span><span class="lbl"><b>Daily bonus</b>Once a day, streak keeps growing</span><span class="amt">50–200</span></div>' +
-        '<div class="earn-row"><span class="em">🏆</span><span class="lbl"><b>Win matches</b>Beat someone at X-O or RPS — take the pot</span><span class="amt">2× bet</span></div>' +
-        '<div class="earn-row"><span class="em">💸</span><span class="lbl"><b>Get paid</b>Ask someone to send you coins</span><span class="amt"><code>/pay @user 100</code></span></div>';
-
-      var hud2 = wrap.querySelector("#arcade-hud");
-      if (hud2 && hud2.nextSibling){
-        wrap.insertBefore(card, hud2.nextSibling);
-      } else {
-        var startBtn = wrap.querySelector("#snake-start");
-        if (startBtn) wrap.insertBefore(card, startBtn);
-        else wrap.appendChild(card);
-      }
-    }
-  }
-
-  // ---------- Also on fishing page ----------
-  function patchFishing(){
-    if (!window.CURRENT || window.CURRENT.type !== "games") return;
-    var body = document.getElementById("chat-body");
-    if (!body) return;
-    var active = body.querySelector("[data-gr].active");
-    if (!active || active.dataset.gr !== "fishing") return;
-    var wrap = body.querySelector(".gsf-fish");
-    if (!wrap) return;
-    if (wrap.querySelector(".earn-card")) return;
-
-    var card = document.createElement("div");
-    card.className = "earn-card";
-    card.style.marginTop = "22px";
-    card.innerHTML =
-      '<h4>Other ways to earn</h4>' +
-      '<div class="earn-row"><span class="em">🐍</span><span class="lbl"><b>Snake</b>Arcade tab</span><span class="amt">up to 500</span></div>' +
-      '<div class="earn-row"><span class="em">🎁</span><span class="lbl"><b>Daily bonus</b>Arcade tab, once a day</span><span class="amt">50–200</span></div>' +
-      '<div class="earn-row"><span class="em">🏆</span><span class="lbl"><b>Win matches</b>X-O or RPS</span><span class="amt">2× bet</span></div>' +
-      '<div class="earn-row"><span class="em">💸</span><span class="lbl"><b>Get paid</b></span><span class="amt"><code>/pay @user 100</code></span></div>';
-    wrap.appendChild(card);
-  }
-
-  var origRC = window.renderChat;
-  if (typeof origRC === "function"){
-    window.renderChat = function(){
-      var r = origRC.apply(this, arguments);
-      setTimeout(patchArcade, 100);
-      setTimeout(patchArcade, 320);
-      setTimeout(patchFishing, 100);
-      setTimeout(patchFishing, 320);
-      return r;
-    };
-  }
-  setInterval(function(){ patchArcade(); patchFishing(); }, 700);
-
-  log("coin fix ready");
-})();
-</script>
-
 <!-- SLEEPY_FISH_SHOP_FORCE_V1 -->
 <script>
 (function(){
@@ -21063,6 +19898,613 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
   }, 4400);
 
   log("loaded");
+})();
+</script>
+
+<!-- SLEEPY_GAMES_CLEAN_V3 -->
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyGamesClean) return;
+  window.__sleepyGamesClean = true;
+  try { console.log("%c[Games] clean v3 armed", "color:#0ff;font-weight:bold"); } catch(e){}
+
+  var E = function(s){ return String(s == null ? "" : s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;").replace(/'/g,"&#39;"); };
+
+  var onGames = function(){ return window.CURRENT && window.CURRENT.type === 'games'; };
+  var activeTab = function(){
+    var b = document.getElementById('chat-body');
+    if (!b) return null;
+    var a = b.querySelector('[data-gr].active');
+    return a ? a.dataset.gr : null;
+  };
+
+  // ==========================================================
+  // FAST FISHING (cast 250-500ms, bite window 700ms, marker 1500ms)
+  // ==========================================================
+  var FF = {
+    account: null, phase: 'idle',
+    caught: null, quality: null, mult: 1,
+    biteT: null, missT: null, raf: null,
+    pos: 0, start: 0,
+    WIN_MS: 1500, CAST_MIN: 250, CAST_MAX: 500,
+    BITE_WIN: 700, RESULT_HOLD: 1000
+  };
+
+  var FISH_POOL = [
+    { name:'Minnow',   emoji:'🐟', tier:'common',   value:10,   w:10 },
+    { name:'Sardine',  emoji:'🐟', tier:'common',   value:15,   w:9 },
+    { name:'Bass',     emoji:'🐟', tier:'common',   value:25,   w:8 },
+    { name:'Trout',    emoji:'🐠', tier:'uncommon', value:50,   w:6 },
+    { name:'Salmon',   emoji:'🐠', tier:'uncommon', value:75,   w:5 },
+    { name:'Tuna',     emoji:'🐟', tier:'uncommon', value:100,  w:4 },
+    { name:'Clownfish',emoji:'🐠', tier:'rare',     value:150,  w:3 },
+    { name:'Swordfish',emoji:'🐟', tier:'rare',     value:250,  w:2 },
+    { name:'Golden Koi',emoji:'🐠',tier:'legendary',value:500,  w:1 },
+    { name:'Mythic Arowana',emoji:'🐉',tier:'legendary',value:1000,w:0.5 },
+    { name:'Pufferfish',emoji:'🐡', tier:'puffer',  value:0,    w:4 }
+  ];
+  function rollFish(){
+    var tot = 0; FISH_POOL.forEach(function(f){ tot += f.w; });
+    var r = Math.random() * tot, acc = 0;
+    for (var i = 0; i < FISH_POOL.length; i++){
+      acc += FISH_POOL[i].w;
+      if (r < acc) return FISH_POOL[i];
+    }
+    return FISH_POOL[0];
+  }
+
+  function killFT(){
+    if (FF.biteT){ clearTimeout(FF.biteT); FF.biteT = null; }
+    if (FF.missT){ clearTimeout(FF.missT); FF.missT = null; }
+    if (FF.raf){ cancelAnimationFrame(FF.raf); FF.raf = null; }
+  }
+
+  async function fishLoad(){
+    if (!window.ME) return null;
+    try {
+      var r = await sb.from('bank_accounts').select('*').eq('user_id', window.ME.id).maybeSingle();
+      if (r.data){ FF.account = r.data; return r.data; }
+      var ins = await sb.from('bank_accounts').insert({ user_id: window.ME.id, balance: 100 }).select().single();
+      FF.account = ins.data;
+    } catch(e){ console.warn("[Games] fish load:", e.message); }
+    return FF.account;
+  }
+
+  function fishHTML(){
+    var acc = FF.account || { balance: 0, poisoned: false };
+    var bal = acc.balance | 0;
+    var poisoned = !!acc.poisoned;
+
+    var stage = '';
+    if (FF.phase === 'casting'){
+      stage = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,10,15,.4)">' +
+        '<div style="font:700 15px system-ui;color:#5ee7d7">🎣 Casting…</div></div>';
+    } else if (FF.phase === 'bite'){
+      stage = '<div id="ffs-bite" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(10,10,15,.55);cursor:pointer">' +
+        '<div style="font-size:72px;line-height:1">❗</div>' +
+        '<div style="font:800 22px system-ui;color:#5ee7d7;margin-top:6px">TAP!</div></div>';
+    } else if (FF.phase === 'timing'){
+      stage = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,10,15,.5)">' +
+        '<div style="font:700 15px system-ui;color:#5ee7d7">Reel it in!</div></div>';
+    } else if (FF.phase === 'result' && FF.caught){
+      var c = FF.caught;
+      var border = c.tier === 'puffer' ? 'rgba(255,45,111,.7)' :
+                   c.tier === 'legendary' ? 'rgba(255,200,87,.7)' :
+                   c.tier === 'rare' ? 'rgba(94,231,215,.6)' : 'rgba(139,124,255,.5)';
+      var bg = c.tier === 'puffer' ? 'linear-gradient(135deg,rgba(255,45,111,.25),rgba(255,45,111,.1))' :
+               c.tier === 'legendary' ? 'linear-gradient(135deg,rgba(255,200,87,.25),rgba(255,45,111,.15))' :
+               c.tier === 'rare' ? 'linear-gradient(135deg,rgba(94,231,215,.2),rgba(139,124,255,.12))' :
+               'linear-gradient(135deg,rgba(255,200,87,.15),rgba(139,124,255,.1))';
+      var valLine = c.tier === 'puffer' ?
+        '<div style="font:800 22px system-ui;color:#ff8aa8;margin-top:6px">+ POISON</div>' :
+        '<div style="font:800 26px system-ui;color:#ffd166;margin-top:6px">+' + Math.round(c.value * FF.mult) + ' 🪙' + (FF.mult > 1 ? ' (x' + FF.mult + ')' : '') + '</div>';
+      var qLine = FF.quality ? '<div style="font:700 13px system-ui;margin-top:10px;color:' +
+        (FF.quality === 'perfect' ? '#ffd166' : FF.quality === 'great' ? '#4ade80' : '#ffc857') + '">' +
+        (FF.quality === 'perfect' ? '🌟 PERFECT!' : FF.quality === 'great' ? '✨ Great!' : '👍 Nice') + '</div>' : '';
+      stage = '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(10,10,15,.85)">' +
+        '<div style="text-align:center;padding:22px;border-radius:14px;min-width:200px;background:' + bg + ';border:1px solid ' + border + '">' +
+          '<div style="font-size:64px;line-height:1;margin-bottom:6px">' + c.emoji + '</div>' +
+          '<div style="font:700 18px system-ui;color:#eef2f8">' + E(c.name) + '</div>' +
+          '<div style="font:700 10px system-ui;letter-spacing:.14em;text-transform:uppercase;padding:2px 10px;border-radius:99px;display:inline-block;background:rgba(0,0,0,.3);color:#9aa8c0;margin-top:5px">' + E(c.tier === 'puffer' ? 'HAZARD' : c.tier) + '</div>' +
+          valLine + qLine +
+        '</div></div>';
+    }
+
+    var h = '<div class="gsf-fish" style="max-width:560px;margin:0 auto;padding:0 16px 40px;font-family:system-ui">';
+    h += '<div style="text-align:center;padding:12px;border-radius:12px;background:linear-gradient(135deg,rgba(255,200,87,.1),rgba(0,230,118,.06));border:1px solid rgba(255,200,87,.3);margin-bottom:14px">' +
+      '<div style="font:800 28px system-ui;color:#ffd166;line-height:1">🪙 ' + bal.toLocaleString() + '</div>' +
+      '<div style="font:700 10px system-ui;letter-spacing:.1em;text-transform:uppercase;color:#5f6c85;margin-top:4px">Balance</div></div>';
+
+    if (poisoned){
+      h += '<div style="display:flex;align-items:center;gap:10px;padding:12px;border-radius:10px;background:rgba(255,45,111,.08);border:1px solid rgba(255,45,111,.4);margin-bottom:12px">' +
+        '<span style="font-size:22px">🐡</span>' +
+        '<div style="flex:1"><div style="font:700 12.5px system-ui;color:#ff8aa8">POISONED</div><div style="font-size:11px;color:#5f6c85">-10/min</div></div>' +
+        '<button id="ffs-cure" style="padding:8px 14px;border-radius:8px;background:linear-gradient(135deg,#ff2d6f,#c41d54);color:#fff;border:none;font:700 12px system-ui;cursor:pointer"' + (bal < 100 ? ' disabled' : '') + '>Cure -100</button>' +
+      '</div>';
+    }
+
+    h += '<div id="ffs-stage" style="position:relative;height:220px;border-radius:14px;background:linear-gradient(180deg,rgba(0,80,140,.5),rgba(0,40,90,.7));border:1px solid rgba(0,200,255,.3);overflow:hidden;margin-bottom:14px">';
+    var posns = [{t:'20%',l:'10%'},{t:'50%',l:'70%'},{t:'75%',l:'25%'},{t:'35%',l:'50%'},{t:'65%',l:'80%'},{t:'15%',l:'45%'}];
+    ['🐟','🐠','🐟','🐡','🐠','🐟'].forEach(function(e, i){
+      h += '<div style="position:absolute;top:' + posns[i].t + ';left:' + posns[i].l + ';font-size:22px;opacity:.7">' + e + '</div>';
+    });
+    h += stage + '</div>';
+
+    if (FF.phase === 'timing'){
+      h += '<div style="margin-top:6px">' +
+        '<div style="position:relative;height:32px;border-radius:9px;overflow:hidden;background:linear-gradient(90deg,rgba(255,45,111,.4) 0%,rgba(255,171,0,.4) 20%,rgba(74,222,128,.5) 40%,rgba(94,231,215,.75) 48%,rgba(94,231,215,.75) 52%,rgba(74,222,128,.5) 60%,rgba(255,171,0,.4) 80%,rgba(255,45,111,.4) 100%);border:1px solid rgba(94,231,215,.4)">' +
+          '<div id="ffs-mark" style="position:absolute;top:-3px;bottom:-3px;left:0;width:4px;background:#fff;border-radius:2px;box-shadow:0 0 12px #fff"></div>' +
+        '</div></div>';
+    }
+
+    if (FF.phase === 'idle'){
+      h += '<button id="ffs-cast"' + (poisoned ? ' disabled' : '') + ' style="width:100%;margin-top:14px;padding:15px;border-radius:12px;background:linear-gradient(135deg,#5ee7d7,#0096ff);color:#04120f;font:800 15px system-ui;letter-spacing:.04em;border:none;cursor:pointer' + (poisoned ? ';opacity:.5;cursor:not-allowed' : '') + '">🎣 Cast Line</button>';
+    }
+
+    h += '</div>';
+    return h;
+  }
+
+  function startTimingBar(){
+    FF.phase = 'timing';
+    FF.start = Date.now();
+    FF.pos = 0;
+    function tick(){
+      var e = Date.now() - FF.start;
+      var t = (e % (FF.WIN_MS * 2)) / FF.WIN_MS;
+      FF.pos = t <= 1 ? t * 100 : (2 - t) * 100;
+      var m = document.getElementById('ffs-mark');
+      if (m) m.style.left = 'calc(' + FF.pos + '% - 2px)';
+      FF.raf = requestAnimationFrame(tick);
+    }
+    tick();
+  }
+
+  function hookTiming(){
+    if (FF.phase !== 'timing') return;
+    killFT();
+    var d = Math.abs(FF.pos - 50);
+    var q = d <= 6 ? 'perfect' : d <= 14 ? 'great' : d <= 28 ? 'ok' : 'miss';
+    finishCast(q);
+  }
+
+  async function doCast(){
+    if (FF.phase !== 'idle') return;
+    if (!FF.account) await fishLoad();
+    if (FF.account && FF.account.poisoned){ window.toast("Poisoned", "Cure first.", "err"); return; }
+    FF.phase = 'casting'; FF.caught = null; FF.quality = null; FF.mult = 1;
+    refillFish();
+    var wait = FF.CAST_MIN + Math.random() * (FF.CAST_MAX - FF.CAST_MIN);
+    FF.biteT = setTimeout(function(){
+      if (FF.phase !== 'casting') return;
+      FF.phase = 'bite';
+      refillFish();
+      if (navigator.vibrate) try { navigator.vibrate(40); } catch(e){}
+      FF.missT = setTimeout(function(){
+        if (FF.phase === 'bite') finishCast('miss');
+      }, FF.BITE_WIN);
+    }, wait);
+  }
+
+  async function finishCast(q){
+    FF.phase = 'result'; FF.quality = q;
+    if (q === 'miss'){
+      FF.caught = null;
+      refillFish();
+      setTimeout(function(){ FF.phase = 'idle'; refillFish(); }, 700);
+      window.toast("Missed", "Fish got away", "err");
+      return;
+    }
+    var caught = rollFish();
+    try {
+      var pr = await sb.from('fishing_catches').select('fish_tier')
+        .eq('user_id', window.ME.id).order('caught_at', { ascending: false }).limit(20);
+      var rows = pr.data || [];
+      var lastIdx = -1;
+      for (var i = 0; i < rows.length; i++) if (rows[i].fish_tier === 'puffer'){ lastIdx = i; break; }
+      var nonPuff = lastIdx < 0 ? rows.length : lastIdx;
+      if (nonPuff >= 10 && caught.tier !== 'puffer'){
+        caught = { name:'Pufferfish', emoji:'🐡', tier:'puffer', value:0 };
+      }
+    } catch(e){}
+    var mult = q === 'perfect' ? 2 : q === 'great' ? 1.5 : 1;
+    FF.mult = mult; FF.caught = caught;
+    try {
+      var r = await sb.rpc('record_catch', {
+        fish_name: caught.name, fish_emoji: caught.emoji,
+        fish_tier: caught.tier, fish_value: Math.round(caught.value * mult)
+      });
+      if (r.error) throw r.error;
+      await fishLoad();
+      refillFish();
+      setTimeout(function(){
+        if (FF.phase === 'result'){ FF.phase = 'idle'; refillFish(); }
+      }, FF.RESULT_HOLD);
+    } catch(e){
+      FF.phase = 'idle'; refillFish();
+      window.toast("Error", e.message || String(e), "err");
+    }
+  }
+
+  async function doCure(){
+    try {
+      var r = await sb.rpc('cure_poison');
+      if (r.error) throw r.error;
+      await fishLoad();
+      window.toast("Cured", "", "ok");
+      refillFish();
+    } catch(e){ window.toast("Error", e.message || String(e), "err"); }
+  }
+
+  function wireFish(){
+    var c = document.getElementById('ffs-cast'); if (c && !c.disabled) c.onclick = doCast;
+    var u = document.getElementById('ffs-cure'); if (u && !u.disabled) u.onclick = doCure;
+    var b = document.getElementById('ffs-bite'); if (b) b.onclick = startTimingBar;
+    var s = document.getElementById('ffs-stage');
+    if (s && FF.phase === 'timing'){ s.style.cursor = 'pointer'; s.onclick = hookTiming; }
+  }
+
+  function refillFish(){
+    var mount = document.getElementById('fish-mount');
+    if (!mount) return;
+    mount.innerHTML = fishHTML();
+    wireFish();
+  }
+
+  // Aggressive mount watcher
+  var _fishWatcher = setInterval(function(){
+    if (!onGames()) return;
+    if (activeTab() !== 'fishing') return;
+    var mount = document.getElementById('fish-mount');
+    if (!mount) return;
+    var isMine = mount.querySelector('.gsf-fish') && mount.querySelector('#ffs-cast') || mount.querySelector('#ffs-stage');
+    if (!isMine){
+      if (!FF.account) fishLoad().then(refillFish);
+      else refillFish();
+    }
+  }, 150);
+
+  // MutationObserver on the mount itself
+  function watchFishMount(){
+    var body = document.getElementById('chat-body');
+    if (!body) return setTimeout(watchFishMount, 300);
+    var mo = new MutationObserver(function(){
+      if (!onGames()) return;
+      if (activeTab() !== 'fishing') return;
+      var mount = document.getElementById('fish-mount');
+      if (!mount) return;
+      var ours = mount.querySelector('#ffs-stage');
+      if (ours) return;
+      if (!FF.account) fishLoad().then(refillFish);
+      else refillFish();
+    });
+    mo.observe(body, { childList: true, subtree: true });
+  }
+  watchFishMount();
+
+  // ==========================================================
+  // FAST SNAKE with working reward
+  // ==========================================================
+  var SN = {
+    running: false, timer: null,
+    snake: [], dir: null, nextDir: null, food: null,
+    score: 0, grid: 24, cell: 20,
+    startTick: 80, minTick: 45, currTick: 80
+  };
+
+  async function creditSnake(score){
+    var reward = Math.min(Math.floor(score / 2), 1000);
+    if (reward <= 0 && score <= 0) return { reward: 0 };
+
+    // Try RPC
+    try {
+      var r = await sb.rpc('submit_snake_score', { p_score: score });
+      if (!r.error && r.data && r.data.ok) return r.data;
+    } catch(e){}
+
+    // Fallback: direct DB
+    try {
+      var acc = await sb.from('bank_accounts').select('balance').eq('user_id', window.ME.id).maybeSingle();
+      var curBal = acc.data ? acc.data.balance : 0;
+      if (!acc.data){
+        await sb.from('bank_accounts').insert({ user_id: window.ME.id, balance: 100 + reward });
+        curBal = 100;
+      } else {
+        await sb.from('bank_accounts').update({ balance: curBal + reward }).eq('user_id', window.ME.id);
+      }
+      try { await sb.from('snake_scores').insert({ user_id: window.ME.id, score: score }); } catch(e){}
+      return { reward: reward, balance: curBal + reward };
+    } catch(e){
+      return { reward: 0, error: e.message };
+    }
+  }
+
+  function startFastSnake(){
+    var canvas = document.getElementById('snake-canvas');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    SN.snake = [{x:10, y:12}, {x:9, y:12}, {x:8, y:12}];
+    SN.dir = {x: 1, y: 0};
+    SN.nextDir = {x: 1, y: 0};
+    SN.score = 0;
+    SN.running = true;
+    SN.currTick = SN.startTick;
+    placeFood();
+    updateScore();
+    if (SN.timer) clearInterval(SN.timer);
+    SN.timer = setInterval(function(){ if (SN.running) stepSnake(ctx); }, SN.currTick);
+    drawSnake(ctx);
+  }
+
+  function placeFood(){
+    while (true){
+      var f = { x: Math.floor(Math.random() * SN.grid), y: Math.floor(Math.random() * SN.grid) };
+      if (!SN.snake.some(function(s){ return s.x === f.x && s.y === f.y; })){ SN.food = f; return; }
+    }
+  }
+
+  function stepSnake(ctx){
+    SN.dir = SN.nextDir;
+    var head = SN.snake[0];
+    var nx = head.x + SN.dir.x, ny = head.y + SN.dir.y;
+    if (nx < 0 || ny < 0 || nx >= SN.grid || ny >= SN.grid){ endFastSnake(ctx); return; }
+    if (SN.snake.some(function(s){ return s.x === nx && s.y === ny; })){ endFastSnake(ctx); return; }
+    SN.snake.unshift({ x: nx, y: ny });
+    if (nx === SN.food.x && ny === SN.food.y){
+      SN.score += 5;
+      updateScore();
+      placeFood();
+      var nt = Math.max(SN.minTick, SN.startTick - Math.floor(SN.score / 20) * 5);
+      if (nt < SN.currTick){
+        SN.currTick = nt;
+        clearInterval(SN.timer);
+        SN.timer = setInterval(function(){ if (SN.running) stepSnake(ctx); }, SN.currTick);
+      }
+    } else { SN.snake.pop(); }
+    drawSnake(ctx);
+  }
+
+  function drawSnake(ctx){
+    ctx.fillStyle = '#0a0f14'; ctx.fillRect(0, 0, 480, 480);
+    ctx.strokeStyle = 'rgba(94,231,215,.06)'; ctx.lineWidth = 1;
+    for (var i = 0; i <= SN.grid; i++){
+      ctx.beginPath(); ctx.moveTo(i * SN.cell, 0); ctx.lineTo(i * SN.cell, 480); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i * SN.cell); ctx.lineTo(480, i * SN.cell); ctx.stroke();
+    }
+    if (SN.food){
+      ctx.fillStyle = '#ff5c8a';
+      ctx.beginPath();
+      ctx.arc(SN.food.x * SN.cell + SN.cell/2, SN.food.y * SN.cell + SN.cell/2, SN.cell * 0.38, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    SN.snake.forEach(function(seg, i){
+      var t = i / Math.max(1, SN.snake.length);
+      ctx.fillStyle = 'rgb(' + Math.round(94 + 45*t) + ',' + Math.round(231 - 100*t) + ',' + Math.round(215 - 100*t) + ')';
+      ctx.fillRect(seg.x * SN.cell + 1, seg.y * SN.cell + 1, SN.cell - 2, SN.cell - 2);
+    });
+  }
+
+  async function endFastSnake(ctx){
+    SN.running = false;
+    if (SN.timer) clearInterval(SN.timer);
+    ctx.fillStyle = 'rgba(255,45,111,.25)';
+    ctx.fillRect(0, 0, 480, 480);
+    var finalScore = SN.score;
+    var res = await creditSnake(finalScore);
+    if (res.reward > 0){
+      showCoinPop(res.reward, finalScore);
+      window.toast("Snake reward", "+" + res.reward + " 🪙", "ok");
+      if (typeof window.refreshAccount === "function") window.refreshAccount();
+      if (typeof window.loadAccount === "function") window.loadAccount();
+    } else {
+      window.toast("Game over", "Score: " + finalScore, "err");
+    }
+  }
+
+  function showCoinPop(reward, score){
+    var big = document.createElement("div");
+    big.style.cssText = "position:fixed;left:50%;top:22%;transform:translate(-50%,-50%);" +
+      "z-index:99999;padding:18px 28px;border-radius:18px;" +
+      "background:linear-gradient(135deg,#ffc857,#ff9f1c);color:#1a0f00;" +
+      "font:800 26px system-ui;box-shadow:0 20px 60px rgba(255,200,87,.65);" +
+      "text-align:center;pointer-events:none;transition:opacity .5s, transform .5s";
+    big.innerHTML = "+" + reward + " 🪙<div style=\"font:600 12px system-ui;opacity:.75;margin-top:4px;letter-spacing:.06em\">SNAKE · SCORE " + score + "</div>";
+    document.body.appendChild(big);
+    setTimeout(function(){
+      big.style.opacity = "0";
+      big.style.transform = "translate(-50%,-160%)";
+      setTimeout(function(){ big.remove(); }, 600);
+    }, 1400);
+  }
+
+  function updateScore(){
+    var el = document.getElementById('snake-score');
+    if (el) el.textContent = SN.score;
+  }
+
+  // Intercept snake-start click
+  document.addEventListener('click', function(e){
+    var start = e.target.closest('#snake-start');
+    if (start){
+      e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+      startFastSnake();
+      return;
+    }
+    var dirBtn = e.target.closest('[data-dir]');
+    if (dirBtn && SN.running){
+      var d = dirBtn.dataset.dir;
+      if (d === 'up' && SN.dir.y !== 1) SN.nextDir = {x:0, y:-1};
+      if (d === 'down' && SN.dir.y !== -1) SN.nextDir = {x:0, y:1};
+      if (d === 'left' && SN.dir.x !== 1) SN.nextDir = {x:-1, y:0};
+      if (d === 'right' && SN.dir.x !== -1) SN.nextDir = {x:1, y:0};
+    }
+  }, true);
+
+  document.addEventListener('keydown', function(e){
+    if (!SN.running) return;
+    if (window.CURRENT && window.CURRENT.type !== 'games') return;
+    var k = e.key.toLowerCase();
+    if ((k === 'arrowup' || k === 'w') && SN.dir.y !== 1){ SN.nextDir = {x:0, y:-1}; e.preventDefault(); }
+    else if ((k === 'arrowdown' || k === 's') && SN.dir.y !== -1){ SN.nextDir = {x:0, y:1}; e.preventDefault(); }
+    else if ((k === 'arrowleft' || k === 'a') && SN.dir.x !== 1){ SN.nextDir = {x:-1, y:0}; e.preventDefault(); }
+    else if ((k === 'arrowright' || k === 'd') && SN.dir.x !== -1){ SN.nextDir = {x:1, y:0}; e.preventDefault(); }
+  });
+
+  // ==========================================================
+  // LEADERBOARD (works without SQL)
+  // ==========================================================
+  async function loadLB(tab){
+    var out = { tab: tab, rows: [], fallback: false };
+    if (tab === 'snake'){
+      try {
+        var r = await sb.from('snake_scores').select('user_id, score').order('score', { ascending: false }).limit(100);
+        if (!r.error && r.data && r.data.length){
+          var best = {};
+          r.data.forEach(function(row){ if (!best[row.user_id] || row.score > best[row.user_id]) best[row.user_id] = row.score; });
+          var ids = Object.keys(best);
+          if (ids.length) await window.fetchProfiles(ids);
+          out.rows = ids.map(function(uid){ return { uid: uid, v: best[uid] }; }).sort(function(a,b){ return b.v - a.v; }).slice(0, 20);
+          return out;
+        }
+      } catch(e){}
+      // Fallback to wealth
+      out.fallback = true;
+      try {
+        var r2 = await sb.from('bank_accounts').select('user_id, balance').order('balance', { ascending: false }).limit(20);
+        if (!r2.error && r2.data){
+          var ids2 = r2.data.map(function(x){ return x.user_id; });
+          if (ids2.length) await window.fetchProfiles(ids2);
+          out.rows = r2.data.map(function(x){ return { uid: x.user_id, v: x.balance }; });
+        }
+      } catch(e){}
+      return out;
+    }
+    try {
+      var game = tab === 'chess' ? 'chess' : 'ttt';
+      var r3 = await sb.from('game_challenges').select('winner_id').eq('game_type', game).eq('status', 'finished').not('winner_id', 'is', null).limit(500);
+      if (!r3.error && r3.data){
+        var wins = {};
+        r3.data.forEach(function(g){ wins[g.winner_id] = (wins[g.winner_id] || 0) + 1; });
+        var ids3 = Object.keys(wins);
+        if (ids3.length) await window.fetchProfiles(ids3);
+        out.rows = ids3.map(function(uid){ return { uid: uid, v: wins[uid] }; }).sort(function(a,b){ return b.v - a.v; }).slice(0, 20);
+      }
+    } catch(e){}
+    return out;
+  }
+
+  async function renderLB(tab){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+    var tabs = '<div style="display:flex;gap:4px;background:#0a0a0f;padding:4px;border-radius:10px;margin-bottom:14px">';
+    ['chess','ttt','snake'].forEach(function(t){
+      var lbl = t === 'chess' ? '♟️ Chess' : t === 'ttt' ? '⭕ X-O' : '🐍 Snake';
+      var active = t === tab;
+      tabs += '<button data-lbt="' + t + '" style="flex:1;padding:10px;border-radius:7px;font:600 12.5px system-ui;cursor:pointer;border:none;' +
+        (active ? 'background:#1a1a26;color:#5ee7d7;box-shadow:inset 0 0 0 1px rgba(94,231,215,.24)' : 'background:transparent;color:#5f6c85') + '">' + lbl + '</button>';
+    });
+    tabs += '</div>';
+    body.innerHTML =
+      '<div style="max-width:520px;margin:0 auto;padding:24px 20px">' +
+        '<div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">' +
+          '<button id="lb-back" style="width:36px;height:36px;border-radius:10px;background:#1a1a26;border:1px solid #2a2a3a;color:#eef2f8;font-size:18px;cursor:pointer">&larr;</button>' +
+          '<div style="font:700 20px system-ui;color:#eef2f8">🏆 Leaderboards</div>' +
+        '</div>' + tabs +
+        '<div id="lb-content" style="display:flex;flex-direction:column;gap:6px">' +
+          '<div style="padding:20px;text-align:center;color:#5f6c85">Loading…</div>' +
+        '</div></div>';
+    body.querySelectorAll('[data-lbt]').forEach(function(b){
+      b.onclick = function(){ renderLB(b.dataset.lbt); };
+    });
+    var back = document.getElementById('lb-back');
+    if (back) back.onclick = function(){
+      window.CURRENT = Object.assign({}, window.CURRENT, { type: 'games' });
+      if (typeof window.openGameRoom === 'function') window.openGameRoom('arcade');
+    };
+    var data = await loadLB(tab);
+    var el = document.getElementById('lb-content');
+    if (!el) return;
+    if (!data.rows.length){
+      el.innerHTML = '<div style="padding:30px;text-align:center;color:#5f6c85;font-size:13px">' +
+        (data.fallback ? 'Showing coin leaderboard (snake scores table not set up).<br><br>' : '') + 'No entries yet.</div>';
+      return;
+    }
+    el.innerHTML = data.rows.map(function(r, i){
+      var p = window.PROFILES[r.uid] || { username: 'user', display_name: 'User' };
+      var me = r.uid === window.ME.id;
+      var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
+      var valColor = data.fallback ? '#ffd166' : (tab === 'snake' ? '#4ade80' : '#5ee7d7');
+      return '<div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:10px;' +
+        'background:' + (me ? 'rgba(94,231,215,.08)' : 'rgba(255,255,255,.03)') + ';' +
+        (me ? 'border:1px solid rgba(94,231,215,.35)' : 'border:1px solid transparent') + '">' +
+        '<div style="width:32px;text-align:center;font:700 14px monospace;color:' + (i < 3 ? '#ffd166' : '#5f6c85') + '">' + medal + '</div>' +
+        '<div style="position:relative">' + window.avatarHTML(r.uid, 32) + '</div>' +
+        '<div style="flex:1;min-width:0"><div style="font:600 13.5px system-ui;color:#eef2f8">' + E(p.display_name || p.username) + (me ? ' (you)' : '') + '</div></div>' +
+        '<div style="font:700 15px monospace;color:' + valColor + '">' + r.v.toLocaleString() + '</div></div>';
+    }).join('');
+  }
+
+  // Intercept snake-lb click
+  document.addEventListener('click', function(e){
+    var lb = e.target.closest('#snake-lb');
+    if (lb){
+      e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+      window.CURRENT = Object.assign({}, window.CURRENT, { type: 'leaderboards' });
+      renderLB('snake');
+      return;
+    }
+    var hdr = e.target.closest('#games-lb-head');
+    if (hdr){
+      e.preventDefault(); e.stopImmediatePropagation(); e.stopPropagation();
+      window.CURRENT = Object.assign({}, window.CURRENT, { type: 'leaderboards' });
+      renderLB('chess');
+      return;
+    }
+  }, true);
+
+  // Override openLeaderboards
+  window.openLeaderboards = function(){
+    window.CURRENT = Object.assign({}, window.CURRENT, { type: 'leaderboards' });
+    renderLB('chess');
+  };
+
+  // Hook renderChat for leaderboards view
+  var _rc = window.renderChat;
+  if (typeof _rc === 'function'){
+    window.renderChat = function(){
+      if (window.CURRENT && window.CURRENT.type === 'leaderboards'){
+        renderLB(window.__lastLBTab || 'chess');
+        return;
+      }
+      return _rc.apply(this, arguments);
+    };
+  }
+
+  var _rch = window.renderChatHead;
+  if (typeof _rch === 'function'){
+    window.renderChatHead = function(){
+      if (window.CURRENT && window.CURRENT.type === 'leaderboards'){
+        var el = document.getElementById('chat-head');
+        if (el) el.innerHTML = '<div class="title"><span style="font-size:16px">🏆</span><span class="txt">Leaderboards</span></div><div class="spacer"></div>';
+        return;
+      }
+      return _rch.apply(this, arguments);
+    };
+  }
+
+  // ==========================================================
+  // BOOT
+  // ==========================================================
+  setTimeout(function(){
+    if (!window.ME) return;
+    fishLoad();
+    console.log("[Games] clean v3 ready");
+  }, 4400);
+
+  console.log("[Games] clean v3 armed");
 })();
 </script>
 
