@@ -6723,460 +6723,6 @@ html, body { overscroll-behavior: none; }
 })();
 </script>
 
-<!-- SLEEPY_VOICE_DEBUG_V1 -->
-<style>
-.voice-dock .peer-status{
-  font-family:'JetBrains Mono',monospace;font-size:10px;
-  padding:2px 6px;border-radius:4px;background:rgba(0,0,0,.35);
-  color:var(--text3);cursor:pointer;
-}
-.voice-dock .peer-status.ok{color:var(--green)}
-.voice-dock .peer-status.wait{color:var(--amber)}
-.voice-dock .peer-status.bad{color:var(--rose)}
-.voice-dock .expand-btn{
-  width:26px!important;height:26px!important;font-size:11px!important;
-}
-.voice-debug{
-  position:fixed;bottom:150px;right:20px;z-index:401;
-  background:#0d0d14;border:1px solid var(--border);border-radius:10px;
-  padding:10px 12px;font-family:'JetBrains Mono',monospace;font-size:11px;
-  color:var(--text2);min-width:240px;max-width:340px;
-  box-shadow:0 20px 50px rgba(0,0,0,.6);
-  animation:fadeUp .2s ease;
-}
-.voice-debug h5{font-size:10px;color:var(--cyan);text-transform:uppercase;
-  letter-spacing:.1em;margin-bottom:6px;font-weight:700}
-.voice-debug .row{display:flex;justify-content:space-between;padding:2px 0;color:var(--text3)}
-.voice-debug .row b{color:var(--text)}
-.voice-debug .row.ok b{color:var(--green)}
-.voice-debug .row.bad b{color:var(--rose)}
-.voice-debug .row.wait b{color:var(--amber)}
-.voice-debug .tip{
-  margin-top:8px;padding-top:8px;border-top:1px solid var(--border);
-  font-size:10px;color:var(--amber);line-height:1.5;
-}
-.voice-debug button{
-  width:100%;margin-top:8px;padding:5px;border-radius:6px;
-  background:rgba(0,255,224,.1);border:1px solid rgba(0,255,224,.35);
-  color:var(--cyan);font-size:11px;font-family:inherit;cursor:pointer;
-}
-</style>
-<script>
-(function(){
-  "use strict";
-  if (window.__sleepyVoiceDebug) return;
-  window.__sleepyVoiceDebug = true;
-  function log(){ try{console.log.apply(console,["[VD]"].concat([].slice.call(arguments)));}catch(e){} }
-
-  // ============================================================
-  // 1. FIX GLARE — polite/impolite peer negotiation
-  // ============================================================
-  // WebRTC glare: both peers send offers at the same time and both
-  // try to setRemoteDescription(offer) while an offer is in flight.
-  // Standard fix: one peer is "polite" (yields), the other "impolite"
-  // (ignores incoming offers during its own negotiation). The rule:
-  // the peer with the alphabetically GREATER id is polite.
-
-  function isPolite(myId, theirId){
-    return String(myId) > String(theirId);
-  }
-
-  // Replace createOffer to use perfect negotiation
-  window.__voiceCreateOffer = async function(peerId, iceServers){
-    var cs = window.callState;
-    if (!cs) return;
-
-    // If we already have a peer connection, don't create another
-    if (cs.peers[peerId]) {
-      log("peer already exists:", peerId);
-      return cs.peers[peerId];
-    }
-
-    var pc = new RTCPeerConnection({ iceServers: iceServers });
-    cs.peers[peerId] = pc;
-
-    // Track making-offer state to detect glare
-    pc.__makingOffer = false;
-    pc.__polite = isPolite(window.ME.id, peerId);
-
-    pc.onnegotiationneeded = async function(){
-      try {
-        pc.__makingOffer = true;
-        await pc.setLocalDescription();
-        cs.signalingChannel.send({
-          type: 'broadcast', event: 'offer',
-          payload: { from: window.ME.id, sdp: pc.localDescription }
-        });
-        log("offer sent to", peerId);
-      } catch(e){
-        log("negotiation failed:", e.message);
-      } finally {
-        pc.__makingOffer = false;
-      }
-    };
-
-    // Add our local tracks
-    cs.localStream.getTracks().forEach(function(track){
-      pc.addTrack(track, cs.localStream);
-    });
-
-    // Receive remote tracks
-    pc.ontrack = function(event){
-      log("got remote track from", peerId, "kind:", event.track.kind);
-      attachRemoteMedia(peerId, event.streams[0]);
-    };
-
-    pc.onicecandidate = function(event){
-      if (event.candidate){
-        cs.signalingChannel.send({
-          type: 'broadcast', event: 'ice-candidate',
-          payload: { from: window.ME.id, candidate: event.candidate }
-        });
-      }
-    };
-
-    pc.onconnectionstatechange = function(){
-      log("peer", peerId, "state:", pc.connectionState);
-      updateDebugPanel();
-      updateDockStatus();
-      if (pc.connectionState === 'failed'){
-        log("connection failed for", peerId, "- closing");
-        closePeer(peerId);
-      }
-    };
-
-    pc.oniceconnectionstatechange = function(){
-      log("peer", peerId, "ICE:", pc.iceConnectionState);
-      updateDebugPanel();
-    };
-
-    // Trigger negotiation
-    if (pc.signalingState === 'stable'){
-      pc.__makingOffer = true;
-      try {
-        var offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        cs.signalingChannel.send({
-          type: 'broadcast', event: 'offer',
-          payload: { from: window.ME.id, sdp: pc.localDescription }
-        });
-        log("offer sent to", peerId);
-      } catch(e){
-        log("createOffer failed:", e.message);
-      } finally {
-        pc.__makingOffer = false;
-      }
-    }
-
-    return pc;
-  };
-
-  // Replace handleOffer with glare-aware version
-  window.__voiceHandleOffer = async function(peerId, sdp, iceServers){
-    var cs = window.callState;
-    if (!cs) return;
-
-    var pc = cs.peers[peerId];
-
-    // If we don't have a connection yet, create one
-    if (!pc){
-      pc = new RTCPeerConnection({ iceServers: iceServers });
-      cs.peers[peerId] = pc;
-      pc.__makingOffer = false;
-      pc.__polite = isPolite(window.ME.id, peerId);
-
-      cs.localStream.getTracks().forEach(function(track){
-        pc.addTrack(track, cs.localStream);
-      });
-
-      pc.ontrack = function(event){
-        log("got remote track from", peerId, "kind:", event.track.kind);
-        attachRemoteMedia(peerId, event.streams[0]);
-      };
-
-      pc.onicecandidate = function(event){
-        if (event.candidate){
-          cs.signalingChannel.send({
-            type: 'broadcast', event: 'ice-candidate',
-            payload: { from: window.ME.id, candidate: event.candidate }
-          });
-        }
-      };
-
-      pc.onconnectionstatechange = function(){
-        log("peer", peerId, "state:", pc.connectionState);
-        updateDebugPanel();
-        updateDockStatus();
-        if (pc.connectionState === 'failed') closePeer(peerId);
-      };
-    }
-
-    try {
-      // Glare detection: if we're making an offer and incoming is also an offer
-      var offerCollision = pc.__makingOffer || pc.signalingState !== 'stable';
-      var polite = pc.__polite;
-
-      // Impolite peer ignores the incoming offer during a collision
-      if (offerCollision && !polite){
-        log("impolite - ignoring incoming offer from", peerId);
-        return;
-      }
-
-      // Polite peer rolls back and accepts the incoming offer
-      if (offerCollision && polite){
-        log("polite - rolling back to accept offer from", peerId);
-        try {
-          await pc.setLocalDescription({ type: 'rollback' });
-        } catch(e){ log("rollback failed:", e.message); }
-      }
-
-      await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-      var answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-
-      cs.signalingChannel.send({
-        type: 'broadcast', event: 'answer',
-        payload: { from: window.ME.id, sdp: pc.localDescription }
-      });
-      log("answer sent to", peerId);
-    } catch(e){
-      log("handleOffer failed for", peerId, ":", e.message);
-    }
-  };
-
-  // ============================================================
-  // 2. ATTACH REMOTE MEDIA properly (fixes autoplay/silence)
-  // ============================================================
-  function attachRemoteMedia(peerId, stream){
-    var cs = window.callState;
-
-    // AUDIO — always attach, but respect deafen state
-    var audio = cs.audioElements[peerId];
-    if (!audio){
-      audio = document.createElement('audio');
-      audio.autoplay = true;
-      audio.playsInline = true;
-      audio.id = 'call-audio-' + peerId;
-      audio.setAttribute('data-peer', peerId);
-      document.body.appendChild(audio);
-      cs.audioElements[peerId] = audio;
-    }
-    audio.srcObject = stream;
-    // Explicit play call — sometimes autoplay is blocked
-    var p = audio.play();
-    if (p && p.catch){
-      p.catch(function(err){
-        log("audio play() rejected:", err.message, "- will retry on next user gesture");
-        // Retry on any click
-        var retry = function(){
-          audio.play().catch(function(){});
-          document.removeEventListener('click', retry, true);
-        };
-        document.addEventListener('click', retry, true);
-      });
-    }
-    audio.muted = !!cs.deafened;
-
-    // VIDEO — only if the stream has a video track
-    if (stream.getVideoTracks().length){
-      var vid = cs.videoElements[peerId];
-      if (!vid){
-        vid = document.createElement('video');
-        vid.autoplay = true;
-        vid.playsInline = true;
-        vid.id = 'call-video-' + peerId;
-        cs.videoElements[peerId] = vid;
-      }
-      vid.srcObject = stream;
-      vid.play().catch(function(){});
-      renderVideoGrid();
-    }
-  }
-
-  // ============================================================
-  // 3. HOOK INTO EXISTING CODE — replace createOffer / handleOffer
-  // ============================================================
-  // The original voice code calls `createOffer` and `handleOffer` as
-  // local functions. They're not on window, so we can't wrap them
-  // directly. Instead, we intervene at the signaling layer: whenever
-  // the signaling channel receives an offer/answer, we route it
-  // through our glare-safe versions.
-  //
-  // We also wrap joinVoice so that after it sets up signaling, we
-  // install our own handler that replaces the built-in one.
-
-  var origJoinVoice = window.joinVoice;
-  if (typeof origJoinVoice === 'function'){
-    window.joinVoice = async function(channelId, withVideo){
-      // Let the original join run first
-      var result = await origJoinVoice.call(this, channelId, withVideo);
-
-      // Now that signalingChannel exists, override the offer/answer handlers
-      setTimeout(function(){
-        var cs = window.callState;
-        if (!cs || !cs.signalingChannel) return;
-
-        log("installing glare-safe offer handler");
-
-        // We can't remove individual listeners from a Supabase channel,
-        // so we intercept by keeping a reference to the "active" peers map
-        // and letting our createOffer/handleOffer overwrite entries.
-        // The original handlers will still fire, but our versions will
-        // win because they check `cs.peers[peerId]` and reuse the connection.
-
-        // Kick off an initial negotiation with everyone we can see
-        sb.from('voice_participants')
-          .select('user_id')
-          .eq('channel_id', channelId)
-          .then(function(resp){
-            var others = (resp.data || [])
-              .map(function(r){ return r.user_id; })
-              .filter(function(uid){ return uid !== window.ME.id; });
-            log("existing participants to connect to:", others.length);
-            others.forEach(function(peerId){
-              if (!cs.peers[peerId]){
-                window.__voiceCreateOffer(peerId, cs.iceServers || [{ urls: 'stun:stun.l.google.com:19302' }]);
-              }
-            });
-          });
-      }, 300);
-
-      // Show debug panel
-      setTimeout(renderDebugPanel, 400);
-
-      return result;
-    };
-  }
-
-  // ============================================================
-  // 4. DIAGNOSTIC PANEL
-  // ============================================================
-  function renderDebugPanel(){
-    var existing = document.getElementById('voice-debug');
-    if (existing) return;
-    var panel = document.createElement('div');
-    panel.id = 'voice-debug';
-    panel.className = 'voice-debug';
-    document.body.appendChild(panel);
-    updateDebugPanel();
-  }
-
-  function updateDebugPanel(){
-    var panel = document.getElementById('voice-debug');
-    if (!panel) return;
-    var cs = window.callState;
-    if (!cs || !cs.channelId){
-      panel.innerHTML = '<h5>Voice Debug</h5><div class="row">Not in a call</div>' +
-        '<button id="vd-refresh">Refresh</button>';
-      wireRefresh(panel);
-      return;
-    }
-
-    var peerIds = Object.keys(cs.peers);
-    var audioCount = Object.keys(cs.audioElements).length;
-    var videoCount = Object.keys(cs.videoElements).length;
-
-    var html = '<h5>Voice Debug</h5>';
-    html += '<div class="row"><span>Peers</span><b>' + peerIds.length + '</b></div>';
-    html += '<div class="row"><span>Audio elements</span><b>' + audioCount + '</b></div>';
-    html += '<div class="row"><span>Video elements</span><b>' + videoCount + '</b></div>';
-
-    // Per-peer state
-    peerIds.forEach(function(pid, i){
-      var pc = cs.peers[pid];
-      var state = pc.connectionState || 'new';
-      var iceState = pc.iceConnectionState || 'new';
-      var cls = 'wait';
-      if (state === 'connected') cls = 'ok';
-      else if (state === 'failed' || state === 'closed') cls = 'bad';
-      var shortId = pid.slice(0, 8);
-      html += '<div class="row ' + cls + '"><span>peer ' + shortId + '</span><b>' + state + '/' + iceState + '</b></div>';
-    });
-
-    // Audio element states
-    for (var pid in cs.audioElements){
-      var a = cs.audioElements[pid];
-      var paused = a.paused ? 'paused' : 'playing';
-      var muted = a.muted ? 'muted' : 'unmuted';
-      html += '<div class="row ' + (paused === 'playing' ? 'ok' : 'bad') + '">' +
-        '<span>audio ' + pid.slice(0, 6) + '</span><b>' + paused + ' ' + muted + '</b></div>';
-    }
-
-    // Tip
-    if (peerIds.length === 0){
-      html += '<div class="tip">No peers yet. If other accounts have joined, this should show them within a few seconds. Check that the voice_participants table exists.</div>';
-    } else if (peerIds.some(function(pid){ return cs.peers[pid].connectionState === 'connected'; })){
-      html += '<div class="tip">Connected. If you still hear nothing on the SAME machine, Chrome\'s echo cancellation is silencing the audio. Use headphones, or test on TWO devices.</div>';
-    } else {
-      html += '<div class="tip">Peers found but not connected. Wait 5-10 seconds — WebRTC usually connects within that time. If states stay "connecting" or "new", TURN is likely needed.</div>';
-    }
-
-    html += '<button id="vd-refresh">Refresh</button>';
-    panel.innerHTML = html;
-    wireRefresh(panel);
-  }
-
-  function wireRefresh(panel){
-    var b = panel.querySelector('#vd-refresh');
-    if (b) b.onclick = updateDebugPanel;
-  }
-
-  // Refresh debug panel every 2 seconds
-  setInterval(function(){
-    if (window.callState && window.callState.channelId) updateDebugPanel();
-  }, 2000);
-
-  // ============================================================
-  // 5. DOCK STATUS INDICATOR
-  // ============================================================
-  function updateDockStatus(){
-    var dock = document.getElementById('voice-dock');
-    if (!dock) return;
-    var cs = window.callState;
-    var peerIds = Object.keys(cs.peers);
-    if (!peerIds.length) return;
-
-    var connected = peerIds.filter(function(pid){
-      return cs.peers[pid].connectionState === 'connected';
-    }).length;
-
-    // Find or create the status chip
-    var chip = dock.querySelector('.peer-status');
-    if (!chip){
-      chip = document.createElement('span');
-      chip.className = 'peer-status';
-      var names = dock.querySelector('.names');
-      if (names) names.insertAdjacentElement('afterend', chip);
-    }
-    chip.textContent = connected + '/' + peerIds.length;
-    chip.classList.remove('ok', 'wait', 'bad');
-    if (connected === peerIds.length && peerIds.length > 0) chip.classList.add('ok');
-    else if (connected === 0) chip.classList.add('bad');
-    else chip.classList.add('wait');
-    chip.title = connected + ' of ' + peerIds.length + ' peers connected';
-    chip.onclick = function(){
-      var panel = document.getElementById('voice-debug');
-      if (panel) panel.remove();
-      else renderDebugPanel();
-    };
-  }
-
-  // ============================================================
-  // 6. CLEANUP — remove debug panel when leaving call
-  // ============================================================
-  var origLeaveVoice = window.leaveVoice;
-  if (typeof origLeaveVoice === 'function'){
-    window.leaveVoice = async function(){
-      var panel = document.getElementById('voice-debug');
-      if (panel) panel.remove();
-      return origLeaveVoice.call(this);
-    };
-  }
-
-  log("voice debug + glare fix ready");
-})();
-</script>
-
 <!-- SLEEPY_SIMPLE_VOICE_V1 -->
 <style>
 /* Clean voice dock — replaces the old debug-heavy one */
@@ -7959,520 +7505,6 @@ html, body { overscroll-behavior: none; }
   });
 
   log("simple voice ready");
-})();
-</script>
-
-<!-- SLEEPY_VOICE_POLISH_V1 -->
-<style>
-/* === Install prompt === */
-#sc-install{
-  position:fixed;left:50%;bottom:24px;transform:translateX(-50%);
-  z-index:950;max-width:420px;width:calc(100% - 32px);
-  background:linear-gradient(135deg, rgba(0,255,224,.08), rgba(180,74,255,.08)), #12121a;
-  border:1px solid rgba(0,255,224,.4);border-radius:16px;
-  padding:16px 18px;box-shadow:0 24px 60px rgba(0,0,0,.75);
-  display:flex;gap:14px;align-items:flex-start;
-  animation:scIn .45s cubic-bezier(.22,.61,.36,1) both;
-  font-family:'Inter',sans-serif;
-}
-@keyframes scIn{from{opacity:0;transform:translate(-50%, 30px)}to{opacity:1;transform:translate(-50%, 0)}}
-#sc-install.gone{animation:scOut .3s ease both}
-@keyframes scOut{to{opacity:0;transform:translate(-50%, 30px)}}
-#sc-install .ico{
-  width:46px;height:46px;border-radius:12px;flex:none;
-  background:linear-gradient(135deg,rgba(0,255,224,.2),rgba(180,74,255,.2));
-  border:1px solid rgba(0,255,224,.35);
-  display:flex;align-items:center;justify-content:center;
-}
-#sc-install .ico svg{width:24px;height:24px;color:var(--cyan)}
-#sc-install .body{flex:1;min-width:0}
-#sc-install .body h4{font-family:'Space Grotesk',sans-serif;font-size:15px;margin-bottom:4px;color:var(--text)}
-#sc-install .body p{font-size:12.5px;color:var(--text2);line-height:1.5;margin-bottom:10px}
-#sc-install .body .acts{display:flex;gap:8px;flex-wrap:wrap}
-#sc-install .body button{
-  padding:8px 14px;border-radius:8px;font-size:12.5px;font-weight:600;
-  border:1px solid var(--border);background:var(--surface2);color:var(--text2);
-  cursor:pointer;transition:all .15s;
-}
-#sc-install .body button.primary{
-  background:linear-gradient(135deg,var(--cyan),#00c9b4);color:#04120f;border-color:transparent;font-weight:700;
-}
-#sc-install .body button.primary:hover{box-shadow:var(--glow)}
-#sc-install .body button:hover{transform:translateY(-1px)}
-#sc-install .x{
-  position:absolute;top:8px;right:8px;width:24px;height:24px;
-  border-radius:50%;background:rgba(255,255,255,.06);color:var(--text3);
-  border:none;cursor:pointer;font-size:14px;line-height:1;
-  display:flex;align-items:center;justify-content:center;
-}
-#sc-install .x:hover{background:rgba(255,255,255,.12);color:var(--text)}
-#sc-install .steps{
-  padding:9px 11px;background:rgba(0,0,0,.35);border-radius:8px;
-  font-size:12px;color:var(--text2);line-height:1.7;margin-bottom:10px;
-}
-#sc-install .steps b{color:var(--cyan)}
-
-/* === Peer status text === */
-.voice-dock .status.connected-partial i{background:var(--amber);animation:pulse 2s infinite}
-.voice-dock .status.connected-partial{color:var(--amber)}
-</style>
-<script>
-(function(){
-  "use strict";
-  if (window.__sleepyVoicePolish) return;
-  window.__sleepyVoicePolish = true;
-  function log(){ try{console.log.apply(console,["[Polish]"].concat([].slice.call(arguments)));}catch(e){} }
-  function esc(s){ return window.esc(s); }
-
-  // ============================================================
-  // PART 1 — FIX STATUS: show "Connected" as soon as any peer connects
-  // ============================================================
-  // The old logic required ALL peers connected. With ghost peers, that
-  // never happened. New logic: as long as one peer is connected, we say
-  // Connected. If some are still pending, show "Connected (2/3)".
-
-  function computeStatus(){
-    var s = window.vs;
-    if (!s) return 'idle';
-    var ids = Object.keys(s.peers);
-    if (!ids.length) return s.status === 'failed' ? 'failed' : 'connecting';
-    var connected = 0, failed = 0, pending = 0;
-    ids.forEach(function(pid){
-      var st = s.peers[pid].pc.connectionState;
-      if (st === 'connected') connected++;
-      else if (st === 'failed' || st === 'closed') failed++;
-      else pending++;
-    });
-    if (connected > 0 && pending === 0 && failed === 0) return 'connected';
-    if (connected > 0 && (pending > 0 || failed > 0)) return 'connected-partial';
-    if (connected === 0 && failed === ids.length) return 'failed';
-    if (connected === 0 && pending > 0){
-      // If we've been waiting too long, mark failed
-      if (s.__waitSince && Date.now() - s.__waitSince > 20000) return 'failed';
-      return 'connecting';
-    }
-    return 'connected';
-  }
-
-  // Override renderDock to use the new status
-  var origRenderDock = window.renderDock;
-  // renderDock is a private function, not exposed. Instead we patch the
-  // global toggle functions and just rebuild the dock periodically.
-  function rebuildDock(){
-    if (!window.vs || !window.vs.channelId){
-      var d = document.getElementById('voice-dock');
-      if (d) d.remove();
-      return;
-    }
-    var s = window.vs;
-    var status = computeStatus();
-    s.status = status;
-
-    // Update the status label in the existing dock
-    var dock = document.getElementById('voice-dock');
-    if (!dock){
-      // Let the original render call happen
-      return;
-    }
-    var statusEl = dock.querySelector('.status');
-    if (statusEl){
-      var cls = status === 'connected-partial' ? 'connected-partial' : status;
-      statusEl.className = 'status ' + cls;
-      var label = {
-        connecting: 'Connecting',
-        connected: 'Connected',
-        'connected-partial': 'Connected',
-        failed: 'Connection failed',
-        idle: 'Idle'
-      }[status] || 'Idle';
-      // Append count if partial
-      var ids = Object.keys(s.peers);
-      var connected = ids.filter(function(pid){ return s.peers[pid].pc.connectionState === 'connected'; }).length;
-      if (status === 'connected-partial') label += ' (' + connected + '/' + ids.length + ')';
-      statusEl.innerHTML = '<i></i>' + label;
-    }
-    // Update count
-    var countEl = dock.querySelector('.count');
-    if (countEl){
-      var ch = (window.CHANNELS || []).filter(function(c){ return c.id === s.channelId; })[0];
-      var chName = ch ? ch.name : 'call';
-      countEl.textContent = (Object.keys(s.peers).length + 1) + ' in #' + chName;
-    }
-  }
-
-  // Run every 2 seconds to keep the dock in sync
-  setInterval(rebuildDock, 2000);
-  // Also track when we started connecting
-  var origJoin = window.joinVoice;
-  if (typeof origJoin === 'function'){
-    window.joinVoice = async function(cid, vid){
-      if (window.vs) window.vs.__waitSince = Date.now();
-      var r = await origJoin.call(this, cid, vid);
-      setTimeout(rebuildDock, 500);
-      return r;
-    };
-  }
-
-  // ============================================================
-  // PART 2 — GHOST USER CLEANUP
-  // ============================================================
-  // When a tab is closed, the participant row stays in the DB.
-  // Fixes:
-  //   a) Heartbeat: our own row updates joined_at every 20s
-  //   b) Filter: hide participants whose joined_at is older than 90s
-  //   c) Unload: best-effort delete via sendBeacon-style fetch
-
-  var HEARTBEAT_MS = 20000;
-  var STALE_MS = 90000;
-  var hbTimer = null;
-
-  function startHeartbeat(){
-    stopHeartbeat();
-    if (!window.ME) return;
-    hbTimer = setInterval(function(){
-      if (!window.vs || !window.vs.channelId) return;
-      sb.from('voice_participants')
-        .update({ joined_at: new Date().toISOString() })
-        .eq('channel_id', window.vs.channelId)
-        .eq('user_id', window.ME.id)
-        .then(function(){});
-    }, HEARTBEAT_MS);
-  }
-  function stopHeartbeat(){
-    if (hbTimer) { clearInterval(hbTimer); hbTimer = null; }
-  }
-
-  // Patch joinVoice to start the heartbeat
-  var prevJoin2 = window.joinVoice;
-  if (typeof prevJoin2 === 'function'){
-    window.joinVoice = async function(cid, vid){
-      var r = await prevJoin2.call(this, cid, vid);
-      startHeartbeat();
-      return r;
-    };
-  }
-  // Patch leaveVoice to stop it
-  var prevLeave2 = window.leaveVoice;
-  if (typeof prevLeave2 === 'function'){
-    window.leaveVoice = async function(){
-      stopHeartbeat();
-      return prevLeave2.call(this);
-    };
-  }
-
-  // Best-effort cleanup on tab close / unload
-  window.addEventListener('beforeunload', function(){
-    if (!window.vs || !window.vs.channelId || !window.ME) return;
-    // Use synchronous XMLHttpRequest as a last resort - most reliable for unload
-    try {
-      var url = SUPABASE_URL + '/rest/v1/voice_participants?channel_id=eq.'
-        + encodeURIComponent(window.vs.channelId)
-        + '&user_id=eq.' + encodeURIComponent(window.ME.id);
-      var xhr = new XMLHttpRequest();
-      xhr.open('DELETE', url, false); // synchronous
-      xhr.setRequestHeader('apikey', SUPABASE_ANON_KEY);
-      xhr.setRequestHeader('Authorization', 'Bearer ' + SUPABASE_ANON_KEY);
-      xhr.send();
-    } catch(e){}
-  });
-
-  // Override voice participant loading to filter stale rows
-  var origRender = window.renderChat;
-  window.renderChat = function(scroll){
-    // Only intercept if we're rendering a voice channel
-    if (window.CURRENT && window.CURRENT.channel &&
-        (window.CURRENT.channel.type === 'voice' || window.CURRENT.channel.type === 'video')){
-      // Let the original render run, but patch its participant query by
-      // intercepting the DOM after a tick and removing stale avatars.
-      var r = origRender.call(this, scroll);
-      setTimeout(function(){
-        pruneStaleFromVoicePanel();
-      }, 400);
-      return r;
-    }
-    return origRender.call(this, scroll);
-  };
-
-  function pruneStaleFromVoicePanel(){
-    // Query the DB for fresh participants and re-render if any are stale
-    if (!window.CURRENT || !window.CURRENT.channel) return;
-    var chId = window.CURRENT.channel.id;
-    sb.from('voice_participants')
-      .select('user_id, joined_at')
-      .eq('channel_id', chId)
-      .then(function(resp){
-        var rows = resp.data || [];
-        var now = Date.now();
-        var stale = rows.filter(function(r){
-          return now - new Date(r.joined_at).getTime() > STALE_MS;
-        });
-        if (stale.length){
-          // Delete stale rows quietly
-          stale.forEach(function(row){
-            sb.from('voice_participants')
-              .delete()
-              .eq('channel_id', chId)
-              .eq('user_id', row.user_id)
-              .then(function(){});
-          });
-          log("pruned " + stale.length + " stale participants");
-        }
-      });
-  }
-
-  // Also prune on boot - clean up any ghost rows on app load
-  setTimeout(function(){
-    if (!window.ME) return;
-    // Get every voice_participants row where the heartbeat is stale
-    sb.from('voice_participants')
-      .select('channel_id, user_id, joined_at')
-      .then(function(resp){
-        var rows = resp.data || [];
-        var now = Date.now();
-        rows.forEach(function(r){
-          if (now - new Date(r.joined_at).getTime() > STALE_MS){
-            sb.from('voice_participants')
-              .delete()
-              .eq('channel_id', r.channel_id)
-              .eq('user_id', r.user_id)
-              .then(function(){});
-          }
-        });
-      });
-  }, 3000);
-
-  // ============================================================
-  // PART 3 — DEVICE-AWARE PWA INSTALL PROMPT
-  // ============================================================
-  // Shows ONCE per device. Phone gets "Add to Home Screen" steps.
-  // Desktop gets an Install button (uses the beforeinstallprompt event
-  // when available, otherwise shows manual steps).
-
-  var STORAGE_KEY = 'sleepychat.install.dismissed.v2';
-  var deferredPrompt = null;
-
-  function isStandalone(){
-    return window.matchMedia('(display-mode: standalone)').matches ||
-           window.navigator.standalone === true ||
-           document.referrer.indexOf('android-app://') === 0;
-  }
-
-  function deviceKind(){
-    var ua = navigator.userAgent;
-    if (/iPad|Tablet|PlayBook|Silk/i.test(ua)) return 'tablet';
-    if (/Android|iPhone|iPod|Mobile|Windows Phone/i.test(ua)) return 'phone';
-    return 'desktop';
-  }
-
-  function isIOS(){
-    return /iPhone|iPad|iPod/i.test(navigator.userAgent) && !window.MSStream;
-  }
-
-  function isAndroid(){
-    return /Android/i.test(navigator.userAgent);
-  }
-
-  function isChrome(){ return /Chrome/i.test(navigator.userAgent) && !/Edge|OPR/i.test(navigator.userAgent); }
-  function isEdge(){ return /Edg\//i.test(navigator.userAgent); }
-  function isFirefox(){ return /Firefox|FxiOS/i.test(navigator.userAgent); }
-  function isSafari(){
-    return /Safari/i.test(navigator.userAgent) && !/Chrome|CriOS|FxiOS|Edg/i.test(navigator.userAgent);
-  }
-
-  function buildInstallHTML(){
-    var kind = deviceKind();
-    var iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-      '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>' +
-      '<polyline points="7 10 12 15 17 10"/>' +
-      '<line x1="12" y1="15" x2="12" y2="3"/>' +
-    '</svg>';
-
-    if (kind === 'phone' && isIOS()){
-      return {
-        title: 'Install Sleepy-Chat',
-        body: 'Add Sleepy-Chat to your home screen for the full app experience.',
-        steps: 'Tap the <b>Share</b> button at the bottom of Safari, then scroll and tap <b>Add to Home Screen</b>, then <b>Add</b>.',
-        showInstallButton: false
-      };
-    }
-    if (kind === 'phone' && isAndroid()){
-      return {
-        title: 'Install Sleepy-Chat',
-        body: 'Add Sleepy-Chat to your home screen for instant access.',
-        steps: deferredPrompt
-          ? 'Tap <b>Install</b> to add Sleepy-Chat to your home screen.'
-          : 'Open the browser menu (⋮), then tap <b>Install app</b> or <b>Add to Home screen</b>.',
-        showInstallButton: !!deferredPrompt
-      };
-    }
-    if (kind === 'tablet'){
-      return {
-        title: 'Install Sleepy-Chat',
-        body: 'Add Sleepy-Chat to your device for the full app experience.',
-        steps: 'Open the browser menu, then choose <b>Install app</b> or <b>Add to Home screen</b>.',
-        showInstallButton: !!deferredPrompt
-      };
-    }
-    // Desktop
-    var browserHint = 'Look for the install icon in your browser\'s address bar.';
-    if (isChrome())   browserHint = 'Click the <b>install icon</b> in the address bar (top-right of the URL), or open the browser menu → <b>Install Sleepy-Chat</b>.';
-    if (isEdge())     browserHint = 'Click the <b>install icon</b> next to the URL, or go to menu (⋯) → <b>Apps</b> → <b>Install this site as an app</b>.';
-    if (isSafari())   browserHint = 'In Safari, go to <b>File</b> → <b>Add to Dock</b>.';
-    if (isFirefox())  browserHint = 'Firefox desktop doesn\'t support installing websites as apps. Try Chrome or Edge for the best experience.';
-    return {
-      title: 'Install Sleepy-Chat as an app',
-      body: 'Get Sleepy-Chat in its own window, no browser tabs, no URL bar.',
-      steps: browserHint,
-      showInstallButton: !!deferredPrompt
-    };
-  }
-
-  function showInstallPrompt(){
-    // Skip if already installed as app
-    if (isStandalone()) return;
-    // Skip if dismissed before
-    try { if (localStorage.getItem(STORAGE_KEY) === '1') return; } catch(e){}
-    // Skip if already shown on this page load
-    if (document.getElementById('sc-install')) return;
-
-    var info = buildInstallHTML();
-    var el = document.createElement('div');
-    el.id = 'sc-install';
-    el.innerHTML =
-      '<div class="ico">' + info.iconSvg + '</div>' +
-      '<div class="body">' +
-        '<h4>' + info.title + '</h4>' +
-        '<p>' + info.body + '</p>' +
-        (info.steps ? '<div class="steps">' + info.steps + '</div>' : '') +
-        '<div class="acts">' +
-          (info.showInstallButton
-            ? '<button class="primary" id="sc-install-go">Install now</button>'
-            : '') +
-          '<button id="sc-install-later">Not now</button>' +
-        '</div>' +
-      '</div>' +
-      '<button class="x" id="sc-install-x" title="Dismiss">×</button>';
-    document.body.appendChild(el);
-
-    function dismiss(){
-      try { localStorage.setItem(STORAGE_KEY, '1'); } catch(e){}
-      el.classList.add('gone');
-      setTimeout(function(){ el.remove(); }, 350);
-    }
-
-    document.getElementById('sc-install-x').onclick = dismiss;
-    document.getElementById('sc-install-later').onclick = dismiss;
-
-    var go = document.getElementById('sc-install-go');
-    if (go) go.onclick = async function(){
-      if (!deferredPrompt) return dismiss();
-      deferredPrompt.prompt();
-      var result = await deferredPrompt.userChoice;
-      deferredPrompt = null;
-      if (result.outcome === 'accepted') dismiss();
-      else dismiss();
-    };
-  }
-
-  // Capture the native install prompt
-  window.addEventListener('beforeinstallprompt', function(e){
-    e.preventDefault();
-    deferredPrompt = e;
-    // If the banner is already visible with a manual-steps message,
-    // refresh it to show the Install button
-    var existing = document.getElementById('sc-install');
-    if (existing){
-      existing.remove();
-      try { localStorage.removeItem(STORAGE_KEY); } catch(e){}
-    }
-    // Show after a short delay so the page settles
-    setTimeout(showInstallPrompt, 800);
-  });
-
-  // If the beforeinstallprompt never fires (Safari, Firefox, or already installed),
-  // show the manual-instructions banner once after the page has been up for a bit.
-  setTimeout(function(){
-    if (isStandalone()) return;
-    try { if (localStorage.getItem(STORAGE_KEY) === '1') return; } catch(e){}
-    if (document.getElementById('sc-install')) return;
-    showInstallPrompt();
-  }, 8000);
-
-  // Hide the banner if the user actually installs
-  window.addEventListener('appinstalled', function(){
-    try { localStorage.setItem(STORAGE_KEY, '1'); } catch(e){}
-    var el = document.getElementById('sc-install');
-    if (el) el.remove();
-    log("app installed");
-  });
-
-  // ============================================================
-  // PART 4 — APP-LIKE NAVIGATION
-  // ============================================================
-  // When running as an installed PWA, hide anything that suggests a
-  // browser context and remember the last channel so a reopen lands
-  // where you left off.
-
-  function isAppMode(){
-    return window.matchMedia('(display-mode: standalone)').matches ||
-           window.matchMedia('(display-mode: minimal-ui)').matches ||
-           window.navigator.standalone === true;
-  }
-
-  // Remember last location
-  function rememberLocation(){
-    try {
-      if (window.CURRENT){
-        var loc = { type: window.CURRENT.type, id: null };
-        if (window.CURRENT.type === 'server' && window.CURRENT.channel){
-          loc.serverId = window.CURRENT.server ? window.CURRENT.server.id : null;
-          loc.id = window.CURRENT.channel.id;
-        } else if (window.CURRENT.type === 'dm' && window.CURRENT.conv){
-          loc.id = window.CURRENT.conv.id;
-        }
-        localStorage.setItem('sleepychat.lastLocation', JSON.stringify(loc));
-      }
-    } catch(e){}
-  }
-  setInterval(rememberLocation, 4000);
-
-  // On boot, if in app mode, jump back
-  function restoreLocation(){
-    if (!isAppMode()) return;
-    if (!window.ME) return;
-    if (window.CURRENT && (window.CURRENT.channel || window.CURRENT.conv)) return; // already somewhere
-    try {
-      var raw = localStorage.getItem('sleepychat.lastLocation');
-      if (!raw) return;
-      var loc = JSON.parse(raw);
-      if (!loc || !loc.type) return;
-      if (loc.type === 'server' && loc.serverId && loc.id && window.goServer){
-        window.goServer(loc.serverId).then(function(){
-          if (window.goChannel) window.goChannel(loc.id);
-        });
-      } else if (loc.type === 'dm' && loc.id && window.goConversation){
-        window.goConversation(loc.id);
-      }
-    } catch(e){}
-  }
-  setTimeout(restoreLocation, 1500);
-
-  // In app mode, prevent links that would open a browser from taking over
-  if (isAppMode()){
-    document.addEventListener('click', function(e){
-      var a = e.target.closest('a[target="_blank"]');
-      if (a){
-        // Let external links open externally, but prevent our own app URLs
-        var href = a.getAttribute('href') || '';
-        if (href.indexOf(location.origin) === 0){
-          e.preventDefault();
-          location.href = href;
-        }
-      }
-    }, true);
-  }
-
-  log("voice polish + PWA ready");
 })();
 </script>
 
@@ -9594,578 +8626,6 @@ html, body { overscroll-behavior: none; }
 })();
 </script>
 
-<!-- SLEEPY_TICKETS_V1 -->
-<style>
-.ticket-row{position:relative;display:flex;align-items:center;gap:9px;padding:8px 9px;border-radius:8px;cursor:pointer;color:var(--text2);font-size:13.5px;font-weight:500;transition:background .14s;width:100%;text-align:left}
-.ticket-row:hover{background:rgba(255,255,255,.045);color:var(--text)}
-.ticket-row.active{background:var(--surface2);color:#fff}
-.ticket-row.active::before{content:'';position:absolute;left:-8px;top:50%;transform:translateY(-50%);width:3px;height:60%;border-radius:0 3px 3px 0;background:var(--purple);box-shadow:0 0 12px rgba(180,74,255,.5)}
-.ticket-row .t-emoji{font-size:15px;flex:none;width:18px;text-align:center}
-.ticket-row .t-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ticket-row .t-status{font-size:9.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:2px 7px;border-radius:99px;flex:none}
-.ticket-row .t-status.open{background:rgba(0,230,118,.15);color:var(--green)}
-.ticket-row .t-status.closed{background:rgba(90,90,114,.25);color:var(--text3)}
-.ticket-row .t-count{font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;flex:none}
-
-.ticket-header-bar{
-  display:flex;align-items:center;gap:10px;padding:10px 20px;
-  background:linear-gradient(90deg,rgba(180,74,255,.08),rgba(0,255,224,.03));
-  border-bottom:1px solid var(--border);
-}
-.ticket-header-bar .t-badge{
-  font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
-  padding:3px 9px;border-radius:99px;
-}
-.ticket-header-bar .t-badge.open{background:rgba(0,230,118,.15);color:var(--green)}
-.ticket-header-bar .t-badge.closed{background:rgba(90,90,114,.25);color:var(--text3)}
-.ticket-header-bar .t-cat{font-size:12px;color:var(--text3);margin-left:auto}
-
-.ticket-intro{padding:24px 20px 8px;text-align:center}
-.ticket-intro h2{font-family:'Space Grotesk',sans-serif;font-size:20px;margin-bottom:6px}
-.ticket-intro p{font-size:13px;color:var(--text2);max-width:460px;margin:0 auto}
-
-.ticket-msg{position:relative;display:flex;gap:13px;padding:6px 20px;animation:tIn2 .22s ease}
-@keyframes tIn2{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-.ticket-msg:hover{background:rgba(255,255,255,.02)}
-.ticket-msg .body{flex:1;min-width:0}
-.ticket-msg .head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-.ticket-msg .author{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:14px}
-.ticket-msg .staff-tag{font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:1px 6px;border-radius:99px;background:rgba(255,171,0,.16);color:var(--amber)}
-.ticket-msg .time{font-size:10.5px;color:var(--text3);font-family:monospace}
-.ticket-msg .content{font-size:14px;color:#dcdce8;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:anywhere;margin-top:2px}
-
-.ticket-closed-note{padding:20px;text-align:center;font-size:13px;color:var(--text3);border-top:1px solid var(--border);margin-top:16px}
-
-.ticket-cat-pick{display:flex;flex-direction:column;gap:8px;margin-top:8px}
-.ticket-cat-pick label{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;background:rgba(255,255,255,.03);border:1px solid var(--border);cursor:pointer;transition:all .15s}
-.ticket-cat-pick label:hover{border-color:var(--border2);background:rgba(255,255,255,.05)}
-.ticket-cat-pick label.sel{border-color:var(--purple);background:rgba(180,74,255,.08);box-shadow:0 0 0 1px rgba(180,74,255,.35)}
-.ticket-cat-pick .emoji{font-size:22px;flex:none}
-.ticket-cat-pick .body{flex:1;min-width:0}
-.ticket-cat-pick .name{font-weight:600;font-size:13.5px;color:var(--text);margin-bottom:2px}
-.ticket-cat-pick .desc{font-size:11.5px;color:var(--text3);line-height:1.4}
-.ticket-cat-pick input{display:none}
-</style>
-<script>
-(function(){
-  "use strict";
-  if (window.__sleepyTickets) return;
-  window.__sleepyTickets = true;
-  function log(){ try{console.log.apply(console,["[Ticket]"].concat([].slice.call(arguments)));}catch(e){} }
-  function esc(s){ return window.esc(s); }
-
-  // -------- State --------
-  window.TICKET_CATEGORIES = [];
-  window.MY_TICKETS = [];        // tickets I created in this server
-  window.ALL_TICKETS = [];       // all tickets in this server (if I'm staff)
-  window.IS_STAFF = false;
-  window.TICKET_MESSAGES = [];
-  var ticketSub = null;
-
-  // -------- Helpers --------
-  function isInServer(){
-    return window.CURRENT && window.CURRENT.type === 'server' && window.CURRENT.server;
-  }
-  function myTicketIds(){ return (window.MY_TICKETS || []).map(function(t){ return t.id; }); }
-
-  // -------- Load data when entering server --------
-  async function loadTicketData(){
-    if (!isInServer()) return;
-    var srv = window.CURRENT.server;
-    try {
-      // Am I staff?
-      var staffResp = await sb.rpc('is_server_staff', { sid: srv.id, uid: window.ME.id });
-      window.IS_STAFF = !!staffResp.data;
-
-      // Categories
-      var catResp = await sb.from('ticket_categories')
-        .select('*').eq('server_id', srv.id).order('position', { ascending: true });
-      window.TICKET_CATEGORIES = catResp.data || [];
-
-      // My tickets
-      var mineResp = await sb.from('tickets')
-        .select('*').eq('server_id', srv.id).eq('creator_id', window.ME.id)
-        .order('created_at', { ascending: false });
-      window.MY_TICKETS = mineResp.data || [];
-
-      // All tickets (staff only)
-      if (window.IS_STAFF){
-        var allResp = await sb.from('tickets')
-          .select('*').eq('server_id', srv.id)
-          .order('created_at', { ascending: false });
-        window.ALL_TICKETS = allResp.data || [];
-      } else {
-        window.ALL_TICKETS = [];
-      }
-    } catch(e){
-      log("loadTicketData failed:", e.message);
-    }
-  }
-
-  // -------- Sidebar rendering --------
-  function injectTicketsIntoPanel(){
-    var body = document.getElementById('panel-body');
-    if (!body) return;
-    var existing = document.getElementById('tickets-section');
-    if (existing) existing.remove();
-
-    if (!isInServer()) return;
-
-    var visible = window.IS_STAFF ? window.ALL_TICKETS : window.MY_TICKETS;
-    var open = visible.filter(function(t){ return t.status === 'open'; });
-    var closed = visible.filter(function(t){ return t.status === 'closed'; });
-
-    var section = document.createElement('div');
-    section.className = 'panel-section';
-    section.id = 'tickets-section';
-
-    var headerHTML = '<div class="panel-label">' +
-      '<span>Tickets' + (visible.length ? ' (' + open.length + ')' : '') + '</span>' +
-      '<span class="add" data-ticket-new title="Create a ticket">' +
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:12px;height:12px"><path d="M12 5v14M5 12h14"/></svg>' +
-      '</span>' +
-    '</div>';
-
-    var listHTML = '';
-    if (!visible.length){
-      listHTML = '<div style="padding:4px 10px 8px;font-size:12px;color:var(--text3)">No tickets yet.</div>';
-    } else {
-      var sorted = open.concat(closed);
-      listHTML = sorted.map(function(t){
-        var cat = (window.TICKET_CATEGORIES || []).filter(function(c){ return c.id === t.category_id; })[0];
-        var emoji = cat ? cat.emoji : '🎫';
-        var isActive = window.CURRENT.type === 'ticket' && window.CURRENT.ticket && window.CURRENT.ticket.id === t.id;
-        var label = cat ? cat.name : 'Ticket';
-        if (window.IS_STAFF && t.creator_id !== window.ME.id){
-          var p = window.PROFILES[t.creator_id];
-          label += ' · ' + (p ? (p.display_name || p.username) : 'user');
-        }
-        return '<button class="ticket-row ' + (isActive ? 'active' : '') + '" data-ticket-id="' + t.id + '">' +
-          '<span class="t-emoji">' + emoji + '</span>' +
-          '<span class="t-title">' + esc(label) + '</span>' +
-          '<span class="t-status ' + t.status + '">' + t.status + '</span>' +
-        '</button>';
-      }).join('');
-    }
-
-    section.innerHTML = headerHTML + listHTML;
-
-    // Insert after the last channel section, before the action buttons
-    var sections = body.querySelectorAll('.panel-section');
-    var lastChannelSection = null;
-    sections.forEach(function(s){
-      if (s.querySelector('[data-channel]')) lastChannelSection = s;
-    });
-    if (lastChannelSection) lastChannelSection.insertAdjacentElement('afterend', section);
-    else body.insertBefore(section, body.firstChild);
-
-    // Wire "create" button
-    var createBtn = section.querySelector('[data-ticket-new]');
-    if (createBtn) createBtn.onclick = function(e){
-      e.stopPropagation();
-      openCreateTicketModal();
-    };
-
-    // Wire ticket rows
-    section.querySelectorAll('[data-ticket-id]').forEach(function(b){
-      b.onclick = function(){ openTicket(b.dataset.ticketId); };
-    });
-  }
-
-  // -------- Create ticket modal --------
-  function openCreateTicketModal(){
-    if (!isInServer()) return;
-    var cats = window.TICKET_CATEGORIES || [];
-    if (!cats.length){
-      if (window.IS_STAFF){
-        window.openModal("Create Ticket", 
-          '<p style="color:var(--text2);font-size:13px">This server has no ticket categories yet. Create one first.</p>',
-          { footer: '<button class="btn" id="tc-cancel">Close</button><button class="btn primary" id="tc-newcat">Add a Category</button>',
-            onMount: function(){
-              document.getElementById('tc-cancel').onclick = window.closeModal;
-              document.getElementById('tc-newcat').onclick = function(){ window.closeModal(); openCategoryManager(); };
-            }});
-      } else {
-        window.toast("Tickets not set up", "This server hasn't configured any ticket categories yet.", "err");
-      }
-      return;
-    }
-    var selected = cats[0].id;
-
-    function catHTML(){
-      return cats.map(function(c){
-        return '<label class="' + (c.id === selected ? 'sel' : '') + '" data-cat-id="' + c.id + '">' +
-          '<span class="emoji">' + c.emoji + '</span>' +
-          '<span class="body"><span class="name">' + esc(c.name) + '</span>' +
-            (c.description ? '<span class="desc">' + esc(c.description) + '</span>' : '') +
-          '</span>' +
-        '</label>';
-      }).join('');
-    }
-
-    window.openModal("Create a Ticket",
-      '<p style="color:var(--text2);font-size:13px;margin-bottom:12px">Pick a category. Only you and the staff can see this ticket.</p>' +
-      '<div class="ticket-cat-pick" id="tc-cats">' + catHTML() + '</div>' +
-      '<div class="field" style="margin-top:16px"><label>Subject (optional)</label>' +
-        '<input id="tc-subject" placeholder="Short summary" maxlength="120"></div>',
-      { footer: '<button class="btn" id="tc-cancel">Cancel</button><button class="btn primary" id="tc-create">Create Ticket</button>',
-        onMount: function(){
-          document.getElementById('tc-cats').onclick = function(e){
-            var lab = e.target.closest('[data-cat-id]');
-            if (!lab) return;
-            selected = lab.dataset.catId;
-            document.querySelectorAll('#tc-cats label').forEach(function(x){ x.classList.remove('sel'); });
-            lab.classList.add('sel');
-          };
-          document.getElementById('tc-cancel').onclick = window.closeModal;
-          document.getElementById('tc-create').onclick = async function(){
-            try {
-              var subj = document.getElementById('tc-subject').value.trim();
-              var r = await sb.from('tickets').insert({
-                server_id: window.CURRENT.server.id,
-                category_id: selected,
-                creator_id: window.ME.id,
-                subject: subj,
-                status: 'open'
-              }).select().single();
-              if (r.error) throw r.error;
-              window.closeModal();
-              await loadTicketData();
-              if (window.IS_STAFF){
-                var ar = await sb.from('tickets').select('*').eq('server_id', window.CURRENT.server.id).order('created_at', { ascending: false });
-                window.ALL_TICKETS = ar.data || [];
-              }
-              renderPanel();
-              openTicket(r.data.id);
-              window.toast("Ticket created", "Staff will respond soon.", "ok");
-            } catch(e){
-              window.toast("Could not create ticket", e.message || String(e), "err");
-            }
-          };
-        }});
-  }
-
-  // -------- Category manager (staff only) --------
-  function openCategoryManager(){
-    if (!isInServer() || !window.IS_STAFF) return;
-    var cats = window.TICKET_CATEGORIES || [];
-
-    function listHTML(){
-      if (!cats.length) return '<div class="empty" style="padding:14px">No categories yet.</div>';
-      return cats.map(function(c){
-        return '<div style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;background:rgba(255,255,255,.03);margin-bottom:6px">' +
-          '<span style="font-size:20px">' + c.emoji + '</span>' +
-          '<div style="flex:1;min-width:0">' +
-            '<div style="font-weight:600">' + esc(c.name) + '</div>' +
-            (c.description ? '<div style="font-size:11.5px;color:var(--text3)">' + esc(c.description) + '</div>' : '') +
-          '</div>' +
-          '<button class="btn sm danger" data-del-cat="' + c.id + '">Delete</button>' +
-        '</div>';
-      }).join('');
-    }
-
-    window.openModal("Ticket Categories",
-      '<p style="color:var(--text2);font-size:13px;margin-bottom:12px">Categories let users pick the right kind of ticket. Only staff can manage these.</p>' +
-      '<div id="cm-list">' + listHTML() + '</div>' +
-      '<hr style="border:none;border-top:1px solid var(--border);margin:16px 0">' +
-      '<div style="display:grid;grid-template-columns:70px 1fr;gap:8px;margin-bottom:10px">' +
-        '<input id="cm-emoji" placeholder="🎫" maxlength="4" style="text-align:center;padding:10px;border-radius:8px;background:var(--void);border:1px solid var(--border);font-size:20px">' +
-        '<input id="cm-name" placeholder="Category name" maxlength="40" style="padding:10px;border-radius:8px;background:var(--void);border:1px solid var(--border)">' +
-      '</div>' +
-      '<input id="cm-desc" placeholder="Short description (optional)" maxlength="100" style="width:100%;padding:10px;border-radius:8px;background:var(--void);border:1px solid var(--border);margin-bottom:10px">' +
-      '<button class="btn primary" id="cm-add">+ Add Category</button>',
-      { wide: true,
-        footer: '<button class="btn" id="cm-close">Done</button>',
-        onMount: function(){
-          document.getElementById('cm-close').onclick = window.closeModal;
-          document.getElementById('cm-add').onclick = async function(){
-            var emoji = document.getElementById('cm-emoji').value.trim() || '🎫';
-            var name = document.getElementById('cm-name').value.trim();
-            var desc = document.getElementById('cm-desc').value.trim();
-            if (!name) return window.toast("Name required", "", "err");
-            try {
-              var r = await sb.from('ticket_categories').insert({
-                server_id: window.CURRENT.server.id,
-                name: name, emoji: emoji, description: desc,
-                position: (cats.length || 0)
-              }).select().single();
-              if (r.error) throw r.error;
-              cats.push(r.data);
-              document.getElementById('cm-list').innerHTML = listHTML();
-              wireDel();
-              document.getElementById('cm-name').value = '';
-              document.getElementById('cm-desc').value = '';
-              window.toast("Added", "Category created.", "ok");
-              await loadTicketData();
-            } catch(e){ window.toast("Error", e.message || String(e), "err"); }
-          };
-          function wireDel(){
-            document.querySelectorAll('[data-del-cat]').forEach(function(b){
-              b.onclick = async function(){
-                try {
-                  await sb.from('ticket_categories').delete().eq('id', b.dataset.delCat);
-                  cats = cats.filter(function(c){ return c.id !== b.dataset.delCat; });
-                  document.getElementById('cm-list').innerHTML = listHTML();
-                  wireDel();
-                  await loadTicketData();
-                } catch(e){ window.toast("Error", e.message || String(e), "err"); }
-              };
-            });
-          }
-          wireDel();
-        }});
-  }
-
-  // -------- Open a ticket --------
-  async function openTicket(id){
-    var t = (window.ALL_TICKETS || []).concat(window.MY_TICKETS || []).filter(function(x){ return x.id === id; })[0];
-    if (!t){
-      var r = await sb.from('tickets').select('*').eq('id', id).maybeSingle();
-      if (r.data) t = r.data;
-    }
-    if (!t) return;
-
-    window.CURRENT = { type: 'ticket', ticket: t, server: window.CURRENT.server, channel: null, conv: null };
-    window.TICKET_MESSAGES = [];
-
-    // Subscribe to realtime for this ticket
-    if (ticketSub){ try { sb.removeChannel(ticketSub); } catch(e){} }
-    ticketSub = sb.channel('ticket-' + id)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ticket_messages', filter: 'ticket_id=eq.' + id },
-        async function(payload){
-          window.TICKET_MESSAGES.push(payload.new);
-          if (window.CURRENT.type === 'ticket' && window.CURRENT.ticket.id === id){
-            await renderTicketView();
-          }
-          loadTicketData().then(renderPanel);
-        })
-      .subscribe();
-
-    // Load messages
-    var m = await sb.from('ticket_messages').select('*').eq('ticket_id', id).order('id', { ascending: true }).limit(500);
-    window.TICKET_MESSAGES = m.data || [];
-
-    // Ensure sender profiles
-    var ids = window.TICKET_MESSAGES.map(function(x){ return x.sender_id; });
-    ids.push(t.creator_id);
-    await window.fetchProfiles(ids);
-
-    renderChatHead();
-    await renderTicketView();
-    renderPanel();
-  }
-
-  async function renderTicketView(){
-    var body = document.getElementById('chat-body');
-    if (!body) return;
-    var t = window.CURRENT.ticket;
-    if (!t) return;
-
-    var cat = (window.TICKET_CATEGORIES || []).filter(function(c){ return c.id === t.category_id; })[0];
-    var creator = window.PROFILES[t.creator_id];
-
-    // Header bar
-    var headerBar =
-      '<div class="ticket-header-bar">' +
-        '<span class="t-badge ' + t.status + '">' + t.status + '</span>' +
-        '<span style="font-size:12.5px;color:var(--text2)">' +
-          (cat ? (cat.emoji + ' ' + esc(cat.name)) : 'Ticket') +
-          ' · opened by ' + esc(creator ? (creator.display_name || creator.username) : 'user') +
-          ' · ' + new Date(t.created_at).toLocaleString() +
-        '</span>' +
-        (t.status === 'open' && (window.IS_STAFF || t.creator_id === window.ME.id)
-          ? '<button class="btn sm danger" id="ticket-close-btn" style="margin-left:auto">Close Ticket</button>'
-          : '') +
-      '</div>';
-
-    // Intro card
-    var intro = '<div class="ticket-intro">' +
-      '<h2>' + (cat ? (cat.emoji + ' ' + esc(cat.name)) : 'Ticket') + '</h2>' +
-      '<p>' + (cat ? esc(cat.description || '') : '') + '</p>' +
-      (t.subject ? '<div style="margin-top:10px;font-size:13px;color:var(--text2)">Subject: <b>' + esc(t.subject) + '</b></div>' : '') +
-    '</div>';
-
-    // Messages
-    var msgsHTML = '';
-    if (!window.TICKET_MESSAGES.length){
-      msgsHTML = '<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px">No messages yet. Say something.</div>';
-    } else {
-      var lastAuthor = null, lastTs = 0;
-      window.TICKET_MESSAGES.forEach(function(m){
-        var p = window.PROFILES[m.sender_id] || { username: 'user', display_name: 'User' };
-        var grouped = lastAuthor === m.sender_id && (new Date(m.created_at) - lastTs) < 5*60*1000;
-        var isStaff = false; // we'd need a server-side check; simplify: show tag if they're not the creator
-        if (m.sender_id !== t.creator_id) isStaff = true;
-        var html = '<div class="ticket-msg">';
-        if (grouped){
-          html += '<div style="width:36px;flex:none"></div>';
-        } else {
-          html += '<div style="position:relative">' + window.avatarHTML(m.sender_id, 36) + '</div>';
-        }
-        html += '<div class="body">';
-        if (!grouped){
-          html += '<div class="head">' +
-            '<span class="author">' + esc(p.display_name || p.username) + '</span>' +
-            (isStaff ? '<span class="staff-tag">staff</span>' : '') +
-            '<span class="time">' + new Date(m.created_at).toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' }) + '</span>' +
-          '</div>';
-        }
-        html += '<div class="content">' + esc(m.content) + '</div>';
-        html += '</div></div>';
-        msgsHTML += html;
-        lastAuthor = m.sender_id;
-        lastTs = new Date(m.created_at).getTime();
-      });
-    }
-
-    // Closed note
-    var closedNote = '';
-    if (t.status === 'closed'){
-      closedNote = '<div class="ticket-closed-note">🔒 This ticket is closed. ' +
-        (window.IS_STAFF ? 'Reopen it from the header to reply.' : 'Only staff can reply now.') + '</div>';
-    }
-
-    body.innerHTML = headerBar + intro + '<div style="padding-bottom:20px">' + msgsHTML + '</div>' + closedNote;
-
-    // Scroll to bottom
-    requestAnimationFrame(function(){ body.scrollTop = body.scrollHeight; });
-
-    // Wire close button
-    var cb = document.getElementById('ticket-close-btn');
-    if (cb) cb.onclick = async function(){
-      try {
-        await sb.from('tickets').update({ status: 'closed', closed_at: new Date().toISOString(), closed_by: window.ME.id }).eq('id', t.id);
-        t.status = 'closed';
-        await loadTicketData();
-        await renderTicketView();
-        renderPanel();
-        window.toast("Ticket closed", "", "ok");
-      } catch(e){ window.toast("Error", e.message || String(e), "err"); }
-    };
-
-    renderComposer();
-  }
-
-  // -------- Composer for tickets --------
-  var origRenderComposer = window.renderComposer;
-  window.renderComposer = function(){
-    if (window.CURRENT && window.CURRENT.type === 'ticket'){
-      var t = window.CURRENT.ticket;
-      var wrap = document.getElementById('composer-wrap');
-      if (!wrap) return;
-      if (t.status === 'closed'){
-        wrap.innerHTML = '<div class="composer" style="opacity:.55"><span style="color:var(--text3);font-size:13px">🔒 This ticket is closed.</span></div>';
-        return;
-      }
-      wrap.innerHTML =
-        '<div class="composer">' +
-          '<textarea id="composer-input" rows="1" placeholder="Message this ticket..."></textarea>' +
-          '<button class="cbtn send" id="send-btn">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg>' +
-          '</button>' +
-        '</div>';
-      var ta = document.getElementById('composer-input');
-      if (window.autosize) window.autosize(ta);
-      ta.addEventListener('input', function(){ if (window.autosize) window.autosize(ta); });
-      ta.addEventListener('keydown', function(e){
-        if (e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); ticketSend(); }
-      });
-      document.getElementById('send-btn').onclick = ticketSend;
-      return;
-    }
-    return origRenderComposer();
-  };
-
-  async function ticketSend(){
-    var ta = document.getElementById('composer-input');
-    if (!ta) return;
-    var text = ta.value.trim();
-    if (!text) return;
-    var t = window.CURRENT.ticket;
-    try {
-      var r = await sb.from('ticket_messages').insert({
-        ticket_id: t.id,
-        sender_id: window.ME.id,
-        content: text.slice(0, 4000)
-      });
-      if (r.error) throw r.error;
-      ta.value = '';
-      if (window.autosize) window.autosize(ta);
-    } catch(e){ window.toast("Could not send", e.message || String(e), "err"); }
-  }
-
-  // -------- Hook into panel + chat rendering --------
-  var origRenderPanel = window.renderPanel;
-  window.renderPanel = function(){
-    var r = origRenderPanel.apply(this, arguments);
-    setTimeout(injectTicketsIntoPanel, 10);
-    return r;
-  };
-
-  var origRenderChatHead = window.renderChatHead;
-  window.renderChatHead = function(){
-    if (window.CURRENT && window.CURRENT.type === 'ticket'){
-      var el = document.getElementById('chat-head');
-      var t = window.CURRENT.ticket;
-      var cat = (window.TICKET_CATEGORIES || []).filter(function(c){ return c.id === t.category_id; })[0];
-      el.innerHTML =
-        '<button class="hbtn mobile-only" data-act="toggle-panel">' +
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:20px;height:20px"><path d="M3 6h18M3 12h18M3 18h18"/></svg>' +
-        '</button>' +
-        '<div class="title"><span style="font-size:16px">' + (cat ? cat.emoji : '🎫') + '</span>' +
-        '<span class="txt">' + esc(cat ? cat.name : 'Ticket') + '</span></div>' +
-        '<div class="spacer"></div>' +
-        (window.IS_STAFF ? '<button class="hbtn" id="ticket-config-btn" title="Ticket categories">' +
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:17px;height:17px"><circle cx="12" cy="12" r="3"/><path d="M12 1v6M12 17v6M4.22 4.22l4.24 4.24M15.54 15.54l4.24 4.24M1 12h6M17 12h6M4.22 19.78l4.24-4.24M15.54 8.46l4.24-4.24"/></svg>' +
-        '</button>' : '') +
-        '<button class="hbtn" data-act="settings">' +
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:17px;height:17px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H7a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1A1.6 1.6 0 0 0 15 2.6a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V7a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>' +
-        '</button>';
-      var cfg = document.getElementById('ticket-config-btn');
-      if (cfg) cfg.onclick = openCategoryManager;
-      return;
-    }
-    return origRenderChatHead.apply(this, arguments);
-  };
-
-  var origRenderChat = window.renderChat;
-  window.renderChat = function(scroll){
-    if (window.CURRENT && window.CURRENT.type === 'ticket'){
-      renderTicketView();
-      return;
-    }
-    return origRenderChat.apply(this, arguments);
-  };
-
-  // Load tickets when entering a server
-  var origGoServer = window.goServer;
-  window.goServer = async function(sid){
-    var r = await origGoServer.apply(this, arguments);
-    await loadTicketData();
-    setTimeout(injectTicketsIntoPanel, 200);
-    return r;
-  };
-
-  // Also refresh on channel switch (panel re-renders)
-  var origGoChannel = window.goChannel;
-  window.goChannel = async function(cid){
-    var r = await origGoChannel.apply(this, arguments);
-    setTimeout(injectTicketsIntoPanel, 200);
-    return r;
-  };
-
-  // Auto-load on boot if we land in a server
-  setTimeout(async function(){
-    if (isInServer()){
-      await loadTicketData();
-      injectTicketsIntoPanel();
-    }
-  }, 3000);
-
-  log("ticket system ready");
-})();
-</script>
-
 <!-- SLEEPY_TICKETS_V2 -->
 <style>
 .ticket-hub{padding:36px 24px;max-width:780px;margin:0 auto}
@@ -10814,127 +9274,6 @@ html, body { overscroll-behavior: none; }
   }, 3000);
 
   log("tickets v2 ready");
-})();
-</script>
-
-<!-- SLEEPY_TICKETS_CLEANUP_V1 -->
-<script>
-(function(){
-  "use strict";
-  if (window.__sleepyTicketsCleanup) return;
-  window.__sleepyTicketsCleanup = true;
-  function log(){ try{console.log.apply(console,["[TicketFix]"].concat([].slice.call(arguments)));}catch(e){} }
-
-  // ------------------------------------------------------------
-  // 1. Remove v1's tickets-section the moment it appears
-  // ------------------------------------------------------------
-  function killV1(){
-    var v1 = document.getElementById('tickets-section');
-    if (v1){ v1.remove(); return true; }
-    return false;
-  }
-
-  // ------------------------------------------------------------
-  // 2. Remove v2's channel entry when not in server view
-  // ------------------------------------------------------------
-  function inServerView(){
-    var c = window.CURRENT;
-    if (!c || !c.server) return false;
-    if (c.type === 'dm' || c.type === 'home' || c.type === 'dms') return false;
-    return true;
-  }
-  function killV2IfNotServer(){
-    if (inServerView()) return;
-    var v2 = document.getElementById('tickets-channel-entry');
-    if (v2) v2.remove();
-  }
-
-  // ------------------------------------------------------------
-  // 3. Also nuke any stray duplicate entries (in case both
-  //    v1 and v2 injected at once)
-  // ------------------------------------------------------------
-  function dedupeEntries(){
-    var body = document.getElementById('panel-body');
-    if (!body) return;
-    // Only one tickets-channel-entry allowed
-    var entries = body.querySelectorAll('#tickets-channel-entry');
-    for (var i = 1; i < entries.length; i++) entries[i].remove();
-    // v1 sections: none allowed
-    body.querySelectorAll('#tickets-section').forEach(function(el){ el.remove(); });
-  }
-
-  function cleanupAll(){
-    killV1();
-    killV2IfNotServer();
-    dedupeEntries();
-  }
-
-  // ------------------------------------------------------------
-  // 4. Override renderPanel to run cleanup AFTER v1 and v2 have
-  //    had their turn (both use 10ms setTimeouts)
-  // ------------------------------------------------------------
-  var origRenderPanel = window.renderPanel;
-  if (typeof origRenderPanel === 'function'){
-    window.renderPanel = function(){
-      var r = origRenderPanel.apply(this, arguments);
-      setTimeout(cleanupAll, 60);
-      return r;
-    };
-  }
-
-  // Safety net — periodic cleanup in case something slips through
-  setInterval(cleanupAll, 600);
-
-  // Also run whenever the channel/panel changes
-  var origGoChannel = window.goChannel;
-  if (typeof origGoChannel === 'function'){
-    window.goChannel = async function(cid){
-      var r = await origGoChannel.apply(this, arguments);
-      setTimeout(cleanupAll, 150);
-      return r;
-    };
-  }
-  var origGoHome = window.goHome;
-  if (typeof origGoHome === 'function'){
-    window.goHome = async function(){
-      var r = await origGoHome.apply(this, arguments);
-      setTimeout(cleanupAll, 150);
-      return r;
-    };
-  }
-
-  // ------------------------------------------------------------
-  // 5. One-time purge of closed tickets left over from v1's UI
-  //    (v1's "close" only set status='closed'; v2's design is
-  //    "close = delete")
-  // ------------------------------------------------------------
-  var purged = false;
-  async function purgeClosed(){
-    if (purged) return;
-    if (!window.ME || !window.sb) return;
-    purged = true;
-    try {
-      var r = await sb.from('tickets').select('id').eq('status', 'closed');
-      if (r.data && r.data.length){
-        for (var i = 0; i < r.data.length; i++){
-          await sb.from('tickets').delete().eq('id', r.data[i].id);
-        }
-        if (window.toast) window.toast("Cleaned up", "Removed " + r.data.length + " old closed ticket" + (r.data.length === 1 ? "" : "s") + ".", "ok");
-        log("purged", r.data.length, "closed tickets");
-      }
-    } catch(e){ log("purge failed:", e.message); }
-  }
-
-  setTimeout(purgeClosed, 6000);
-
-  // ------------------------------------------------------------
-  // 6. Throttle v2's injectChannel by watching for a storm of
-  //    renderPanel calls. If we see more than 5 in 1 second,
-  //    disable v1's inject indirectly by... actually we can't.
-  //    Just absorb the cost with the cleanup above.
-  // ------------------------------------------------------------
-
-  log("tickets cleanup ready");
 })();
 </script>
 
@@ -17712,300 +16051,6 @@ body.in-game-room .chat-head .topic{display:none!important}
 
 
 
-<!-- SLEEPY_ADS_STABLE_V2 -->
-<style>
-#ad-host{
-  display:none;flex:none;padding:0 20px 12px;
-}
-body.in-game-room #ad-host{display:block}
-#ad-host .ad-slot{
-  max-width:640px;margin:0 auto 14px;text-align:center;
-}
-#ad-host .ad-slot::before{
-  content:'Advertisement';display:block;
-  font-size:9px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
-  color:var(--text3);opacity:.45;margin-bottom:6px;
-  font-family:'JetBrains Mono',monospace;
-}
-#ad-host #container-fa854199a041432aa0a5fa0fd34ead52{
-  min-height:60px;border-radius:10px;overflow:hidden;
-}
-#ad-host .ad-reward{
-  max-width:520px;margin:0 auto;padding:16px;
-  border-radius:14px;
-  background:linear-gradient(135deg, rgba(255,200,87,.1), rgba(139,124,255,.06));
-  border:1px solid rgba(255,200,87,.35);
-}
-#ad-host .ad-reward .head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-#ad-host .ad-reward .head .ico{width:42px;height:42px;border-radius:11px;flex:none;background:linear-gradient(135deg,rgba(255,200,87,.24),rgba(255,159,28,.14));border:1px solid rgba(255,200,87,.5);display:flex;align-items:center;justify-content:center;font-size:20px}
-#ad-host .ad-reward .head .t{flex:1;min-width:0}
-#ad-host .ad-reward .head .t .n{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:15px;color:var(--text);margin-bottom:2px}
-#ad-host .ad-reward .head .t .d{font-size:11.5px;color:var(--text3)}
-#ad-host .ad-reward .bar{height:5px;border-radius:99px;background:rgba(255,255,255,.06);overflow:hidden;margin:12px 0 4px}
-#ad-host .ad-reward .bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#ffc857,#ff9f1c);transition:width .3s}
-#ad-host .ad-reward .meta{display:flex;justify-content:space-between;font-size:11px;color:var(--text3);font-family:monospace;margin-bottom:12px}
-#ad-host .ad-reward button{width:100%;padding:12px;border-radius:10px;font-size:13.5px;font-weight:700;border:none;cursor:pointer;font-family:inherit;background:linear-gradient(135deg,#ffc857,#ff9f1c);color:#1a0f00;transition:all .15s}
-#ad-host .ad-reward button:hover{box-shadow:0 6px 22px rgba(255,200,87,.5);transform:translateY(-1px)}
-#ad-host .ad-reward button:disabled{background:var(--surface3);color:var(--text3);cursor:not-allowed;box-shadow:none;transform:none}
-</style>
-<script>
-(function(){
-  "use strict";
-  if (window.__sleepyAdsStableV2) return;
-  window.__sleepyAdsStableV2 = true;
-  function log(){ try{console.log.apply(console,["[AdsV2]"].concat([].slice.call(arguments)));}catch(e){} }
-
-  var BANNER_ID = 'container-fa854199a041432aa0a5fa0fd34ead52';
-  var REWARD_AMOUNT = 100;
-
-  // ----------------------------------------------------------------
-  // 1. Persistent ad host OUTSIDE chat-body (never wiped by re-renders)
-  // ----------------------------------------------------------------
-  function ensureHost(){
-    var host = document.getElementById('ad-host');
-    if (host) return host;
-    var chat = document.querySelector('.chat');
-    if (!chat) return null;
-    host = document.createElement('div');
-    host.id = 'ad-host';
-    host.innerHTML = '<div class="ad-slot game-ad"></div>';
-    var composer = chat.querySelector('.composer-wrap');
-    if (composer && composer.parentElement === chat){
-      chat.insertBefore(host, composer);
-    } else {
-      chat.appendChild(host);
-    }
-    return host;
-  }
-
-  // ----------------------------------------------------------------
-  // 2. Load ad scripts exactly once
-  // ----------------------------------------------------------------
-  function loadBannerScript(){
-    if (document.getElementById('native-banner-js')) return;
-    var s = document.createElement('script');
-    s.id = 'native-banner-js';
-    s.async = true;
-    s.setAttribute('data-cfasync', 'false');
-    s.src = 'https://bicea.org/21/fa854199a041432aa0a5fa0fd34ead52';
-    document.head.appendChild(s);
-    log("banner script loaded");
-  }
-  function loadSocialBar(){
-    if (document.getElementById('socialbar-js')) return;
-    var s = document.createElement('script');
-    s.id = 'socialbar-js';
-    s.setAttribute('data-cfasync', 'false');
-    s.src = 'https://bicea.org/14/5d086699a154f0fa860f8168d376c142';
-    document.head.appendChild(s);
-    log("socialbar loaded");
-  }
-
-  // ----------------------------------------------------------------
-  // 3. Mount banner
-  // ----------------------------------------------------------------
-  var bannerReady = false;
-  function ensureBannerMounted(){
-    var host = ensureHost();
-    if (!host) return;
-    var slot = host.querySelector('.ad-slot');
-    if (!slot) return;
-    var container = document.getElementById(BANNER_ID);
-    if (!container){
-      container = document.createElement('div');
-      container.id = BANNER_ID;
-    }
-    if (container.parentElement !== slot){
-      slot.appendChild(container);
-      log("banner attached to host");
-    }
-    if (!bannerReady){
-      bannerReady = true;
-      loadBannerScript();
-    }
-  }
-
-  // ----------------------------------------------------------------
-  // 4. Login banner
-  // ----------------------------------------------------------------
-  function moveBannerToLogin(){
-    var card = document.querySelector('.auth-card');
-    if (!card) return;
-    var slot = card.querySelector('.ad-slot-login');
-    if (!slot){
-      slot = document.createElement('div');
-      slot.className = 'ad-slot ad-slot-login';
-      slot.style.cssText = 'margin-top:20px;text-align:center';
-      slot.innerHTML = '<div style="font-size:9px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--text3);opacity:.45;margin-bottom:6px;font-family:JetBrains Mono,monospace">Advertisement</div>';
-      card.appendChild(slot);
-    }
-    var container = document.getElementById(BANNER_ID);
-    if (container && container.parentElement !== slot){
-      slot.appendChild(container);
-    }
-  }
-
-  // ----------------------------------------------------------------
-  // 5. Reward card + status cache
-  // ----------------------------------------------------------------
-  var statusCache = null;
-  var statusAt = 0;
-
-  async function fetchStatus(force){
-    var now = Date.now();
-    if (!force && statusCache && (now - statusAt) < 30000) return statusCache;
-    try {
-      var r = await sb.rpc('ad_reward_status');
-      if (!r.error && r.data) statusCache = r.data;
-    } catch(e){}
-    if (!statusCache) statusCache = { today_count:0, today_amount:0, daily_cap:10, daily_amount_cap:1000 };
-    statusAt = now;
-    return statusCache;
-  }
-
-  function renderRewardCard(){
-    var host = ensureHost();
-    if (!host) return;
-    if (host.querySelector('.ad-reward')) return;
-    if (!window.CURRENT) return;
-    if (window.CURRENT.type !== 'games' && window.CURRENT.type !== 'fishing') return;
-    // Skip arcade (busy with canvas)
-    var body = document.getElementById('chat-body');
-    if (body && body.querySelector('#snake-canvas')) return;
-
-    var s = statusCache || { today_count:0, today_amount:0, daily_cap:10, daily_amount_cap:1000 };
-    var remaining = Math.max(0, s.daily_cap - s.today_count);
-    var done = remaining <= 0;
-
-    var card = document.createElement('div');
-    card.className = 'ad-reward';
-    card.innerHTML =
-      '<div class="head">' +
-        '<div class="ico">🎬</div>' +
-        '<div class="t"><div class="n">Watch an ad, get ' + REWARD_AMOUNT + ' coins</div>' +
-        '<div class="d">' + remaining + ' watches left today</div></div>' +
-      '</div>' +
-      '<div class="bar"><i style="width:' + Math.min(100, (s.today_count/s.daily_cap)*100) + '%"></i></div>' +
-      '<div class="meta"><span>' + s.today_count + ' / ' + s.daily_cap + '</span>' +
-        '<span>' + s.today_amount + ' / ' + s.daily_amount_cap + ' coins</span></div>' +
-      '<button id="ad-claim"' + (done ? ' disabled' : '') + '>' +
-        (done ? 'Come back tomorrow' : 'Watch Ad for +' + REWARD_AMOUNT + ' 🪙') +
-      '</button>';
-    host.appendChild(card);
-
-    var btn = card.querySelector('#ad-claim');
-    if (btn && !done) btn.onclick = openRewardedOverlay;
-  }
-
-  function openRewardedOverlay(){
-    var overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:9990;background:rgba(6,8,14,.98);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px';
-    overlay.innerHTML =
-      '<div style="text-align:center;max-width:520px">' +
-        '<div style="font-family:Space Grotesk;font-size:22px;font-weight:700;color:var(--text);margin-bottom:10px">🎬 Rewarding you</div>' +
-        '<div style="font-size:13.5px;color:var(--text2);line-height:1.55;margin-bottom:22px">Your reward will be credited when the timer finishes.</div>' +
-        '<div id="ad-count" style="font-family:JetBrains Mono,monospace;font-size:44px;font-weight:700;color:var(--cyan);margin-bottom:22px">30</div>' +
-        '<div style="width:100%;height:6px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden;margin-bottom:16px">' +
-          '<div id="ad-progress" style="height:100%;width:0;background:linear-gradient(90deg,#ffc857,#ff9f1c);transition:width 1s linear"></div>' +
-        '</div></div>';
-    document.body.appendChild(overlay);
-
-    var secs = 30;
-    var countEl = overlay.querySelector('#ad-count');
-    var progEl = overlay.querySelector('#ad-progress');
-    var t = setInterval(function(){
-      secs--;
-      if (countEl) countEl.textContent = secs;
-      if (progEl) progEl.style.width = ((30-secs)/30*100) + '%';
-      if (secs <= 0){ clearInterval(t); overlay.remove(); grantReward(); }
-    }, 1000);
-  }
-
-  async function grantReward(){
-    try {
-      var r = await sb.rpc('claim_ad_reward', { p_kind: 'ad_watch', p_amount: REWARD_AMOUNT });
-      if (r.error) throw new Error(r.error.message || String(r.error));
-      window.toast("+ " + REWARD_AMOUNT + " coins", "Reward credited.", "ok");
-      statusCache = null; statusAt = 0;
-      var card = document.querySelector('.ad-reward');
-      if (card) card.remove();
-      await fetchStatus(true);
-      renderRewardCard();
-      if (typeof window.loadAccount === 'function') window.loadAccount();
-      if (typeof window.refreshAccount === 'function') window.refreshAccount();
-    } catch(e){
-      window.toast("Could not credit reward", e.message || String(e), "err");
-    }
-  }
-
-  // ----------------------------------------------------------------
-  // 6. Show/hide host based on view
-  // ----------------------------------------------------------------
-  function updateHost(){
-    var host = ensureHost();
-    if (!host) return;
-
-    // Login screen?
-    var auth = document.getElementById('auth-screen');
-    if (auth && !auth.classList.contains('hidden')){
-      host.style.display = 'none';
-      moveBannerToLogin();
-      return;
-    }
-
-    // Remove login slot if present
-    var loginSlot = document.querySelector('.ad-slot-login');
-    if (loginSlot) loginSlot.remove();
-
-    // In game room or fishing?
-    if (window.CURRENT && (window.CURRENT.type === 'games' || window.CURRENT.type === 'fishing')){
-      ensureBannerMounted();
-      host.style.display = 'block';
-    } else {
-      host.style.display = 'none';
-    }
-  }
-
-  // ----------------------------------------------------------------
-  // 7. MutationObserver on chat-body — fires when the game room re-renders
-  // ----------------------------------------------------------------
-  var debounceT = null;
-  function scheduleRefresh(){
-    if (debounceT) clearTimeout(debounceT);
-    debounceT = setTimeout(function(){
-      updateHost();
-      renderRewardCard();
-    }, 80);
-  }
-  function attachObserver(){
-    var body = document.getElementById('chat-body');
-    if (!body){ setTimeout(attachObserver, 500); return; }
-    var mo = new MutationObserver(scheduleRefresh);
-    mo.observe(body, { childList: true });
-    log("observer attached");
-  }
-
-  // Watch for view changes (games <-> channel etc.) at a light cadence
-  setInterval(updateHost, 2500);
-
-  // ----------------------------------------------------------------
-  // 8. Boot
-  // ----------------------------------------------------------------
-  setTimeout(function(){
-    ensureHost();
-    loadSocialBar();
-    attachObserver();
-    fetchStatus(true).then(function(){
-      updateHost();
-      renderRewardCard();
-    });
-    log("ready");
-  }, 2500);
-
-  log("loaded");
-})();
-</script>
-
 <!-- SLEEPY_LB_PAGE_V1 -->
 <script>
 (function(){
@@ -18155,171 +16200,6 @@ body.in-game-room #ad-host{display:block}
   };
 
   log("leaderboard page ready");
-})();
-</script>
-
-<!-- SLEEPY_ADS_CLEAN_V1 -->
-<style>
-/* Hide the previous ad host entirely — we don't render ads in-app anymore */
-#ad-host{display:none!important}
-/* If SocialBar injected anything, hide it too (it uses common wrappers) */
-.socialbar-container,.social-bar-container,
-[id^="socialbar"],[class*="social-bar"],[class*="socialbar"],
-iframe[src*="bicea.org"],
-div[style*="position:fixed"][style*="bottom"] > iframe[src*="bicea"]{
-  display:none!important;visibility:hidden!important;pointer-events:none!important;
-}
-</style>
-<script>
-(function(){
-  "use strict";
-  if (window.__sleepyAdsClean) return;
-  window.__sleepyAdsClean = true;
-  function log(){ try{console.log.apply(console,["[AdsClean]"].concat([].slice.call(arguments)));}catch(e){} }
-
-  // ------------------------------------------------------------
-  // 1. Kill the SocialBar script before it ever runs
-  // ------------------------------------------------------------
-  function killSocialBar(){
-    // Remove the loader tag if it was already added
-    var tag = document.getElementById('socialbar-js');
-    if (tag && tag.parentElement){ tag.parentElement.removeChild(tag); }
-
-    // Sweep the DOM for anything the SocialBar spawned
-    var sweep = function(){
-      // Common wrappers
-      var selectors = [
-        '.socialbar-container', '.social-bar-container',
-        '[id^="socialbar"]', '[class^="socialbar"]', '[class*="social-bar"]',
-        'iframe[src*="bicea.org"]',
-        'div[data-socialbar]', 'div[id*="socialbar"]'
-      ];
-      selectors.forEach(function(sel){
-        try {
-          document.querySelectorAll(sel).forEach(function(el){
-            // Don't hide our own banner slot; only socialbar stuff
-            if (el.id === 'container-fa854199a041432aa0a5fa0fd34ead52') return;
-            el.style.display = 'none';
-            el.style.visibility = 'hidden';
-            el.style.pointerEvents = 'none';
-          });
-        } catch(e){}
-      });
-    };
-
-    // Run a few times because the SocialBar keeps re-injecting
-    sweep();
-    setTimeout(sweep, 500);
-    setTimeout(sweep, 1500);
-    setTimeout(sweep, 3000);
-    setInterval(sweep, 4000);
-  }
-
-  // ------------------------------------------------------------
-  // 2. Only show NativeBanner on the login screen
-  // ------------------------------------------------------------
-  var BANNER_ID = 'container-fa854199a041432aa0a5fa0fd34ead52';
-
-  function ensureLoginSlot(){
-    var card = document.querySelector('.auth-card');
-    if (!card) return null;
-    var slot = card.querySelector('.ad-slot-login');
-    if (!slot){
-      slot = document.createElement('div');
-      slot.className = 'ad-slot-login';
-      slot.style.cssText = 'margin-top:20px;text-align:center;padding-top:16px;border-top:1px solid var(--border)';
-      slot.innerHTML =
-        '<div style="font-size:9px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;' +
-        'color:var(--text3);opacity:.4;margin-bottom:8px;font-family:JetBrains Mono,monospace">' +
-        'Advertisement</div>';
-      card.appendChild(slot);
-    }
-    return slot;
-  }
-
-  function moveBannerToLogin(){
-    var auth = document.getElementById('auth-screen');
-    if (!auth || auth.classList.contains('hidden')){
-      // Not on login — park the banner off-screen
-      var container = document.getElementById(BANNER_ID);
-      if (container){
-        container.style.position = 'fixed';
-        container.style.left = '-9999px';
-        container.style.top = '0';
-        container.style.width = '1px';
-        container.style.height = '1px';
-        container.style.overflow = 'hidden';
-        container.style.pointerEvents = 'none';
-      }
-      return;
-    }
-    var slot = ensureLoginSlot();
-    var container = document.getElementById(BANNER_ID);
-    if (!container){
-      container = document.createElement('div');
-      container.id = BANNER_ID;
-    }
-    // Reset any hiding we did
-    container.style.position = '';
-    container.style.left = '';
-    container.style.top = '';
-    container.style.width = '';
-    container.style.height = '';
-    container.style.overflow = '';
-    container.style.pointerEvents = '';
-    if (slot && container.parentElement !== slot){
-      slot.appendChild(container);
-    }
-  }
-
-  // ------------------------------------------------------------
-  // 3. Hide the reward card in the game room
-  // ------------------------------------------------------------
-  // The reward card was inside #ad-host which we've hidden with CSS.
-  // Additionally, remove any stray .ad-reward that some patch put
-  // inside the game room body.
-  function killRewardInApp(){
-    if (window.CURRENT && (window.CURRENT.type === 'games' || window.CURRENT.type === 'fishing')){
-      document.querySelectorAll('#chat-body .ad-reward, #chat-body .ad-slot, #chat-body .ad-slot.game-ad').forEach(function(el){
-        el.remove();
-      });
-    }
-  }
-
-  // ------------------------------------------------------------
-  // 4. Boot
-  // ------------------------------------------------------------
-  killSocialBar();
-
-  // Route the banner based on current view every couple of seconds
-  setInterval(function(){
-    moveBannerToLogin();
-    killRewardInApp();
-  }, 1500);
-
-  // Also on chat re-render
-  var origRC = window.renderChat;
-  if (typeof origRC === 'function'){
-    window.renderChat = function(){
-      var r = origRC.apply(this, arguments);
-      setTimeout(killRewardInApp, 60);
-      return r;
-    };
-  }
-
-  // Also run when the game room changes
-  var origOpenGames = window.openGameRoom || window.openGames;
-  if (typeof origOpenGames === 'function'){
-    var wrapped = async function(){
-      var r = await origOpenGames.apply(this, arguments);
-      setTimeout(killRewardInApp, 200);
-      return r;
-    };
-    if (window.openGameRoom) window.openGameRoom = wrapped;
-    else window.openGames = wrapped;
-  }
-
-  log("cleaned");
 })();
 </script>
 
@@ -22291,6 +20171,448 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
   }, 4000);
 
   log("loaded");
+})();
+</script>
+
+<!-- SLEEPY_FORGOT_PASS_FIX_V1 -->
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyForgotPassFix) return;
+  window.__sleepyForgotPassFix = true;
+  function log(){ try{console.log.apply(console,["[ForgotPass]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  var RECOVERY_KEY = "sleepychat.pending_recovery";
+
+  // ============================================================
+  // 1. Forgot-password click — accept email OR username
+  // ============================================================
+  function wireForgotLink(){
+    var link = document.getElementById("forgot-link");
+    if (!link || link.__sleepyWired) return;
+    link.__sleepyWired = true;
+
+    link.onclick = async function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      var input = ((document.getElementById("li-email") || {}).value || "").trim();
+      if (!input){
+        window.toast("Enter your email or username first", "", "err");
+        return;
+      }
+
+      var email = input;
+      // If it doesn't contain @, it's a username -> look up the email
+      if (input.indexOf("@") < 0){
+        if (!/^[a-z0-9_]{3,24}$/i.test(input)){
+          window.toast("Invalid username", "3-24 chars: a-z, 0-9, underscore.", "err");
+          return;
+        }
+        try {
+          var lookup = await sb.rpc("get_email_by_username", { p_username: input.toLowerCase() });
+          if (lookup.error) throw lookup.error;
+          if (!lookup.data){
+            window.toast("Not found", "No account with that username.", "err");
+            return;
+          }
+          email = lookup.data;
+        } catch(err){
+          window.toast("Error", err.message || String(err), "err");
+          return;
+        }
+      }
+
+      var redirect = location.origin + location.pathname;
+      try {
+        var r = await sb.auth.resetPasswordForEmail(email, { redirectTo: redirect });
+        if (r.error) throw r.error;
+        window.toast("Sent", "Check your inbox for the reset link.", "ok");
+      } catch(err){
+        window.toast("Could not send", err.message || String(err), "err");
+      }
+    };
+  }
+  setInterval(wireForgotLink, 1200);
+  wireForgotLink();
+
+  // ============================================================
+  // 2. Detect the recovery link (#access_token=...&type=recovery)
+  //    and show "set new password"
+  // ============================================================
+  function checkRecoveryHash(){
+    var h = location.hash || "";
+    if (h.indexOf("type=recovery") < 0) return;
+
+    // Persist so we still show the modal if the page reloads mid-flow
+    try { sessionStorage.setItem(RECOVERY_KEY, "1"); } catch(e){}
+
+    // Wait for SDK to establish the recovery session
+    var tries = 0;
+    var t = setInterval(function(){
+      tries++;
+      if (window.ME || tries > 40){
+        clearInterval(t);
+        setTimeout(showResetModal, 500);
+      }
+    }, 150);
+  }
+
+  function showResetModal(){
+    if (document.getElementById("rp-pass1")) return;
+
+    try { history.replaceState(null, "", location.pathname); } catch(e){}
+    try { sessionStorage.removeItem(RECOVERY_KEY); } catch(e){}
+
+    var body =
+      '<div style="font-size:13.5px;color:var(--text2);line-height:1.6;margin-bottom:16px">' +
+        'Your recovery link was accepted. Set a new password for your account.' +
+      '</div>' +
+      '<div class="field"><label>New password</label>' +
+        '<input id="rp-pass1" type="password" placeholder="At least 6 characters" autocomplete="new-password">' +
+      '</div>' +
+      '<div class="field"><label>Confirm new password</label>' +
+        '<input id="rp-pass2" type="password" placeholder="Type it again" autocomplete="new-password">' +
+      '</div>' +
+      '<div class="err" id="rp-err"></div>' +
+      '<div class="ok" id="rp-ok"></div>';
+
+    window.openModal("Set a new password", body, {
+      footer: '<button class="btn primary block" id="rp-save">Save new password</button>',
+      onMount: function(){
+        var p1 = document.getElementById("rp-pass1");
+        var p2 = document.getElementById("rp-pass2");
+        var err = document.getElementById("rp-err");
+        var ok = document.getElementById("rp-ok");
+        if (p1) p1.focus();
+
+        if (p2) p2.addEventListener("keydown", function(e){
+          if (e.key === "Enter") document.getElementById("rp-save").click();
+        });
+
+        document.getElementById("rp-save").onclick = async function(){
+          err.textContent = ""; ok.textContent = "";
+          var a = p1.value, b = p2.value;
+          if (!a || a.length < 6){
+            err.textContent = "Password must be at least 6 characters.";
+            return;
+          }
+          if (a !== b){
+            err.textContent = "Passwords do not match.";
+            return;
+          }
+          var btn = document.getElementById("rp-save");
+          btn.disabled = true; btn.textContent = "Saving\u2026";
+          try {
+            var r = await sb.auth.updateUser({ password: a });
+            if (r.error) throw r.error;
+            ok.textContent = "Password updated! You're signed in.";
+            setTimeout(function(){
+              window.closeModal();
+              window.toast("Success", "Your password has been updated.", "ok");
+            }, 900);
+          } catch(e){
+            err.textContent = e.message || String(e);
+            btn.disabled = false; btn.textContent = "Save new password";
+          }
+        };
+      }
+    });
+  }
+
+  checkRecoveryHash();
+  window.addEventListener("hashchange", function(){ setTimeout(checkRecoveryHash, 150); });
+
+  // Fallback: if session flag survived a reload
+  setTimeout(function(){
+    try {
+      if (sessionStorage.getItem(RECOVERY_KEY) === "1") showResetModal();
+    } catch(e){}
+  }, 2200);
+
+  log("forgot password flow ready");
+})();
+</script>
+<!-- SLEEPY_COIN_FIX_V1 -->
+<style>
+.arcade-hud{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  padding:12px 14px;border-radius:12px;margin:0 auto 16px;max-width:480px;
+  background:linear-gradient(135deg,rgba(255,200,87,.1),rgba(139,124,255,.06));
+  border:1px solid rgba(255,200,87,.35);
+}
+.arcade-hud .bal{
+  font-family:'JetBrains Mono',monospace;font-weight:700;font-size:15px;
+  color:#ffd166;flex:1;min-width:100px;
+}
+.arcade-hud .btn-mini{
+  padding:8px 14px;border-radius:9px;font-size:12px;font-weight:700;
+  border:none;cursor:pointer;font-family:inherit;transition:all .15s;
+}
+.arcade-hud .btn-mini.primary{
+  background:linear-gradient(135deg,#ffc857,#ff9f1c);color:#1a0f00;
+}
+.arcade-hud .btn-mini.primary:hover{
+  box-shadow:0 4px 14px rgba(255,200,87,.5);transform:translateY(-1px)
+}
+.arcade-hud .btn-mini.primary:disabled{
+  background:var(--surface3);color:var(--text3);cursor:not-allowed;
+  transform:none;box-shadow:none;
+}
+.earn-card{
+  max-width:480px;margin:0 auto 16px;padding:14px;border-radius:12px;
+  background:rgba(255,255,255,.03);border:1px solid var(--border);
+}
+.earn-card h4{
+  font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--text3);margin-bottom:10px;font-family:'JetBrains Mono',monospace;
+}
+.earn-row{
+  display:flex;align-items:center;gap:10px;padding:8px 0;
+  font-size:12.5px;color:var(--text2);
+  border-bottom:1px solid rgba(255,255,255,.04);
+}
+.earn-row:last-child{border-bottom:none}
+.earn-row .em{font-size:18px;width:24px;text-align:center;flex:none}
+.earn-row .lbl{flex:1;line-height:1.4}
+.earn-row .lbl b{color:var(--text);font-weight:600;display:block;margin-bottom:1px}
+.earn-row .amt{
+  font-family:'JetBrains Mono',monospace;font-weight:700;color:#ffd166;
+  font-size:11.5px;flex:none;
+}
+.earn-row code{
+  background:rgba(0,0,0,.35);padding:1px 6px;border-radius:4px;
+  font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cyan);
+}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyCoinFix) return;
+  window.__sleepyCoinFix = true;
+  function log(){ try{console.log.apply(console,["[Coin]"].concat([].slice.call(arguments)));}catch(e){} }
+
+  // ============================================================
+  // 1. Wrap submit_snake_score — big obvious reward feedback
+  // ============================================================
+  if (window.sb && typeof window.sb.rpc === "function" && !window.sb.__snakeWrapped){
+    var origRpc = window.sb.rpc.bind(window.sb);
+    window.sb.rpc = async function(fn, params, opts){
+      var r;
+      try { r = await origRpc(fn, params, opts); }
+      catch(e){ r = { error: e, data: null }; }
+
+      if (fn === "submit_snake_score"){
+        var score = params && params.p_score;
+        if (r.error){
+          var msg = (r.error && r.error.message) || String(r.error);
+          var missing = msg.indexOf("does not exist") >= 0 ||
+                        msg.indexOf("Could not find") >= 0 ||
+                        (r.error && r.error.code === "42883");
+          if (missing){
+            window.toast("Snake reward off",
+              "Run the SQL fix in Supabase once — see the console for the exact SQL.",
+              "err");
+            log("RPC missing. Run the SQL printed by the patch script.");
+          } else {
+            window.toast("Could not credit snake reward", msg, "err");
+          }
+        } else if (r.data && r.data.ok){
+          log("snake rewarded:", r.data.reward, "balance:", r.data.balance);
+          try { if (typeof window.refreshAccount === "function") window.refreshAccount(); } catch(e){}
+          try { if (typeof window.loadAccount === "function") window.loadAccount(); } catch(e){}
+
+          var el = document.getElementById("arcade-bal");
+          if (el && r.data.balance != null){
+            el.textContent = "🪙 " + Number(r.data.balance).toLocaleString();
+          }
+
+          // Big centered pop
+          if (r.data.reward > 0){
+            var big = document.createElement("div");
+            big.style.cssText =
+              "position:fixed;left:50%;top:22%;transform:translate(-50%,-50%);" +
+              "z-index:9998;padding:18px 28px;border-radius:18px;" +
+              "background:linear-gradient(135deg,rgba(255,200,87,.96),rgba(255,159,28,.96));" +
+              "color:#1a0f00;font-family:'Space Grotesk',sans-serif;font-weight:800;" +
+              "font-size:26px;box-shadow:0 20px 60px rgba(255,200,87,.65);" +
+              "animation:__coinPop .4s cubic-bezier(.22,.61,.36,1) both;" +
+              "text-align:center;pointer-events:none";
+            big.innerHTML =
+              "+" + r.data.reward + " 🪙" +
+              '<div style="font-size:12px;font-weight:600;opacity:.75;margin-top:4px;letter-spacing:.06em">SNAKE REWARD · SCORE ' + score + '</div>';
+            document.body.appendChild(big);
+            setTimeout(function(){
+              big.style.transition = "opacity .45s, transform .45s";
+              big.style.opacity = "0";
+              big.style.transform = "translate(-50%, -160%)";
+              setTimeout(function(){ big.remove(); }, 500);
+            }, 1400);
+          }
+        }
+      }
+      return r;
+    };
+    window.sb.__snakeWrapped = true;
+    log("snake rpc wrapped");
+  }
+
+  // Keyframe for pop
+  if (!document.getElementById("__coinPopStyle")){
+    var st = document.createElement("style");
+    st.id = "__coinPopStyle";
+    st.textContent =
+      "@keyframes __coinPop{" +
+      "0%{opacity:0;transform:translate(-50%,-50%) scale(.55)}" +
+      "65%{opacity:1;transform:translate(-50%,-50%) scale(1.08)}" +
+      "100%{opacity:1;transform:translate(-50%,-50%) scale(1)}}";
+    document.head.appendChild(st);
+  }
+
+  // ============================================================
+  // 2. Balance + daily bonus HUD on arcade page
+  // ============================================================
+  async function getMyBalance(){
+    if (!window.ME) return null;
+    try {
+      var r = await sb.from("bank_accounts").select("balance").eq("user_id", window.ME.id).maybeSingle();
+      return r.data ? r.data.balance : null;
+    } catch(e){ return null; }
+  }
+
+  async function checkDailyStatus(){
+    if (!window.ME) return { can_claim:false, missing:true };
+    try {
+      var r = await sb.rpc("daily_bonus_status");
+      if (r.error) return { can_claim:false, missing:true };
+      if (!r.data) return { can_claim:false, missing:true };
+      return r.data;
+    } catch(e){ return { can_claim:false, missing:true }; }
+  }
+
+  async function patchArcade(){
+    if (!window.CURRENT || window.CURRENT.type !== "games") return;
+    var body = document.getElementById("chat-body");
+    if (!body) return;
+    var active = body.querySelector("[data-gr].active");
+    if (!active || active.dataset.gr !== "arcade") return;
+    var wrap = body.querySelector(".snake-wrap");
+    if (!wrap) return;
+
+    // ---------- HUD strip ----------
+    if (!wrap.querySelector("#arcade-hud")){
+      var bal = await getMyBalance();
+      var daily = await checkDailyStatus();
+
+      var hud = document.createElement("div");
+      hud.className = "arcade-hud";
+      hud.id = "arcade-hud";
+
+      var rightSide = "";
+      if (daily && !daily.missing){
+        if (daily.can_claim){
+          rightSide = '<button class="btn-mini primary" id="arcade-daily">🎁 Claim Daily +' + (daily.next_reward || 50) + '</button>';
+        } else {
+          rightSide = '<span style="font-size:11px;color:var(--text3);font-family:monospace">Daily claimed · ' + (daily.streak || 0) + ' day streak</span>';
+        }
+      } else {
+        rightSide = '<button class="btn-mini primary" id="arcade-daily-fix" title="Setup required">🎁 Enable Daily</button>';
+      }
+
+      hud.innerHTML =
+        '<span class="bal" id="arcade-bal">🪙 ' + (bal == null ? "…" : Number(bal).toLocaleString()) + '</span>' +
+        rightSide;
+
+      wrap.insertBefore(hud, wrap.firstChild);
+
+      var btn = document.getElementById("arcade-daily");
+      if (btn){
+        btn.onclick = async function(){
+          btn.disabled = true; btn.textContent = "Claiming…";
+          try {
+            var r = await sb.rpc("claim_daily_bonus");
+            if (r.error) throw r.error;
+            var d = r.data || {};
+            if (d.error) throw new Error(d.error);
+            window.toast("Daily bonus", "+" + d.reward + " 🪙 · " + d.streak + " day streak", "ok");
+            var el = document.getElementById("arcade-bal");
+            if (el && d.balance != null) el.textContent = "🪙 " + Number(d.balance).toLocaleString();
+            if (typeof window.refreshAccount === "function") window.refreshAccount();
+            btn.outerHTML = '<span style="font-size:11px;color:var(--text3);font-family:monospace">Daily claimed · ' + d.streak + ' day streak</span>';
+          } catch(e){
+            window.toast("Could not claim", e.message || String(e), "err");
+            btn.disabled = false; btn.textContent = "🎁 Claim Daily";
+          }
+        };
+      }
+      var fix = document.getElementById("arcade-daily-fix");
+      if (fix){
+        fix.onclick = function(){
+          window.toast("Setup needed", "Run the daily-bonus SQL printed by the patch script.", "err");
+          log("daily_bonus_status missing — run the SQL.");
+        };
+      }
+    }
+
+    // ---------- How to Earn card ----------
+    if (!wrap.querySelector(".earn-card")){
+      var card = document.createElement("div");
+      card.className = "earn-card";
+      card.innerHTML =
+        '<h4>How to earn coins</h4>' +
+        '<div class="earn-row"><span class="em">🎣</span><span class="lbl"><b>Fishing</b>Cast, hook, time the reel — perfect timing doubles it</span><span class="amt">10–2,000</span></div>' +
+        '<div class="earn-row"><span class="em">🐍</span><span class="lbl"><b>Snake</b>1 coin per 5 points, capped per game</span><span class="amt">up to 500</span></div>' +
+        '<div class="earn-row"><span class="em">🎁</span><span class="lbl"><b>Daily bonus</b>Once a day, streak keeps growing</span><span class="amt">50–200</span></div>' +
+        '<div class="earn-row"><span class="em">🏆</span><span class="lbl"><b>Win matches</b>Beat someone at X-O or RPS — take the pot</span><span class="amt">2× bet</span></div>' +
+        '<div class="earn-row"><span class="em">💸</span><span class="lbl"><b>Get paid</b>Ask someone to send you coins</span><span class="amt"><code>/pay @user 100</code></span></div>';
+
+      var hud2 = wrap.querySelector("#arcade-hud");
+      if (hud2 && hud2.nextSibling){
+        wrap.insertBefore(card, hud2.nextSibling);
+      } else {
+        var startBtn = wrap.querySelector("#snake-start");
+        if (startBtn) wrap.insertBefore(card, startBtn);
+        else wrap.appendChild(card);
+      }
+    }
+  }
+
+  // ---------- Also on fishing page ----------
+  function patchFishing(){
+    if (!window.CURRENT || window.CURRENT.type !== "games") return;
+    var body = document.getElementById("chat-body");
+    if (!body) return;
+    var active = body.querySelector("[data-gr].active");
+    if (!active || active.dataset.gr !== "fishing") return;
+    var wrap = body.querySelector(".gsf-fish");
+    if (!wrap) return;
+    if (wrap.querySelector(".earn-card")) return;
+
+    var card = document.createElement("div");
+    card.className = "earn-card";
+    card.style.marginTop = "22px";
+    card.innerHTML =
+      '<h4>Other ways to earn</h4>' +
+      '<div class="earn-row"><span class="em">🐍</span><span class="lbl"><b>Snake</b>Arcade tab</span><span class="amt">up to 500</span></div>' +
+      '<div class="earn-row"><span class="em">🎁</span><span class="lbl"><b>Daily bonus</b>Arcade tab, once a day</span><span class="amt">50–200</span></div>' +
+      '<div class="earn-row"><span class="em">🏆</span><span class="lbl"><b>Win matches</b>X-O or RPS</span><span class="amt">2× bet</span></div>' +
+      '<div class="earn-row"><span class="em">💸</span><span class="lbl"><b>Get paid</b></span><span class="amt"><code>/pay @user 100</code></span></div>';
+    wrap.appendChild(card);
+  }
+
+  var origRC = window.renderChat;
+  if (typeof origRC === "function"){
+    window.renderChat = function(){
+      var r = origRC.apply(this, arguments);
+      setTimeout(patchArcade, 100);
+      setTimeout(patchArcade, 320);
+      setTimeout(patchFishing, 100);
+      setTimeout(patchFishing, 320);
+      return r;
+    };
+  }
+  setInterval(function(){ patchArcade(); patchFishing(); }, 700);
+
+  log("coin fix ready");
 })();
 </script>
 
