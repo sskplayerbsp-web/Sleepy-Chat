@@ -21012,5 +21012,1287 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
   log("invite links + account switcher + guest cleanup ready");
 })();
 </script>
+<!-- SLEEPY_MOBILE_UX_FIX_V2 -->
+<style>
+/* ================================================================
+   MOBILE / TOUCH UX
+   ================================================================ */
+
+/* --- Bigger tap targets everywhere on mobile --- */
+@media (max-width: 760px), (pointer: coarse){
+  .btn, .cbtn, .hbtn, .ctl, .xbtn, .menu button{
+    min-height: 40px;
+  }
+  .btn{ padding: 11px 16px; font-size: 13.5px; }
+  .btn.sm{ padding: 10px 14px; font-size: 13px; }
+  .row{ padding: 11px 12px; min-height: 46px; }
+  .member{ padding: 9px 10px; min-height: 46px; }
+  .field input, .field textarea, .field select{
+    padding: 13px 14px; font-size: 15px;
+  }
+
+  /* Modal footer: stack buttons */
+  .modal-foot{
+    flex-direction: column-reverse;
+    gap: 10px;
+  }
+  .modal-foot .btn{
+    width: 100%;
+    min-height: 48px;
+    font-size: 15px;
+  }
+  .modal{ max-height: 94vh; }
+  .modal-body{ padding: 18px 16px; }
+
+  /* Profile modal — big buttons */
+  #modal-body .field button.btn,
+  #modal-body > button.btn{
+    min-height: 46px;
+    font-size: 14px;
+    padding: 12px 18px;
+  }
+
+  /* Composer: taller so typing is easier */
+  .composer{ padding: 12px 14px; border-radius: 16px; }
+  .composer textarea{ font-size: 15px; line-height: 1.5; }
+  .composer .send{ width: 40px; height: 40px; }
+
+  /* Author names in chat = bigger tap zone to open profile */
+  .msg .author{
+    padding: 6px 4px;
+    margin: -6px -4px;
+    min-height: 32px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .msg .avatar{ min-width: 40px; min-height: 40px; }
+
+  /* Game room picker cards */
+  .picker-card{ padding: 22px 14px !important; min-height: 120px; }
+  .picker-card .em{ font-size: 46px !important; }
+  .picker-card .nm{ font-size: 15px !important; }
+
+  .game-pick{ padding: 20px 14px; min-height: 130px; }
+  .game-pick .em{ font-size: 48px; }
+
+  /* RPS buttons bigger */
+  .rps-btn{ padding: 26px 12px; }
+  .rps-btn .em{ font-size: 52px; }
+
+  /* TTT + chess cells bigger on mobile */
+  .ttt-cell{ font-size: 52px; }
+  .chess-sq{ font-size: 40px; }
+}
+
+/* --- Snake touchpad (replaces arrow buttons) --- */
+.snake-touchpad{
+  display: none;
+  position: relative;
+  width: 200px;
+  height: 200px;
+  margin: 20px auto 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, rgba(94,231,215,.08), rgba(94,231,215,.02));
+  border: 2px solid rgba(94,231,215,.3);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.snake-touchpad .knob{
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 64px; height: 64px;
+  margin: 0;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #5ee7d7, #3bb8aa);
+  box-shadow: 0 0 24px rgba(94,231,215,.55), inset 0 1px 0 rgba(255,255,255,.35);
+  transform: translate(-50%, -50%);
+  transition: transform .08s ease;
+  pointer-events: none;
+}
+.snake-touchpad .hint{
+  position: absolute;
+  left: 50%; bottom: -28px;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: var(--text3);
+  white-space: nowrap;
+  font-family: monospace;
+}
+.snake-touchpad .arrow{
+  position: absolute;
+  font-size: 22px;
+  color: rgba(94,231,215,.55);
+  font-weight: 700;
+  pointer-events: none;
+  font-family: system-ui, sans-serif;
+}
+.snake-touchpad .arrow.up    { top: 10px; left: 50%; transform: translateX(-50%); }
+.snake-touchpad .arrow.down  { bottom: 10px; left: 50%; transform: translateX(-50%); }
+.snake-touchpad .arrow.left  { left: 10px; top: 50%; transform: translateY(-50%); }
+.snake-touchpad .arrow.right { right: 10px; top: 50%; transform: translateY(-50%); }
+
+@media (max-width: 760px), (pointer: coarse){
+  .snake-touchpad{ display: block; }
+  .snake-mobile{ display: none !important; }
+  .snake-canvas{
+    width: 100% !important;
+    height: auto !important;
+    max-width: 420px !important;
+  }
+}
+
+/* --- Leaderboard mobile --- */
+@media (max-width: 760px), (pointer: coarse){
+  .lb-tabs{ padding: 5px; }
+  .lb-tabs button{ padding: 12px 6px; font-size: 13px; min-height: 44px; }
+  .lb-row, [data-lbt] + div > div[style*="display:flex"]{
+    padding: 12px 14px !important;
+  }
+}
+
+/* --- User bar tap feedback --- */
+.user-bar .info:active,
+.user-bar .avatar:active{
+  opacity: .7;
+}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyMobileUxFixV2) return;
+  window.__sleepyMobileUxFixV2 = true;
+  function log(){ try{console.log.apply(console,["[MobUX]"].concat([].slice.call(arguments)));}catch(e){} }
+  var isTouch = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
+
+  // ============================================================
+  // 1. COMPOSER PRESERVATION — the big fix
+  // ============================================================
+  // Save the textarea value / focus / selection BEFORE any re-render,
+  // restore AFTER. This stops incoming messages from wiping what you
+  // were typing.
+
+  function snapshotComposer(){
+    var wrap = document.getElementById("composer-wrap");
+    if (!wrap) return null;
+    var ta = wrap.querySelector("#composer-input");
+    if (!ta) return null;
+    return {
+      text: ta.value,
+      placeholder: ta.placeholder,
+      focus: document.activeElement === ta,
+      selStart: ta.selectionStart,
+      selEnd: ta.selectionEnd,
+      scrollTop: ta.scrollTop
+    };
+  }
+
+  function restoreComposer(snap){
+    if (!snap) return;
+    var wrap = document.getElementById("composer-wrap");
+    if (!wrap) return;
+    var ta = wrap.querySelector("#composer-input");
+    if (!ta) return;
+    // Skip if we're switching to a different target (channel/DM)
+    if (snap.placeholder !== ta.placeholder) return;
+    // Skip if in edit mode (edit content is intentional)
+    if (window.UI && window.UI.editing) return;
+
+    if (snap.text && snap.text.length > 0 && ta.value !== snap.text){
+      ta.value = snap.text;
+      if (typeof window.autosize === "function") window.autosize(ta);
+      else { ta.style.height = "auto"; ta.style.height = Math.min(ta.scrollHeight, 190) + "px"; }
+    }
+    if (snap.focus){
+      try {
+        ta.focus();
+        ta.setSelectionRange(snap.selStart, snap.selEnd);
+        ta.scrollTop = snap.scrollTop;
+      } catch(e){}
+    }
+  }
+
+  // Wrap renderChat
+  var origRenderChat = window.renderChat;
+  if (typeof origRenderChat === "function"){
+    window.renderChat = function(scroll){
+      var snap = snapshotComposer();
+      var body = document.getElementById("chat-body");
+      var wasAtBottom = true;
+      var prevScrollTop = 0;
+      if (body){
+        wasAtBottom = (body.scrollHeight - body.scrollTop - body.clientHeight) < 100;
+        prevScrollTop = body.scrollTop;
+      }
+
+      var r;
+      try { r = origRenderChat.apply(this, arguments); }
+      catch(e){ log("renderChat threw:", e.message); }
+
+      // Restore immediately, then again on microtask + macrotask
+      restoreComposer(snap);
+      Promise.resolve().then(function(){ restoreComposer(snap); });
+      setTimeout(function(){ restoreComposer(snap); }, 0);
+      setTimeout(function(){ restoreComposer(snap); }, 80);
+
+      // Preserve scroll: if user was NOT at bottom, keep them there
+      if (body && !wasAtBottom){
+        setTimeout(function(){
+          var b = document.getElementById("chat-body");
+          if (!b) return;
+          b.scrollTop = prevScrollTop;
+        }, 20);
+      }
+      return r;
+    };
+    log("renderChat preservation installed");
+  }
+
+  // Wrap renderComposer too — some patches call it directly
+  var origRenderComposer = window.renderComposer;
+  if (typeof origRenderComposer === "function"){
+    window.renderComposer = function(){
+      var snap = snapshotComposer();
+      var r = origRenderComposer.apply(this, arguments);
+      restoreComposer(snap);
+      setTimeout(function(){ restoreComposer(snap); }, 0);
+      return r;
+    };
+    log("renderComposer preservation installed");
+  }
+
+  // ============================================================
+  // 2. USER BAR — tap anywhere on mobile opens profile editor
+  // ============================================================
+  document.addEventListener("click", function(e){
+    if (!isTouch) return;
+    var bar = e.target.closest("#user-bar");
+    if (!bar) return;
+    // Skip if they tapped a real action button
+    if (e.target.closest("[data-act], [data-as-trigger]")) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (typeof window.openEditProfile === "function") window.openEditProfile();
+    else if (typeof window.openSettings === "function") window.openSettings();
+  }, true);
+
+  // ============================================================
+  // 3. SNAKE TOUCHPAD — swipe joystick instead of arrow buttons
+  // ============================================================
+  function dispatchArrow(key){
+    var ev = new KeyboardEvent("keydown", {
+      key: key, code: key, bubbles: true, cancelable: true
+    });
+    document.dispatchEvent(ev);
+  }
+
+  function installSnakeTouchpad(){
+    var body = document.getElementById("chat-body");
+    if (!body) return;
+    if (!body.querySelector("#snake-canvas")) return;
+    if (body.querySelector(".snake-touchpad")) return;
+
+    var pad = document.createElement("div");
+    pad.className = "snake-touchpad";
+    pad.innerHTML =
+      '<div class="arrow up">\u2191</div>' +
+      '<div class="arrow down">\u2193</div>' +
+      '<div class="arrow left">\u2190</div>' +
+      '<div class="arrow right">\u2192</div>' +
+      '<div class="knob" id="snake-knob"></div>' +
+      '<div class="hint">Drag to steer</div>';
+
+    // Place it right after the score HUD
+    var hud = body.querySelector(".snake-hud");
+    if (hud && hud.parentNode){
+      hud.parentNode.insertBefore(pad, hud.nextSibling);
+    } else {
+      body.appendChild(pad);
+    }
+
+    var knob = pad.querySelector("#snake-knob");
+    var active = false;
+    var cx = 0, cy = 0;
+    var lastKey = null;
+
+    function point(e){
+      var t = e.touches ? e.touches[0] : (e.changedTouches ? e.changedTouches[0] : e);
+      return { x: t.clientX, y: t.clientY };
+    }
+
+    function commit(dx, dy){
+      var len = Math.sqrt(dx*dx + dy*dy);
+      if (len < 24) return;
+      var key;
+      if (Math.abs(dx) > Math.abs(dy)){
+        key = dx < 0 ? "ArrowLeft" : "ArrowRight";
+      } else {
+        key = dy < 0 ? "ArrowUp" : "ArrowDown";
+      }
+      if (key === lastKey) return;
+      lastKey = key;
+      dispatchArrow(key);
+      if (navigator.vibrate) try { navigator.vibrate(8); } catch(e){}
+    }
+
+    function onStart(e){
+      active = true;
+      var r = pad.getBoundingClientRect();
+      cx = r.left + r.width / 2;
+      cy = r.top  + r.height / 2;
+      onMove(e);
+    }
+    function onMove(e){
+      if (!active) return;
+      if (e.preventDefault) e.preventDefault();
+      var p = point(e);
+      var dx = p.x - cx;
+      var dy = p.y - cy;
+      var len = Math.sqrt(dx*dx + dy*dy);
+      var maxR = 68;
+      var kx = dx, ky = dy;
+      if (len > maxR){
+        kx = dx / len * maxR;
+        ky = dy / len * maxR;
+      }
+      knob.style.transform = "translate(calc(-50% + " + kx + "px), calc(-50% + " + ky + "px))";
+      commit(dx, dy);
+    }
+    function onEnd(){
+      active = false;
+      lastKey = null;
+      knob.style.transform = "translate(-50%, -50%)";
+    }
+
+    pad.addEventListener("touchstart",  onStart, { passive: false });
+    pad.addEventListener("touchmove",   onMove,  { passive: false });
+    pad.addEventListener("touchend",    onEnd,   { passive: true  });
+    pad.addEventListener("touchcancel", onEnd,   { passive: true  });
+
+    // Same handlers for mouse (desktop with touch screens / testing)
+    pad.addEventListener("mousedown", onStart);
+    document.addEventListener("mousemove", function(e){ if (active) onMove(e); });
+    document.addEventListener("mouseup",   function(){ if (active) onEnd(); });
+
+    // Hide the old button grid
+    var oldBtns = body.querySelector(".snake-mobile");
+    if (oldBtns) oldBtns.style.display = "none";
+
+    log("snake touchpad installed");
+  }
+  setInterval(installSnakeTouchpad, 800);
+
+  // ============================================================
+  // 4. LEADERBOARD — always works on mobile
+  // ============================================================
+  // Force the page version (not modal) since it works better on phones.
+  if (typeof window.openLeaderboardsPage === "function"){
+    window.openLeaderboards = function(){
+      window.openLeaderboardsPage();
+    };
+  }
+
+  // ============================================================
+  // 5. DIAGNOSTICS
+  // ============================================================
+  // Warn if the composer ever loses focus while typing during a
+  // re-render — helps catch regressions.
+  var lastFocusedComposer = false;
+  setInterval(function(){
+    var ta = document.getElementById("composer-input");
+    if (!ta) return;
+    var focused = document.activeElement === ta;
+    if (lastFocusedComposer && !focused && ta.value.length > 0){
+      log("composer lost focus while typing — restoring");
+      try { ta.focus(); } catch(e){}
+    }
+    lastFocusedComposer = focused;
+  }, 400);
+
+  log("mobile UX + composer preservation ready");
+})();
+</script>
+
+<!-- SLEEPY_GAME_SHOP_FIX_V1 -->
+<style>
+/* Fishing mini-game (self-contained) */
+.gsf-fish{padding:0 0 40px}
+.gsf-bal{text-align:center;padding:14px;border-radius:14px;
+  background:linear-gradient(135deg,rgba(255,200,87,.1),rgba(0,230,118,.06));
+  border:1px solid rgba(255,200,87,.3);margin-bottom:18px}
+.gsf-bal .amt{font-family:'Space Grotesk',sans-serif;font-size:32px;font-weight:700;
+  color:#ffd166;line-height:1;text-shadow:0 0 24px rgba(255,200,87,.4)}
+.gsf-bal .lbl{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--text3);margin-top:5px}
+.gsf-poison{display:flex;align-items:center;gap:12px;padding:14px;border-radius:12px;
+  background:rgba(255,45,111,.08);border:1px solid rgba(255,45,111,.4);margin-bottom:16px}
+.gsf-poison .em{font-size:24px;animation:gsfShake 1.5s ease-in-out infinite}
+@keyframes gsfShake{0%,100%{transform:rotate(0)}25%{transform:rotate(-8deg)}75%{transform:rotate(8deg)}}
+.gsf-poison .info{flex:1}
+.gsf-poison .t{font-weight:700;font-size:13px;color:#ff8aa8}
+.gsf-poison .d{font-size:11.5px;color:var(--text3);margin-top:2px}
+.gsf-poison button{padding:9px 16px;border-radius:8px;
+  background:linear-gradient(135deg,#ff2d6f,#c41d54);color:#fff;border:none;
+  font-weight:700;font-size:12.5px;cursor:pointer;font-family:inherit}
+.gsf-poison button:disabled{opacity:.5;cursor:not-allowed}
+.gsf-stage{position:relative;height:260px;border-radius:16px;
+  background:linear-gradient(180deg,rgba(0,80,140,.5),rgba(0,40,90,.7));
+  border:1px solid rgba(0,200,255,.3);overflow:hidden;margin-bottom:16px}
+.gsf-stage::before{content:'';position:absolute;inset:0;
+  background:repeating-linear-gradient(90deg,transparent 0 40px,rgba(0,255,224,.05) 40px 42px);
+  animation:gsfWater 8s linear infinite}
+@keyframes gsfWater{from{background-position:0 0}to{background-position:80px 0}}
+.gsf-swim{position:absolute;font-size:24px;filter:drop-shadow(0 0 6px rgba(0,200,255,.5));
+  opacity:.75;animation:gsfSwim 4s ease-in-out infinite}
+@keyframes gsfSwim{0%,100%{transform:translate(0,0) rotate(-5deg)}
+  25%{transform:translate(18px,-8px) rotate(6deg)}
+  50%{transform:translate(-10px,10px) rotate(-3deg)}
+  75%{transform:translate(-18px,-5px) rotate(4deg)}}
+.gsf-overlay{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:12px;z-index:5;
+  background:rgba(10,10,15,.55);backdrop-filter:blur(4px)}
+.gsf-overlay .m{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;
+  color:var(--cyan);letter-spacing:.06em;text-transform:uppercase;
+  text-shadow:0 0 12px rgba(94,231,215,.6)}
+.gsf-overlay .hint{font-size:12px;color:var(--text3);text-align:center;max-width:280px;line-height:1.5}
+.gsf-overlay.bite{cursor:pointer}
+.gsf-overlay .bite-em{font-size:60px;animation:gsfPop .3s ease}
+@keyframes gsfPop{0%{transform:scale(0) rotate(-20deg)}
+  70%{transform:scale(1.3) rotate(10deg)}
+  100%{transform:scale(1) rotate(0)}}
+.gsf-timing{margin-top:6px}
+.gsf-timing-bar{position:relative;height:36px;border-radius:10px;overflow:hidden;
+  background:linear-gradient(90deg,
+    rgba(255,45,111,.4) 0%,rgba(255,171,0,.4) 20%,
+    rgba(74,222,128,.5) 40%,rgba(94,231,215,.75) 48%,
+    rgba(94,231,215,.75) 52%,rgba(74,222,128,.5) 60%,
+    rgba(255,171,0,.4) 80%,rgba(255,45,111,.4) 100%);
+  border:1px solid rgba(94,231,215,.4)}
+.gsf-mark{position:absolute;top:-3px;bottom:-3px;left:0;width:4px;
+  background:#fff;border-radius:2px;box-shadow:0 0 12px #fff,0 0 24px rgba(94,231,215,.9)}
+.gsf-timing-lbl{display:flex;justify-content:space-between;margin-top:6px;
+  font-size:10.5px;color:var(--text3);font-family:monospace}
+.gsf-timing-lbl .c{color:var(--cyan);font-weight:700}
+.gsf-cast-btn{width:100%;margin-top:16px;padding:16px;border-radius:14px;
+  background:linear-gradient(135deg,#5ee7d7,#0096ff);color:#04120f;
+  font-weight:800;font-size:15px;letter-spacing:.04em;border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:10px;font-family:inherit;
+  transition:all .15s}
+.gsf-cast-btn:hover{transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,200,255,.5)}
+.gsf-cast-btn:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
+.gsf-result{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  background:rgba(10,10,15,.9);z-index:6;animation:gsfIn .35s ease}
+@keyframes gsfIn{from{opacity:0}to{opacity:1}}
+.gsf-card{text-align:center;padding:26px;border-radius:16px;min-width:220px;
+  font-family:'Space Grotesk',sans-serif;
+  border:1px solid rgba(255,200,87,.4);
+  background:linear-gradient(135deg,rgba(255,200,87,.12),rgba(139,124,255,.08))}
+.gsf-card.rare{background:linear-gradient(135deg,rgba(94,231,215,.2),rgba(139,124,255,.12));
+  border-color:rgba(94,231,215,.5)}
+.gsf-card.legendary{background:linear-gradient(135deg,rgba(255,200,87,.25),rgba(255,45,111,.18));
+  border-color:rgba(255,200,87,.7)}
+.gsf-card.puffer{background:linear-gradient(135deg,rgba(255,45,111,.22),rgba(255,45,111,.1));
+  border-color:rgba(255,45,111,.6)}
+.gsf-card .em{font-size:72px;line-height:1;margin-bottom:10px;animation:gsfBounce .6s ease}
+@keyframes gsfBounce{0%{transform:scale(0) rotate(-30deg)}
+  60%{transform:scale(1.2) rotate(10deg)}100%{transform:scale(1) rotate(0)}}
+.gsf-card .nm{font-size:20px;font-weight:700;color:var(--text);margin-bottom:6px}
+.gsf-card .tier{font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+  font-weight:700;padding:3px 11px;border-radius:99px;display:inline-block;
+  background:rgba(0,0,0,.3);color:var(--text2);margin-bottom:10px}
+.gsf-card .val{font-size:26px;font-weight:700;color:#ffd166;margin-top:4px}
+.gsf-card .val.bad{color:#ff8aa8}
+.gsf-card .q{font-size:13px;font-weight:700;margin-top:12px}
+.gsf-card .q.perfect{color:#ffd166}
+.gsf-card .q.great{color:#4ade80}
+.gsf-card .q.ok{color:#ffc857}
+.gsf-recent{margin-top:22px}
+.gsf-recent h3{font-size:10.5px;font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--text3);margin-bottom:10px;
+  font-family:'JetBrains Mono',monospace}
+.gsf-rc{display:flex;align-items:center;gap:12px;padding:9px 12px;border-radius:9px;
+  background:rgba(255,255,255,.03);font-size:13px;margin-bottom:5px}
+.gsf-rc .em{font-size:20px}
+.gsf-rc .nm{flex:1;font-weight:600;color:var(--text)}
+.gsf-rc .tier{font-size:10.5px;color:var(--text3);letter-spacing:.06em;text-transform:uppercase}
+.gsf-rc .val{font-family:monospace;font-weight:700;color:#ffd166}
+.gsf-rc .val.bad{color:#ff8aa8}
+
+/* Shop */
+.gsf-shop{padding:0 0 40px}
+.gsf-shop-head{text-align:center;padding:14px;border-radius:14px;
+  background:linear-gradient(135deg,rgba(255,200,87,.1),rgba(0,230,118,.06));
+  border:1px solid rgba(255,200,87,.3);margin-bottom:18px}
+.gsf-shop-head .amt{font-family:'Space Grotesk',sans-serif;font-size:28px;
+  font-weight:700;color:#ffd166;line-height:1}
+.gsf-shop-head .lbl{font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--text3);margin-top:5px}
+.gsf-cat{font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--text3);margin:20px 0 10px;padding:0 4px;
+  font-family:'JetBrains Mono',monospace}
+.gsf-shop-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.gsf-item{padding:14px;border-radius:12px;background:rgba(255,255,255,.03);
+  border:1px solid var(--border);text-align:center;transition:all .15s;
+  display:flex;flex-direction:column}
+.gsf-item:hover{border-color:var(--border2);transform:translateY(-2px)}
+.gsf-item .prev{font-size:34px;line-height:1;margin-bottom:8px;height:42px;
+  display:flex;align-items:center;justify-content:center}
+.gsf-item .n{font-weight:600;font-size:13px;margin-bottom:3px}
+.gsf-item .d{font-size:10.5px;color:var(--text3);line-height:1.45;margin-bottom:10px;
+  min-height:30px;flex:1}
+.gsf-item .p{font-family:monospace;font-weight:700;color:var(--gold);
+  font-size:14px;margin-bottom:10px}
+.gsf-item button{width:100%;padding:9px;border-radius:8px;font-size:12px;
+  font-weight:700;border:none;cursor:pointer;font-family:inherit;transition:all .15s}
+.gsf-item .buy{background:linear-gradient(135deg,#ffc857,#ff9f1c);color:#1a0f00}
+.gsf-item .buy:hover{box-shadow:0 4px 16px rgba(255,200,87,.5)}
+.gsf-item .buy:disabled{background:var(--surface3);color:var(--text3);
+  cursor:not-allowed;box-shadow:none}
+.gsf-item .equip{background:rgba(94,231,215,.14);color:var(--cyan);
+  border:1px solid rgba(94,231,215,.35)}
+.gsf-item .owned{background:rgba(74,222,128,.14);color:var(--green);
+  border:1px solid rgba(74,222,128,.35)}
+.gsf-item .unequip{background:transparent;color:var(--text3);
+  border:1px solid var(--border)}
+.preview-sample{display:inline-block;padding:2px 8px;border-radius:6px;
+  font-weight:700;font-size:13px}
+.sample-gold{background:linear-gradient(90deg,#ffc857,#ff9f1c);color:#1a0f00}
+.sample-rose{background:linear-gradient(90deg,#ff7f9f,#ff4d70);color:#1a0008}
+.sample-teal{background:linear-gradient(90deg,#5ee7d7,#3bb8aa);color:#04211d}
+.sample-amber{background:linear-gradient(90deg,#fbbf24,#d97706);color:#1a0e00}
+.sample-lime{background:linear-gradient(90deg,#a3e635,#65a30d);color:#0a1a00}
+.sample-ice{background:linear-gradient(90deg,#a5f3fc,#06b6d4);color:#001a2e}
+.sample-rainbow{background:linear-gradient(90deg,#ff2d6f,#ffc857,#4ade80,#5ee7d7,#8b7cff);
+  background-size:200%;color:#0a0a0f;animation:gsfRb 3s linear infinite}
+@keyframes gsfRb{to{background-position:200% 0}}
+
+/* Bank quick actions */
+.bank-quick{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.bank-quick button{padding:6px 12px;border-radius:99px;
+  background:rgba(255,200,87,.1);border:1px solid rgba(255,200,87,.35);
+  color:var(--gold);font-size:11.5px;font-weight:600;cursor:pointer;
+  transition:all .15s;font-family:inherit}
+.bank-quick button:hover{background:rgba(255,200,87,.2);transform:translateY(-1px)}
+.bank-quick button.primary{background:linear-gradient(135deg,#ffc857,#ff9f1c);
+  color:#1a0f00;border-color:transparent}
+
+/* Account switcher in settings */
+.as-section{padding:14px;border-radius:12px;background:rgba(255,255,255,.03);
+  border:1px solid var(--border);margin-top:14px}
+.as-section h4{font-size:11px;font-weight:700;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--text3);margin-bottom:10px;
+  font-family:'JetBrains Mono',monospace}
+.as-row{display:flex;align-items:center;gap:10px;padding:8px 10px;
+  border-radius:9px;background:rgba(0,0,0,.15);margin-bottom:6px}
+.as-row.active{border:1px solid rgba(94,231,215,.4);
+  background:rgba(94,231,215,.06)}
+.as-row .av{width:32px;height:32px;border-radius:50%;flex:none;
+  background:linear-gradient(135deg,#5ee7d7,#8b7cff);color:#04120f;
+  display:flex;align-items:center;justify-content:center;font-weight:700;
+  font-size:12px;font-family:'Space Grotesk',sans-serif}
+.as-row .body{flex:1;min-width:0}
+.as-row .name{font-weight:600;font-size:13px;color:var(--text)}
+.as-row .user{font-size:11px;color:var(--text3)}
+.as-row button{padding:6px 12px;border-radius:7px;font-size:11.5px;
+  font-weight:600;border:1px solid var(--border);background:var(--surface2);
+  color:var(--text2);cursor:pointer;font-family:inherit}
+.as-row button:hover{color:var(--text);border-color:var(--border2)}
+.as-row button.primary{background:linear-gradient(135deg,var(--cyan),#00c9b4);
+  color:#04120f;border-color:transparent;font-weight:700}
+.as-row button.danger{color:#ff8aa2;background:rgba(255,45,111,.1);
+  border-color:rgba(255,45,111,.3)}
+.as-add{display:block;width:100%;padding:10px;border-radius:9px;
+  background:rgba(94,231,215,.1);border:1px dashed rgba(94,231,215,.4);
+  color:var(--cyan);font-weight:600;font-size:13px;cursor:pointer;
+  font-family:inherit;margin-top:6px}
+.as-add:hover{background:rgba(94,231,215,.16)}
+
+@media (max-width:760px){
+  .gsf-shop-grid{grid-template-columns:repeat(2,1fr);gap:8px}
+  .gsf-item{padding:12px}
+  .gsf-item .prev{font-size:30px;height:36px}
+  .gsf-item .n{font-size:12.5px}
+  .gsf-item .d{font-size:10px}
+  .gsf-item button{padding:11px;font-size:12.5px;min-height:44px}
+  .gsf-stage{height:220px}
+  .gsf-cast-btn{min-height:54px;font-size:16px}
+  .gsf-poison button{min-height:44px;padding:11px 16px}
+}
+</style>
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyGameShopFix) return;
+  window.__sleepyGameShopFix = true;
+  function log(){ try{console.log.apply(console,["[GSF]"].concat([].slice.call(arguments)));}catch(e){} }
+  function esc(s){ return window.esc(s); }
+
+  // ============================================================
+  // EXTRA SHOP ITEMS
+  // ============================================================
+  var EXTRA_SHOP = [
+    { id:'name_color_amber',   price:750,   category:'name_color', name:'Amber Name',    desc:'Warm amber gradient', preview:'<span class="preview-sample sample-amber">Aa</span>' },
+    { id:'name_color_lime',    price:750,   category:'name_color', name:'Lime Name',     desc:'Bright lime green',   preview:'<span class="preview-sample sample-lime">Aa</span>' },
+    { id:'name_color_ice',     price:1200,  category:'name_color', name:'Ice Name',      desc:'Frosted cool blue',   preview:'<span class="preview-sample sample-ice">Aa</span>' },
+    { id:'title_tycoon',       price:2000,  category:'title',      name:'Tycoon Title',  desc:'Show "Tycoon" on your profile',  preview:'💼' },
+    { id:'title_reeler',       price:3000,  category:'title',      name:'Reeler Title',  desc:'Show "Reeler" on your profile',  preview:'🎣' },
+    { id:'title_boss',         price:8000,  category:'title',      name:'Boss Title',    desc:'Show "Boss" on your profile',    preview:'👑' },
+    { id:'title_sleeper',      price:15000, category:'title',      name:'Sleeper Title', desc:'Show "Sleeper" on your profile', preview:'🌙' },
+    { id:'frame_neon',         price:2000,  category:'frame',      name:'Neon Frame',    desc:'Bright cyan ring around avatar', preview:'🟦' },
+    { id:'frame_ember',        price:2500,  category:'frame',      name:'Ember Frame',   desc:'Warm orange glow',               preview:'🔥' },
+    { id:'frame_void',         price:5000,  category:'frame',      name:'Void Frame',    desc:'Purple animated aura',           preview:'🟪' },
+    { id:'rod_bamboo',         price:300,   category:'rod',        name:'Bamboo Rod',    desc:'+2% rare fish chance',           preview:'🎋' },
+    { id:'rod_carbon',         price:3500,  category:'rod',        name:'Carbon Rod',    desc:'+8% rare fish chance',           preview:'⚫' },
+    { id:'rod_mythic',         price:25000, category:'rod',        name:'Mythic Rod',    desc:'+30% rare fish chance',          preview:'🌟' }
+  ];
+
+  // ============================================================
+  // FISHING ENGINE
+  // ============================================================
+  var FISH = [
+    { name:'Minnow',         emoji:'🐟', tier:'common',    value:10,   weight:25 },
+    { name:'Sardine',        emoji:'🐟', tier:'common',    value:15,   weight:20 },
+    { name:'Bass',           emoji:'🐟', tier:'common',    value:25,   weight:15 },
+    { name:'Trout',          emoji:'🐠', tier:'uncommon',  value:50,   weight:10 },
+    { name:'Salmon',         emoji:'🐠', tier:'uncommon',  value:75,   weight:8 },
+    { name:'Tuna',           emoji:'🐟', tier:'uncommon',  value:100,  weight:7 },
+    { name:'Clownfish',      emoji:'🐠', tier:'rare',      value:150,  weight:4 },
+    { name:'Swordfish',      emoji:'🐟', tier:'rare',      value:250,  weight:3 },
+    { name:'Golden Koi',     emoji:'🐠', tier:'legendary', value:500,  weight:1 },
+    { name:'Mythic Arowana', emoji:'🐉', tier:'legendary', value:1000, weight:0.5 },
+    { name:'Pufferfish',     emoji:'🐡', tier:'puffer',    value:0,    weight:6.5 }
+  ];
+
+  var fish = {
+    phase:'idle', biteTimer:null, missTimer:null,
+    raf:null, pos:0, start:0, window:2600,
+    quality:null, caught:null, mult:1
+  };
+  var FISH_ACCOUNT = null;
+
+  function clearFishTimers(){
+    if (fish.biteTimer){ clearTimeout(fish.biteTimer); fish.biteTimer = null; }
+    if (fish.missTimer){ clearTimeout(fish.missTimer); fish.missTimer = null; }
+    if (fish.raf){ cancelAnimationFrame(fish.raf); fish.raf = null; }
+  }
+
+  async function loadFishAccount(){
+    if (!window.ME) return null;
+    try {
+      var r = await sb.from('bank_accounts').select('*').eq('user_id', window.ME.id).maybeSingle();
+      if (r.data){ FISH_ACCOUNT = r.data; return r.data; }
+      var ins = await sb.from('bank_accounts').insert({ user_id: window.ME.id, balance: 100 }).select().single();
+      FISH_ACCOUNT = ins.data;
+    } catch(e){ log("account:", e.message); }
+    return FISH_ACCOUNT;
+  }
+
+  function rollFish(){
+    var total = FISH.reduce(function(s,f){ return s + f.weight; }, 0);
+    var r = Math.random() * total, acc = 0;
+    for (var i = 0; i < FISH.length; i++){
+      acc += FISH[i].weight;
+      if (r < acc) return FISH[i];
+    }
+    return FISH[0];
+  }
+
+  function buildFishing(){
+    var bal = FISH_ACCOUNT ? FISH_ACCOUNT.balance : 0;
+    var poisoned = FISH_ACCOUNT && FISH_ACCOUNT.poisoned;
+
+    var h = '<div class="gsf-fish">';
+
+    h += '<div class="gsf-bal">' +
+      '<div class="amt">🪙 ' + bal.toLocaleString() + '</div>' +
+      '<div class="lbl">Your balance</div>' +
+    '</div>';
+
+    if (poisoned){
+      h += '<div class="gsf-poison">' +
+        '<span class="em">🐡</span>' +
+        '<div class="info"><div class="t">POISONED</div>' +
+          '<div class="d">-10 coins per minute</div></div>' +
+        '<button id="gsf-cure"' + (bal < 100 ? ' disabled' : '') + '>Cure -100</button>' +
+      '</div>';
+    }
+
+    h += '<div class="gsf-stage" id="gsf-stage">';
+    var positions = [
+      {t:'20%',l:'10%'},{t:'50%',l:'70%'},{t:'75%',l:'25%'},
+      {t:'35%',l:'50%'},{t:'65%',l:'80%'},{t:'15%',l:'45%'}
+    ];
+    var swimmers = ['🐟','🐠','🐟','🐡','🐠','🐟'];
+    swimmers.forEach(function(e, i){
+      var p = positions[i];
+      h += '<div class="gsf-swim" style="top:' + p.t + ';left:' + p.l + ';' +
+        'animation-duration:' + (4 + i * .3) + 's">' + e + '</div>';
+    });
+
+    if (fish.phase === 'casting'){
+      h += '<div class="gsf-overlay">' +
+        '<div class="m">Casting…</div>' +
+        '<div class="hint">Wait for a bite…</div>' +
+      '</div>';
+    }
+    if (fish.phase === 'bite'){
+      h += '<div class="gsf-overlay bite" id="gsf-bite">' +
+        '<div class="bite-em">❗</div>' +
+        '<div class="m">Tap now!</div>' +
+        '<div class="hint">Hook the fish before it escapes</div>' +
+      '</div>';
+    }
+    if (fish.phase === 'timing'){
+      h += '<div class="gsf-overlay">' +
+        '<div class="m">Reel it in!</div>' +
+        '<div class="hint">Tap the stage when the bar is in the middle</div>' +
+      '</div>';
+    }
+    if (fish.phase === 'result' && fish.caught){
+      var c = fish.caught;
+      var cls = c.tier === 'legendary' ? 'legendary' :
+                c.tier === 'rare' ? 'rare' :
+                c.tier === 'puffer' ? 'puffer' : '';
+      var valLine = c.tier === 'puffer'
+        ? '<div class="val bad">+ POISON</div>'
+        : '<div class="val">+' + Math.round(c.value * fish.mult) + ' 🪙' +
+          (fish.mult > 1 ? ' (x' + fish.mult + ')' : '') + '</div>';
+      var qLine = '';
+      if (fish.quality){
+        qLine = '<div class="q ' + fish.quality + '">' +
+          (fish.quality === 'perfect' ? '🌟 PERFECT!' :
+           fish.quality === 'great' ? '✨ Great!' :
+           fish.quality === 'ok' ? '👍 Nice' : '💨 Missed') + '</div>';
+      }
+      h += '<div class="gsf-result"><div class="gsf-card ' + cls + '">' +
+        '<div class="em">' + c.emoji + '</div>' +
+        '<div class="nm">' + esc(c.name) + '</div>' +
+        '<div class="tier">' + esc(c.tier === 'puffer' ? 'HAZARD' : c.tier) + '</div>' +
+        valLine + qLine +
+      '</div></div>';
+    }
+    h += '</div>';
+
+    if (fish.phase === 'timing'){
+      h += '<div class="gsf-timing">' +
+        '<div class="gsf-timing-bar">' +
+          '<div class="gsf-mark" id="gsf-mark" style="left:0"></div>' +
+        '</div>' +
+        '<div class="gsf-timing-lbl">' +
+          '<span>Miss</span><span>OK</span><span class="c">PERFECT</span><span>OK</span><span>Miss</span>' +
+        '</div>' +
+      '</div>';
+      setTimeout(startTiming, 0);
+    }
+
+    if (fish.phase === 'idle'){
+      h += '<button class="gsf-cast-btn" id="gsf-cast"' + (poisoned ? ' disabled' : '') + '>' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" ' +
+        'stroke-linecap="round" stroke-linejoin="round" style="width:20px;height:20px">' +
+          '<path d="M4 20 12 12M12 12l8-8M12 12H4M12 12v8"/>' +
+        '</svg>' +
+        (poisoned ? 'Cure first to fish' : 'Cast Line') +
+      '</button>';
+    }
+
+    h += '<div class="gsf-recent" id="gsf-recent">' +
+      '<h3>Recent catches</h3><div id="gsf-rc-list">Loading…</div>' +
+    '</div>';
+
+    h += '</div>';
+    return h;
+  }
+
+  function startTiming(){
+    fish.phase = 'timing';
+    fish.start = Date.now();
+    fish.pos = 0;
+    var tick = function(){
+      var elapsed = Date.now() - fish.start;
+      var t = (elapsed % (fish.window * 2)) / fish.window;
+      fish.pos = t <= 1 ? t * 100 : (2 - t) * 100;
+      var m = document.getElementById('gsf-mark');
+      if (m) m.style.left = 'calc(' + fish.pos + '% - 2px)';
+      fish.raf = requestAnimationFrame(tick);
+    };
+    tick();
+  }
+
+  function hookTiming(){
+    if (fish.phase !== 'timing') return;
+    clearFishTimers();
+    var d = Math.abs(fish.pos - 50);
+    var q = d <= 6 ? 'perfect' : d <= 14 ? 'great' : d <= 28 ? 'ok' : 'miss';
+    finishCast(q);
+  }
+
+  async function doCast(){
+    if (fish.phase !== 'idle') return;
+    if (!FISH_ACCOUNT) await loadFishAccount();
+    if (FISH_ACCOUNT && FISH_ACCOUNT.poisoned){
+      window.toast("You're poisoned", "Cure first.", "err");
+      return;
+    }
+    fish.phase = 'casting';
+    fish.caught = null;
+    fish.quality = null;
+    fish.mult = 1;
+    refreshFishingView();
+
+    var wait = 1400 + Math.random() * 2400;
+    fish.biteTimer = setTimeout(function(){
+      if (fish.phase !== 'casting') return;
+      fish.phase = 'bite';
+      refreshFishingView();
+      if (navigator.vibrate) try { navigator.vibrate(60); } catch(e){}
+
+      fish.missTimer = setTimeout(function(){
+        if (fish.phase === 'bite') finishCast('miss');
+      }, 1600);
+    }, wait);
+  }
+
+  async function finishCast(quality){
+    fish.phase = 'result';
+    fish.quality = quality;
+    if (quality === 'miss'){
+      fish.caught = null;
+      refreshFishingView();
+      setTimeout(function(){ fish.phase = 'idle'; refreshFishingView(); loadRecent(); }, 1200);
+      window.toast("Missed", "The fish got away.", "err");
+      return;
+    }
+
+    var caught = rollFish();
+
+    // Hidden puffer cycle
+    try {
+      var pr = await sb.from('fishing_catches').select('fish_tier')
+        .eq('user_id', window.ME.id).order('caught_at', { ascending: false }).limit(20);
+      var rows = pr.data || [];
+      var lastIdx = -1;
+      for (var i = 0; i < rows.length; i++)
+        if (rows[i].fish_tier === 'puffer'){ lastIdx = i; break; }
+      var nonPuff = lastIdx < 0 ? rows.length : lastIdx;
+      if (nonPuff >= 10 && caught.tier !== 'puffer'){
+        caught = { name:'Pufferfish', emoji:'🐡', tier:'puffer', value:0 };
+      }
+    } catch(e){}
+
+    var mult = quality === 'perfect' ? 2 : quality === 'great' ? 1.5 : 1;
+    fish.mult = mult;
+    fish.caught = caught;
+
+    try {
+      var r = await sb.rpc('record_catch', {
+        fish_name: caught.name,
+        fish_emoji: caught.emoji,
+        fish_tier: caught.tier,
+        fish_value: Math.round(caught.value * mult)
+      });
+      if (r.error) throw r.error;
+      await loadFishAccount();
+      refreshFishingView();
+      loadRecent();
+      setTimeout(function(){
+        if (fish.phase === 'result'){ fish.phase = 'idle'; refreshFishingView(); }
+      }, 2600);
+    } catch(e){
+      log("catch failed:", e.message);
+      window.toast("Error", e.message || String(e), "err");
+      fish.phase = 'idle';
+      refreshFishingView();
+    }
+  }
+
+  async function doCure(){
+    try {
+      var r = await sb.rpc('cure_poison');
+      if (r.error) throw r.error;
+      await loadFishAccount();
+      window.toast("Cured", "You're healthy again.", "ok");
+      refreshFishingView();
+    } catch(e){ window.toast("Error", e.message || String(e), "err"); }
+  }
+
+  async function loadRecent(){
+    var el = document.getElementById('gsf-rc-list');
+    if (!el || !window.ME) return;
+    try {
+      var r = await sb.from('fishing_catches').select('*')
+        .eq('user_id', window.ME.id).order('caught_at', { ascending: false }).limit(6);
+      var rows = r.data || [];
+      if (!rows.length){
+        el.innerHTML = '<div style="color:var(--text3);font-size:12.5px">No catches yet. Cast your line!</div>';
+        return;
+      }
+      el.innerHTML = rows.map(function(c){
+        var v = c.fish_tier === 'puffer'
+          ? '<span class="val bad">POISON</span>'
+          : '<span class="val">+' + c.value + '</span>';
+        return '<div class="gsf-rc">' +
+          '<span class="em">' + c.fish_emoji + '</span>' +
+          '<span class="nm">' + esc(c.fish_name) + '</span>' +
+          '<span class="tier">' + esc(c.fish_tier) + '</span>' + v +
+        '</div>';
+      }).join('');
+    } catch(e){}
+  }
+
+  function refreshFishingView(){
+    var mount = document.getElementById('fish-mount');
+    if (!mount) return;
+    mount.innerHTML = buildFishing();
+    wireFishing();
+  }
+
+  function wireFishing(){
+    var cast = document.getElementById('gsf-cast');
+    if (cast) cast.onclick = doCast;
+    var cure = document.getElementById('gsf-cure');
+    if (cure && !cure.disabled) cure.onclick = doCure;
+    var bite = document.getElementById('gsf-bite');
+    if (bite) bite.onclick = startTiming;
+    var stage = document.getElementById('gsf-stage');
+    if (stage && fish.phase === 'timing'){
+      stage.style.cursor = 'pointer';
+      stage.onclick = hookTiming;
+    }
+    if (fish.phase === 'idle') loadRecent();
+  }
+
+  // ============================================================
+  // SHOP ENGINE
+  // ============================================================
+  var SHOP_ACCOUNT = null;
+  var SHOP_INVENTORY = [];
+  var SHOP_EQUIPPED = { name_color:null, title:null, profile_frame:null };
+  var BASE_SHOP = [
+    { id:'name_color_gold',    price:500,   category:'name_color', name:'Gold Name',    desc:'Shiny gold name',         preview:'<span class="preview-sample sample-gold">Aa</span>' },
+    { id:'name_color_rose',    price:500,   category:'name_color', name:'Rose Name',    desc:'Warm rose gradient',      preview:'<span class="preview-sample sample-rose">Aa</span>' },
+    { id:'name_color_teal',    price:500,   category:'name_color', name:'Teal Name',    desc:'Cool teal gradient',      preview:'<span class="preview-sample sample-teal">Aa</span>' },
+    { id:'name_color_rainbow', price:2000,  category:'name_color', name:'Rainbow Name', desc:'Animated rainbow',        preview:'<span class="preview-sample sample-rainbow">Aa</span>' },
+    { id:'title_angler',       price:500,   category:'title',      name:'Angler Title',  desc:'Show "Angler" on profile', preview:'🎣' },
+    { id:'title_champion',     price:1000,  category:'title',      name:'Champion Title',desc:'Show "Champion" on profile', preview:'🏆' },
+    { id:'title_legend',       price:5000,  category:'title',      name:'Legend Title',  desc:'Show "Legend" on profile', preview:'⭐' },
+    { id:'frame_gold',         price:1000,  category:'frame',      name:'Gold Frame',    desc:'Gold ring around avatar',  preview:'🟡' },
+    { id:'frame_glow',         price:1500,  category:'frame',      name:'Glow Frame',    desc:'Cyan glowing ring',        preview:'✨' },
+    { id:'rod_silver',         price:2000,  category:'rod',        name:'Silver Rod',    desc:'+5% rare fish chance',     preview:'🥈' },
+    { id:'rod_gold',           price:5000,  category:'rod',        name:'Gold Rod',      desc:'+10% rare fish chance',    preview:'🥇' },
+    { id:'rod_diamond',        price:15000, category:'rod',        name:'Diamond Rod',   desc:'+20% rare fish chance',    preview:'💎' }
+  ];
+  var ALL_SHOP = BASE_SHOP.concat(EXTRA_SHOP);
+
+  async function loadShopData(){
+    if (!window.ME) return;
+    try {
+      var r = await sb.from('bank_accounts').select('*').eq('user_id', window.ME.id).maybeSingle();
+      SHOP_ACCOUNT = r.data || { balance: 0 };
+      var inv = await sb.from('shop_inventory').select('item_id').eq('user_id', window.ME.id);
+      SHOP_INVENTORY = (inv.data || []).map(function(x){ return x.item_id; });
+      var eq = await sb.from('shop_equipped').select('*').eq('user_id', window.ME.id).maybeSingle();
+      SHOP_EQUIPPED = eq.data || { name_color:null, title:null, profile_frame:null };
+    } catch(e){ log("shop load:", e.message); }
+  }
+
+  function buildShop(){
+    var bal = SHOP_ACCOUNT ? SHOP_ACCOUNT.balance : 0;
+    var h = '<div class="gsf-shop">';
+
+    h += '<div class="gsf-shop-head">' +
+      '<div class="amt">🪙 ' + bal.toLocaleString() + '</div>' +
+      '<div class="lbl">Spend on cosmetics</div>' +
+    '</div>';
+
+    var categories = [
+      { key:'name_color', label:'Name Colors' },
+      { key:'title',      label:'Titles' },
+      { key:'frame',      label:'Avatar Frames' },
+      { key:'rod',        label:'Fishing Rods' }
+    ];
+
+    categories.forEach(function(cat){
+      var items = ALL_SHOP.filter(function(x){ return x.category === cat.key; });
+      if (!items.length) return;
+      h += '<div class="gsf-cat">' + cat.label + '</div>';
+      h += '<div class="gsf-shop-grid">';
+      items.forEach(function(item){
+        var owned = SHOP_INVENTORY.indexOf(item.id) >= 0;
+        var isColor = item.category === 'name_color';
+        var isTitle = item.category === 'title';
+        var isFrame = item.category === 'frame';
+        var equipped = (isColor && SHOP_EQUIPPED.name_color === item.id) ||
+                       (isTitle && SHOP_EQUIPPED.title === item.id) ||
+                       (isFrame && SHOP_EQUIPPED.profile_frame === item.id);
+        var canEquip = isColor || isTitle || isFrame;
+        var afford = bal >= item.price;
+
+        h += '<div class="gsf-item">' +
+          '<div class="prev">' + item.preview + '</div>' +
+          '<div class="n">' + esc(item.name) + '</div>' +
+          '<div class="d">' + esc(item.desc) + '</div>' +
+          '<div class="p">🪙 ' + item.price.toLocaleString() + '</div>';
+        if (owned){
+          if (equipped){
+            h += '<button class="owned" data-gsf-unequip="' + item.category + '">Equipped · tap to remove</button>';
+          } else if (canEquip){
+            h += '<button class="equip" data-gsf-equip="' + item.id + '">Equip</button>';
+          } else {
+            h += '<button class="owned" style="cursor:default">Owned</button>';
+          }
+        } else {
+          h += '<button class="buy" data-gsf-buy="' + item.id + '"' +
+            (afford ? '' : ' disabled') + '>' +
+            (afford ? 'Buy' : 'Need ' + (item.price - bal) + ' more') + '</button>';
+        }
+        h += '</div>';
+      });
+      h += '</div>';
+    });
+
+    h += '</div>';
+    return h;
+  }
+
+  function wireShop(){
+    document.querySelectorAll('[data-gsf-buy]').forEach(function(b){
+      b.onclick = async function(){
+        try {
+          var r = await sb.rpc('purchase_shop_item', { p_item: b.dataset.gsfBuy });
+          if (r.error) throw r.error;
+          window.toast("Purchased", "Enjoy your new item!", "ok");
+          await loadShopData();
+          refreshShopView();
+        } catch(e){ window.toast("Purchase failed", e.message || String(e), "err"); }
+      };
+    });
+    document.querySelectorAll('[data-gsf-equip]').forEach(function(b){
+      b.onclick = async function(){
+        try {
+          await sb.rpc('equip_shop_item', { p_item: b.dataset.gsfEquip });
+          await loadShopData();
+          window.toast("Equipped", "", "ok");
+          refreshShopView();
+          if (window.renderAll) window.renderAll();
+        } catch(e){ window.toast("Equip failed", e.message || String(e), "err"); }
+      };
+    });
+    document.querySelectorAll('[data-gsf-unequip]').forEach(function(b){
+      b.onclick = async function(){
+        try {
+          await sb.rpc('unequip_shop_item', { p_kind: b.dataset.gsfUnequip });
+          await loadShopData();
+          window.toast("Removed", "", "ok");
+          refreshShopView();
+          if (window.renderAll) window.renderAll();
+        } catch(e){ window.toast("Failed", e.message || String(e), "err"); }
+      };
+    });
+  }
+
+  function refreshShopView(){
+    var wrapper = document.querySelector('#chat-body div[style*="max-width:600px"]');
+    if (!wrapper) return;
+    var active = wrapper.querySelector('[data-gr].active');
+    var tab = active ? active.dataset.gr : null;
+    if (tab !== 'shop') return;
+    // Replace the stub content but keep the tabs
+    var tabsHTML = wrapper.querySelector('.gr-tabs').outerHTML;
+    wrapper.innerHTML = tabsHTML + buildShop();
+    wireTabs(wrapper);
+    wireShop();
+  }
+
+  // ============================================================
+  // GAME ROOM PATCHER — runs after V3 renders
+  // ============================================================
+  function patchGameRoom(){
+    if (!window.CURRENT || window.CURRENT.type !== 'games') return;
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+
+    var active = body.querySelector('[data-gr].active');
+    var tab = active ? active.dataset.gr : null;
+
+    // ---- FISHING ----
+    if (tab === 'fishing'){
+      var mount = document.getElementById('fish-mount');
+      if (mount && !mount.querySelector('.gsf-fish')){
+        if (!FISH_ACCOUNT) loadFishAccount().then(function(){
+          mount.innerHTML = buildFishing();
+          wireFishing();
+        });
+      }
+    }
+
+    // ---- SHOP ----
+    if (tab === 'shop'){
+      var wrapper = body.querySelector('div[style*="max-width:600px"]');
+      if (wrapper && !wrapper.querySelector('.gsf-shop')){
+        if (!SHOP_ACCOUNT) loadShopData().then(function(){
+          var tabsHTML = wrapper.querySelector('.gr-tabs') ? wrapper.querySelector('.gr-tabs').outerHTML : '';
+          wrapper.innerHTML = tabsHTML + buildShop();
+          wireTabs(wrapper);
+          wireShop();
+        });
+      }
+    }
+  }
+
+  function wireTabs(scope){
+    scope = scope || document;
+    scope.querySelectorAll('[data-gr]').forEach(function(b){
+      var old = b.onclick;
+      b.onclick = function(e){
+        // Let the original handler fire (V3 tab logic)
+        if (old) old.call(this, e);
+        // Then re-patch the body
+        setTimeout(patchGameRoom, 80);
+      };
+    });
+  }
+
+  var origRC = window.renderChat;
+  if (typeof origRC === 'function'){
+    window.renderChat = function(){
+      var r = origRC.apply(this, arguments);
+      setTimeout(patchGameRoom, 60);
+      setTimeout(patchGameRoom, 200);
+      return r;
+    };
+  }
+  setInterval(patchGameRoom, 500);
+
+  // ============================================================
+  // /pay QUICK ACTIONS in Bank DM
+  // ============================================================
+  function addBankQuickActions(){
+    document.querySelectorAll('[data-msg]').forEach(function(el){
+      if (el.querySelector('.bank-quick')) return;
+      var author = el.querySelector('.author');
+      if (!author) return;
+      if (!/bank|sleepybank/i.test(author.textContent)) return;
+      var body = el.querySelector('.content');
+      if (!body) return;
+      var actions = document.createElement('div');
+      actions.className = 'bank-quick';
+      actions.innerHTML =
+        '<button data-bank-quick="balance">💰 Balance</button>' +
+        '<button data-bank-quick="fish" class="primary">🎣 Fish</button>' +
+        '<button data-bank-quick="badges">🏅 Badges</button>' +
+        '<button data-bank-quick="top">🏆 Top</button>' +
+        '<button data-bank-quick="help">❓ Help</button>';
+      body.appendChild(actions);
+    });
+  }
+  setInterval(addBankQuickActions, 1200);
+
+  // ============================================================
+  // ACCOUNT SWITCHER in Settings modal
+  // ============================================================
+  var ACC_KEY = "sleepychat.accounts";
+  function loadAccounts(){
+    try { return JSON.parse(localStorage.getItem(ACC_KEY) || "[]"); }
+    catch(e){ return []; }
+  }
+
+  async function switchToAccount(id){
+    var list = loadAccounts();
+    var t = list.find(function(a){ return a.id === id; });
+    if (!t){ window.toast("Missing", "Sign in again.", "err"); return; }
+    try {
+      var r = await sb.auth.setSession({
+        access_token: t.access_token,
+        refresh_token: t.refresh_token
+      });
+      if (r.error) throw r.error;
+      window.toast("Switched", "Loading as @" + t.username, "ok");
+      setTimeout(function(){ location.reload(); }, 400);
+    } catch(e){
+      window.toast("Could not switch", e.message || String(e), "err");
+    }
+  }
+
+  function buildAccountSection(){
+    var list = loadAccounts();
+    var h = '<div class="as-section">' +
+      '<h4>Accounts on this device</h4>';
+    if (!list.length){
+      h += '<div style="font-size:12px;color:var(--text3);padding:6px 0">No other accounts saved.</div>';
+    }
+    list.forEach(function(a){
+      var active = window.ME && a.id === window.ME.id;
+      var initials = (a.display_name || a.username || "?").slice(0, 2).toUpperCase();
+      h += '<div class="as-row' + (active ? ' active' : '') + '">' +
+        '<div class="av">' + esc(initials) + '</div>' +
+        '<div class="body"><div class="name">' +
+          esc(a.display_name || a.username) + (active ? ' · current' : '') + '</div>' +
+          '<div class="user">@' + esc(a.username) + '</div></div>' +
+        (active
+          ? '<button class="owned" disabled style="background:rgba(74,222,128,.14);color:var(--green);border:1px solid rgba(74,222,128,.35)">Active</button>'
+          : '<button class="primary" data-as-switch="' + esc(a.id) + '">Switch</button>') +
+      '</div>';
+    });
+    h += '<button class="as-add" id="as-add-account">+ Add another account</button>';
+    h += '</div>';
+    return h;
+  }
+
+  var origOpenSettings = window.openSettings;
+  if (typeof origOpenSettings === "function"){
+    window.openSettings = function(){
+      var r = origOpenSettings.apply(this, arguments);
+      setTimeout(function(){
+        var body = document.getElementById("modal-body");
+        if (!body) return;
+        if (body.querySelector(".as-section")) return;
+        var holder = document.createElement("div");
+        holder.innerHTML = buildAccountSection();
+        while (holder.firstElementChild) body.appendChild(holder.firstElementChild);
+
+        body.querySelectorAll("[data-as-switch]").forEach(function(b){
+          b.onclick = function(){ switchToAccount(b.dataset.asSwitch); };
+        });
+        var add = document.getElementById("as-add-account");
+        if (add) add.onclick = async function(){
+          // Snapshot current, then sign out to add
+          if (window.SESSION && window.ME){
+            var list = loadAccounts();
+            var entry = {
+              id: window.ME.id,
+              email: window.SESSION.user && window.SESSION.user.email,
+              username: window.ME.username,
+              display_name: window.ME.display_name,
+              access_token: window.SESSION.access_token,
+              refresh_token: window.SESSION.refresh_token,
+              saved_at: Date.now()
+            };
+            var idx = list.findIndex(function(a){ return a.id === entry.id; });
+            if (idx >= 0) list[idx] = entry; else list.push(entry);
+            try { localStorage.setItem(ACC_KEY, JSON.stringify(list)); } catch(e){}
+          }
+          window.closeModal();
+          try { await sb.auth.signOut(); } catch(e){}
+          setTimeout(function(){ location.reload(); }, 300);
+        };
+      }, 220);
+      return r;
+    };
+  }
+
+  // ============================================================
+  // BOOT
+  // ============================================================
+  setTimeout(function(){
+    if (!window.ME) return;
+    loadFishAccount();
+    loadShopData();
+    log("game + shop fix ready");
+  }, 4000);
+
+  log("loaded");
+})();
+</script>
+
 </body>
 </html>
