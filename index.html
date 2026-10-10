@@ -16335,310 +16335,6 @@ body.in-game-room .chat-head .topic{display:none!important}
 })();
 </script>
 
-<!-- SLEEPY_ADS_HIDDEN_V1 -->
-<style>
-/* Kill every visible ad surface. Scripts keep running. */
-
-/* Our own container */
-#ad-host{display:none!important;visibility:hidden!important;height:0!important;padding:0!important;margin:0!important;overflow:hidden!important}
-
-/* Login banner slot */
-.ad-slot-login{display:none!important;height:0!important;padding:0!important;margin:0!important;overflow:hidden!important}
-
-/* Adsterra NativeBanner container */
-#container-fa854199a041432aa0a5fa0fd34ead52{
-  position:fixed!important;
-  left:-10000px!important;
-  top:-10000px!important;
-  width:1px!important;
-  height:1px!important;
-  overflow:hidden!important;
-  opacity:0!important;
-  pointer-events:none!important;
-  visibility:hidden!important;
-}
-
-/* Reward cards */
-.ad-reward{display:none!important}
-
-/* SocialBar - all known wrapper patterns */
-[id^="socialbar"],[class^="socialbar"],[class*="socialbar"],
-[id^="social_"],[class^="social_"],[class*="social_"],
-[data-socialbar],
-div[data-widget="socialbar"],
-div[data-type="socialbar"]{
-  position:fixed!important;
-  left:-10000px!important;
-  top:-10000px!important;
-  width:1px!important;
-  height:1px!important;
-  overflow:hidden!important;
-  opacity:0!important;
-  visibility:hidden!important;
-  pointer-events:none!important;
-  display:block!important;
-}
-
-/* Pop-unders that anchor to body corners */
-body > div[style*="position: fixed"][style*="bottom"],
-body > div[style*="position:fixed"][style*="bottom"],
-body > a[target="_blank"][style*="position: fixed"],
-body > iframe[style*="position: fixed"]{
-  position:fixed!important;
-  left:-10000px!important;
-  top:-10000px!important;
-  width:1px!important;
-  height:1px!important;
-  opacity:0!important;
-  pointer-events:none!important;
-  visibility:hidden!important;
-}
-
-/* Blocklist domains — always hidden no matter what */
-iframe[src*="exoclick"],
-iframe[src*="trafficjunky"],
-iframe[src*="juicyads"],
-iframe[src*="trafficstars"],
-iframe[src*="clickadu"],
-iframe[src*="popads"],
-iframe[src*="popcash"],
-iframe[src*="propellerpops"],
-iframe[src*="bongacams"],
-iframe[src*="stripchat"],
-iframe[src*="livejasmin"],
-iframe[src*="chaturbate"],
-img[src*="exoclick"],
-img[src*="juicyads"]{
-  display:none!important;
-  visibility:hidden!important;
-  position:absolute!important;
-  left:-10000px!important;
-  width:1px!important;
-  height:1px!important;
-  pointer-events:none!important;
-}
-</style>
-<script>
-(function(){
-  "use strict";
-  if (window.__sleepyAdsHidden) return;
-  window.__sleepyAdsHidden = true;
-  function log(){ try{console.log.apply(console,["[AdsHide]"].concat([].slice.call(arguments)));}catch(e){} }
-
-  // ------------------------------------------------------------
-  // 1. VULGAR FILTER — hides any ad whose text we can read
-  // ------------------------------------------------------------
-  var VULGAR = [
-    'gf','bf','girlfriend','boyfriend','singles','hot singles','meet local',
-    'meet girls','meet boys','near you','hookup','dating','adult','mature',
-    'milf','sex','xxx','porn','onlyfans','nsfw','18+','sexy','affair',
-    'lonely','seduc','swipe','match now','chat live','live girls','local girls',
-    'casino','betting','gambling','poker','slots','jackpot','spin to win',
-    'play now win','crypto','viagra','weight loss','diet'
-  ];
-
-  function looksVulgar(text){
-    if (!text) return false;
-    var t = String(text).toLowerCase();
-    // Multi-word first (more reliable)
-    for (var i = 0; i < VULGAR.length; i++){
-      var kw = VULGAR[i];
-      if (kw.indexOf(' ') >= 0 && t.indexOf(kw) >= 0) return true;
-    }
-    // Single-word: match on word boundaries
-    for (var j = 0; j < VULGAR.length; j++){
-      var kw2 = VULGAR[j];
-      if (kw2.indexOf(' ') >= 0) continue;
-      var re = new RegExp('\\b' + kw2 + '\\b', 'i');
-      if (re.test(t)) return true;
-    }
-    return false;
-  }
-
-  // ------------------------------------------------------------
-  // 2. Hide everything ad-related, blocklist domains
-  // ------------------------------------------------------------
-  var BLOCKED_DOMAINS = [
-    'exoclick','trafficjunky','juicyads','trafficstars','clickadu',
-    'popads','popcash','propellerpops','bongacams','stripchat',
-    'livejasmin','chaturbate','adultforce','xxx','porn','cam4','cams'
-  ];
-
-  function isBlocked(url){
-    if (!url) return false;
-    var u = String(url).toLowerCase();
-    for (var i = 0; i < BLOCKED_DOMAINS.length; i++){
-      if (u.indexOf(BLOCKED_DOMAINS[i]) >= 0) return true;
-    }
-    return false;
-  }
-
-  function hideEl(el){
-    if (!el || !el.style) return;
-    el.style.setProperty('position', 'fixed', 'important');
-    el.style.setProperty('left', '-10000px', 'important');
-    el.style.setProperty('top', '-10000px', 'important');
-    el.style.setProperty('width', '1px', 'important');
-    el.style.setProperty('height', '1px', 'important');
-    el.style.setProperty('opacity', '0', 'important');
-    el.style.setProperty('visibility', 'hidden', 'important');
-    el.style.setProperty('pointer-events', 'none', 'important');
-    el.setAttribute('data-hidden', '1');
-  }
-
-  function sweep(){
-    // 1. Our own container (already hidden by CSS but be sure)
-    var host = document.getElementById('ad-host');
-    if (host) hideEl(host);
-
-    var login = document.querySelector('.ad-slot-login');
-    if (login) hideEl(login);
-
-    // 2. Any element whose ID/class contains "socialbar", "social_", "popunder"
-    document.querySelectorAll('[id*="socialbar"],[class*="socialbar"],[id*="social_"],[class*="social_"],[id*="popunder"],[class*="popunder"]').forEach(function(el){
-      if (el.tagName === 'SCRIPT') return; // leave the loader alone
-      hideEl(el);
-    });
-
-    // 3. Blocked-domain iframes/images/scripts
-    document.querySelectorAll('iframe,img,script,ins,embed,object').forEach(function(el){
-      var src = el.src || el.getAttribute('src') || '';
-      if (isBlocked(src)) hideEl(el);
-    });
-
-    // 4. Body-level floating wrappers that aren't ours
-    Array.prototype.forEach.call(document.body.children, function(el){
-      if (!el || el.tagName === 'SCRIPT' || el.tagName === 'STYLE' || el.tagName === 'LINK') return;
-      // Skip legitimate app roots
-      var keepIds = ['app','auth-screen','modal-root','toasts','ad-host','voice-video-grid','voice-dock','voice-composer-slot','sc-install','oc-install-btn','pwa-splash','voice-debug','install-inline-bar','snake-canvas'];
-      if (el.id && keepIds.indexOf(el.id) >= 0) return;
-      // If it looks like a floating overlay we didn't make
-      var s = el.getAttribute('style') || '';
-      if (/position\s*:\s*fixed/i.test(s) && /(bottom|right|left|top)/i.test(s)){
-        // Check if it contains our own known elements
-        if (el.querySelector('#app, #auth-screen, #modal-root, #toasts, .chat, .rail, .panel')) return;
-        hideEl(el);
-      }
-    });
-
-    // 5. Vulgar-text sweep on any visible ad container we can read
-    var banner = document.getElementById('container-fa854199a041432aa0a5fa0fd34ead52');
-    if (banner){
-      var txt = (banner.innerText || banner.textContent || '').trim();
-      if (looksVulgar(txt)){
-        log("vulgar banner hidden:", txt.slice(0,60));
-        hideEl(banner);
-      } else {
-        // Even if not vulgar, keep it in the background
-        hideEl(banner);
-      }
-    }
-
-    // 6. Vulgar-text sweep on ALL visible divs (in case some render as plain DOM)
-    // Only checks elements with ad-ish indicators to avoid scanning the whole app
-    document.querySelectorAll('[id*="ad"],[class*="ad-"],[class*="ad_"],ins').forEach(function(el){
-      if (el.id && el.id === 'ad-host') return;
-      if (el.closest('.chat, .rail, .panel, .modal, .auth-card')) return;
-      var t = (el.innerText || el.textContent || '').trim();
-      if (looksVulgar(t)) hideEl(el);
-    });
-  }
-
-  // ------------------------------------------------------------
-  // 3. Continuous sweep
-  // ------------------------------------------------------------
-  // Aggressive at boot to catch everything the ad scripts inject.
-  sweep();
-  [200, 500, 1000, 2000, 4000, 8000].forEach(function(ms){
-    setTimeout(sweep, ms);
-  });
-  setInterval(sweep, 1500);
-
-  // ------------------------------------------------------------
-  // 4. MutationObserver — hide new ad nodes the instant they appear
-  // ------------------------------------------------------------
-  function attachObserver(){
-    if (!document.body){ setTimeout(attachObserver, 300); return; }
-    var mo = new MutationObserver(function(muts){
-      var needsSweep = false;
-      muts.forEach(function(m){
-        m.addedNodes.forEach(function(n){
-          if (!n || n.nodeType !== 1) return;
-          var tag = n.tagName ? n.tagName.toLowerCase() : '';
-          if (tag === 'iframe' || tag === 'ins' || tag === 'embed'){
-            needsSweep = true;
-            return;
-          }
-          if (tag === 'div' || tag === 'a' || tag === 'span'){
-            var id = (n.id || '').toLowerCase();
-            var cls = (typeof n.className === 'string' ? n.className : '').toLowerCase();
-            if (id.indexOf('social') >= 0 || cls.indexOf('social') >= 0 ||
-                id.indexOf('popunder') >= 0 || cls.indexOf('popunder') >= 0 ||
-                id.indexOf('ad') === 0 || cls.indexOf('ad-') === 0){
-              needsSweep = true;
-            }
-            var st = n.getAttribute && n.getAttribute('style') || '';
-            if (/position\s*:\s*fixed/i.test(st)) needsSweep = true;
-          }
-        });
-      });
-      if (needsSweep) setTimeout(sweep, 40);
-    });
-    mo.observe(document.body, { childList: true, subtree: true });
-    log("observer attached");
-  }
-  attachObserver();
-
-  // ------------------------------------------------------------
-  // 5. Remove SocialBar loader entirely (no visual, no server call)
-  // ------------------------------------------------------------
-  function killSocialLoader(){
-    var t = document.getElementById('socialbar-js');
-    if (t && t.parentElement) t.parentElement.removeChild(t);
-    document.querySelectorAll('script[src*="bicea.org/14/"]').forEach(function(s){
-      try { s.remove(); } catch(e){}
-    });
-  }
-  killSocialLoader();
-  setInterval(killSocialLoader, 3000);
-
-  // ------------------------------------------------------------
-  // 6. Block pop-under windows (some ad scripts call window.open)
-  // ------------------------------------------------------------
-  var origOpen = window.open;
-  window.open = function(url, name, features){
-    if (url && isBlocked(url)) {
-      log("blocked pop-under:", url);
-      return null;
-    }
-    // Also block anything that isn't our own app
-    if (url && (String(url).indexOf(location.origin) !== 0 && String(url).indexOf('http') === 0)){
-      // Allow known safe: supabase, github, fonts, google
-      var safe = ['supabase.co','github.io','fonts.googleapis','fonts.gstatic','jsdelivr','googleusercontent'];
-      var ok = false;
-      for (var i = 0; i < safe.length; i++) if (String(url).indexOf(safe[i]) >= 0) { ok = true; break; }
-      if (!ok){
-        log("blocked popup:", url);
-        return null;
-      }
-    }
-    return origOpen.apply(this, arguments);
-  };
-
-  // ------------------------------------------------------------
-  // 7. Kill the reward-claim button too (it opens the timer overlay)
-  // ------------------------------------------------------------
-  var overlayKiller = setInterval(function(){
-    document.querySelectorAll('.ad-reward button, #ad-claim').forEach(function(b){
-      var wrap = b.closest('.ad-reward');
-      if (wrap) hideEl(wrap);
-    });
-  }, 2000);
-
-  log("hidden ads + filter ready");
-})();
-</script>
-
 <!-- SLEEPY_BOARD_FIX_V1 -->
 <style>
 /* Smooth cell state changes even when the DOM rebuilds */
@@ -17617,129 +17313,6 @@ img[src*="juicyads"]{
 </script>
 
 <!-- SLEEPY_OWNERID_V3 -->
-<!-- SLEEPY_FINAL_CLEANUP_V1 -->
-<style>
-#container-fa854199a041432aa0a5fa0fd34ead52,
-iframe[src*="bicea.org"],iframe[src*="bicea"],
-iframe[src*="adsterra"],iframe[src*="popads"],iframe[src*="popcash"],
-iframe[src*="propeller"],iframe[src*="exoclick"],iframe[src*="juicyads"],
-iframe[src*="trafficjunky"],iframe[src*="highperformance"],iframe[src*="profitablerate"],
-[id^="socialbar"],[class^="socialbar"],[class*="socialbar"],
-[id*="social-bar"],[class*="social-bar"],[data-socialbar],
-div[data-widget="socialbar"],div[data-type="socialbar"],
-body > a[target="_blank"][style*="position: fixed"],
-body > div[style*="position: fixed"][style*="bottom"],
-body > div[style*="position:fixed"][style*="bottom"]{
-  display:none!important;visibility:hidden!important;opacity:0!important;
-  pointer-events:none!important;width:0!important;height:0!important;
-  position:absolute!important;left:-10000px!important;top:-10000px!important;
-}
-.ad-slot,.ad-reward,#ad-host{display:none!important;height:0!important;width:0!important;overflow:hidden!important}
-</style>
-<script>
-(function(){
-  "use strict";
-  if (window.__sleepyFinalCleanup) return;
-  window.__sleepyFinalCleanup = true;
-  function log(){ try{console.log.apply(console,["[Cleanup]"].concat([].slice.call(arguments)));}catch(e){} }
-
-  // ---------- 1. Kill every ad artifact ----------
-  function killAds(){
-    document.querySelectorAll('script').forEach(function(sc){
-      var src = sc.src || "";
-      if (/bicea|adsterra|popads|popcash|propeller|exoclick|juicyads|trafficjunky|highperformance|profitablerate/i.test(src)){
-        sc.remove();
-      }
-    });
-    document.querySelectorAll('iframe').forEach(function(fr){
-      var src = fr.src || "";
-      if (/bicea|adsterra|popads|popcash|propeller|exoclick|juicyads|trafficjunky/i.test(src)){
-        fr.remove();
-      }
-    });
-    var banner = document.getElementById('container-fa854199a041432aa0a5fa0fd34ead52');
-    if (banner) banner.remove();
-    document.querySelectorAll('[id*="socialbar"],[class*="socialbar"],[class*="social-bar"]').forEach(function(el){
-      if (el.tagName === 'SCRIPT') return;
-      el.remove();
-    });
-    var adHost = document.getElementById('ad-host');
-    if (adHost) adHost.remove();
-    var KEEP = ['app','auth-screen','modal-root','toasts','voice-dock','voice-video-grid',
-                'voice-composer-slot','voice-debug','pwa-splash','oc-install-btn',
-                'sc-install','install-inline-bar','snake-canvas'];
-    Array.prototype.forEach.call(document.body.children, function(el){
-      if (!el || !el.tagName) return;
-      if (/^(SCRIPT|STYLE|LINK)$/.test(el.tagName)) return;
-      if (el.id && KEEP.indexOf(el.id) >= 0) return;
-      if (el.querySelector && el.querySelector('#app, #auth-screen, #modal-root, #toasts')) return;
-      var style = el.getAttribute('style') || "";
-      if (/position\s*:\s*fixed/i.test(style) && /(bottom|right|top|left)/i.test(style)){
-        el.remove();
-      }
-    });
-  }
-  killAds();
-  [300, 1200, 3000, 6000].forEach(function(t){ setTimeout(killAds, t); });
-  setInterval(killAds, 2500);
-
-  // ---------- 2. Block pop-unders and redirects ----------
-  var _origOpen = window.open;
-  var ALLOW = ['supabase.co','github.io','githubusercontent','fonts.googleapis',
-               'fonts.gstatic','jsdelivr','livekit','localhost'];
-  window.open = function(url){
-    if (!url) return null;
-    var u = String(url);
-    if (u.indexOf(location.origin) === 0) return _origOpen.apply(this, arguments);
-    for (var i = 0; i < ALLOW.length; i++){
-      if (u.indexOf(ALLOW[i]) >= 0) return _origOpen.apply(this, arguments);
-    }
-    log("blocked popup:", u.slice(0, 80));
-    return null;
-  };
-
-  // Block external redirects we didn't initiate
-  var lastHref = location.href;
-  setInterval(function(){
-    if (location.href !== lastHref){
-      var external = location.origin && location.href.indexOf(location.origin) !== 0;
-      if (external && !/supabase|github|localhost/i.test(location.href)){
-        log("blocked redirect:", location.href.slice(0, 80));
-        try { location.replace(lastHref); } catch(e){}
-        return;
-      }
-      lastHref = location.href;
-    }
-  }, 400);
-
-  // ---------- 3. Rate-limit RPS subscribe retries ----------
-  // Now that sb is fixed, first attempt should succeed. Add a small
-  // guard so we never spam more than one attempt per second even if
-  // something else goes wrong.
-  var _lastSubAttempt = 0;
-  var _origSetInterval = window.setInterval;
-  var _origSetTimeout = window.setTimeout;
-
-  function wrapRpsRetry(fn){
-    return function(){
-      var now = Date.now();
-      if (now - _lastSubAttempt < 1000) return;
-      _lastSubAttempt = now;
-      return fn.apply(this, arguments);
-    };
-  }
-
-  // Wrap the two broken sub retry loops via tag matching is complex.
-  // Simpler: expose a flag that the wrappers check. But we can't
-  // easily patch the closed-over functions. The source fix below
-  // (window.sb -> sb) makes them succeed, so this is just a fallback
-  // against pathological re-tries.
-  window.__rpsLastSubAttempt = 0;
-
-  log("ads killed, redirects blocked");
-})();
-</script>
-
 <!-- SLEEPY_GUESTS_V1 -->
 <style>
 .guest-panel{padding:16px;border-radius:12px;border:1px solid rgba(180,74,255,.35);background:rgba(180,74,255,.05);margin-top:22px}
@@ -21149,6 +20722,615 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
   }, 4400);
 
   console.log("[Shop v5] armed — " + SHOP.length + " items across " + CATEGORIES.length + " categories");
+})();
+</script>
+
+<!-- SLEEPY_MOD_FEATURES_V1 -->
+<style id="mod-features-css">
+/* Report modal */
+.mod-rating{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.mod-rating button{flex:1;min-width:80px;padding:11px 8px;border-radius:9px;background:rgba(255,255,255,.03);
+  border:1px solid #2a2a3a;color:#8f8fa8;font:600 12px system-ui;cursor:pointer;transition:all .15s}
+.mod-rating button:hover{color:#eef2f8;border-color:#3a3a4d}
+.mod-rating button.sel{background:rgba(255,45,111,.14);border-color:rgba(255,45,111,.5);color:#ff8aa8}
+
+/* Reports channel view */
+#reports-view{max-width:820px;margin:0 auto;padding:20px 16px 60px;font-family:'Inter',system-ui,sans-serif}
+#reports-view .rp-header{display:flex;align-items:center;gap:14px;margin-bottom:20px;flex-wrap:wrap}
+#reports-view .rp-header h2{font:700 22px system-ui;color:#eef2f8;margin:0}
+#reports-view .rp-header .badge{padding:4px 12px;border-radius:99px;font:700 11px system-ui;
+  letter-spacing:.06em;text-transform:uppercase;background:rgba(255,45,111,.16);border:1px solid rgba(255,45,111,.45);color:#ff8aa8}
+#reports-view .rp-tabs{display:flex;gap:5px;background:#0a0a0f;padding:4px;border-radius:10px;
+  border:1px solid #2a2a3a;margin-bottom:16px}
+#reports-view .rp-tabs button{flex:1;padding:10px 8px;border-radius:7px;font:600 12.5px system-ui;
+  color:#5f6c85;cursor:pointer;border:none;background:transparent;transition:all .15s}
+#reports-view .rp-tabs button.active{background:#1a1a26;color:#5ee7d7;box-shadow:inset 0 0 0 1px rgba(94,231,215,.24)}
+#reports-view .rp-list{display:flex;flex-direction:column;gap:10px}
+#reports-view .rp-card{padding:14px 16px;border-radius:12px;background:rgba(255,255,255,.03);
+  border:1px solid #2a2a3a;position:relative}
+#reports-view .rp-card.open{border-left:3px solid #ff2d6f}
+#reports-view .rp-card.reviewing{border-left:3px solid #ffab00}
+#reports-view .rp-card.resolved{border-left:3px solid #00e676;opacity:.7}
+#reports-view .rp-card.dismissed{border-left:3px solid #5a5a72;opacity:.5}
+#reports-view .rp-card .top{display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap}
+#reports-view .rp-card .who{font:600 13.5px system-ui;color:#eef2f8}
+#reports-view .rp-card .arrow{color:#5f6c85;font-size:14px}
+#reports-view .rp-card .target{font:600 13.5px system-ui;color:#ff8aa8}
+#reports-view .rp-card .status{font:700 10px system-ui;letter-spacing:.06em;text-transform:uppercase;
+  padding:3px 9px;border-radius:99px;margin-left:auto}
+#reports-view .rp-card .status.open{background:rgba(255,45,111,.16);color:#ff8aa8}
+#reports-view .rp-card .status.reviewing{background:rgba(255,171,0,.16);color:#ffc857}
+#reports-view .rp-card .status.resolved{background:rgba(0,230,118,.16);color:#4ade80}
+#reports-view .rp-card .status.dismissed{background:rgba(120,120,140,.2);color:#9aa8c0}
+#reports-view .rp-card .reason{font:600 13.5px system-ui;color:#eef2f8;margin-bottom:5px}
+#reports-view .rp-card .details{font:400 12.5px system-ui;color:#9aa8c0;line-height:1.5;margin-bottom:10px;
+  padding:8px 10px;background:rgba(0,0,0,.2);border-radius:7px;white-space:pre-wrap}
+#reports-view .rp-card .when{font:400 11px monospace;color:#5f6c85;margin-bottom:10px}
+#reports-view .rp-card .actions{display:flex;gap:6px;flex-wrap:wrap}
+#reports-view .rp-card .actions button{padding:6px 12px;border-radius:7px;font:600 11.5px system-ui;
+  border:1px solid #2a2a3a;background:#1a1a26;color:#9aa8c0;cursor:pointer;transition:all .15s}
+#reports-view .rp-card .actions button:hover{color:#eef2f8;border-color:#3a3a4d}
+#reports-view .rp-card .actions button.primary{background:rgba(94,231,215,.14);border-color:rgba(94,231,215,.4);color:#5ee7d7}
+#reports-view .rp-card .actions button.danger{background:rgba(255,45,111,.12);border-color:rgba(255,45,111,.4);color:#ff8aa8}
+#reports-view .rp-empty{padding:40px 20px;text-align:center;color:#5f6c85;font-size:13.5px}
+
+/* Reports rail button */
+.rail-btn.reports-btn{background:linear-gradient(135deg,rgba(255,45,111,.18),rgba(180,74,255,.14));
+  border:1px solid rgba(255,45,111,.45)}
+.rail-btn.reports-btn:hover{box-shadow:0 0 18px rgba(255,45,111,.55);transform:translateY(-2px)}
+.rail-btn.reports-btn.active{border-color:rgba(255,45,111,.75);box-shadow:0 0 26px rgba(255,45,111,.55)}
+.rail-btn.reports-btn .rb-badge{position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;
+  padding:0 5px;border-radius:99px;background:#ff2d6f;color:#fff;font:800 10px system-ui;
+  display:flex;align-items:center;justify-content:center;border:2px solid #0a0a0f}
+</style>
+
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyModFeatures) return;
+  window.__sleepyModFeatures = true;
+  try { console.log("%c[Mod] features armed", "color:#0ff;font-weight:bold"); } catch(e){}
+
+  var E = function(s){ return String(s==null?"":s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;").replace(/'/g,"&#39;"); };
+
+  // ============================================================
+  // STATE
+  // ============================================================
+  var BLOCKED = new Set();       // uids I have blocked
+  var BLOCKED_ME = new Set();    // uids who blocked me
+  var REPORTS = [];              // owner cache
+  var REPORTS_LOADED = false;
+  var LAST_OPEN_REPORT = null;   // remember tab
+  var IS_OWNER = false;
+
+  // ============================================================
+  // LOAD
+  // ============================================================
+  async function loadBlocks(){
+    if (!window.ME) return;
+    try {
+      var a = await sb.from('blocked_users').select('blocked_id').eq('blocker_id', window.ME.id);
+      BLOCKED = new Set((a.data || []).map(function(x){ return x.blocked_id; }));
+      var b = await sb.from('blocked_users').select('blocker_id').eq('blocked_id', window.ME.id);
+      BLOCKED_ME = new Set((b.data || []).map(function(x){ return x.blocker_id; }));
+    } catch(e){ console.warn("[Mod] loadBlocks:", e.message); }
+  }
+
+  async function checkOwner(){
+    try {
+      var r = await sb.rpc('is_app_owner');
+      IS_OWNER = !!r.data;
+    } catch(e){ IS_OWNER = false; }
+    return IS_OWNER;
+  }
+
+  async function loadReports(){
+    if (!IS_OWNER) return [];
+    try {
+      var r = await sb.rpc('list_reports', { p_status: null });
+      if (r.error) throw r.error;
+      REPORTS = r.data || [];
+      // fetch profiles
+      var ids = [];
+      REPORTS.forEach(function(x){ ids.push(x.reporter_id); ids.push(x.reported_id); });
+      if (ids.length) await window.fetchProfiles(ids.filter(function(v,i,a){ return a.indexOf(v)===i; }));
+      REPORTS_LOADED = true;
+      return REPORTS;
+    } catch(e){
+      console.warn("[Mod] loadReports:", e.message);
+      return [];
+    }
+  }
+
+  // ============================================================
+  // BLOCK
+  // ============================================================
+  window.blockUser = async function(uid){
+    if (!window.ME || uid === window.ME.id) return;
+    try {
+      await sb.from('blocked_users').insert({ blocker_id: window.ME.id, blocked_id: uid });
+      BLOCKED.add(uid);
+      window.toast("Blocked", "You will no longer see their messages.", "ok");
+      if (window.renderChat) window.renderChat(false);
+    } catch(e){
+      if (e.code === '23505'){ window.toast("Already blocked", "", "err"); return; }
+      window.toast("Block failed", e.message || String(e), "err");
+    }
+  };
+
+  window.unblockUser = async function(uid){
+    try {
+      await sb.from('blocked_users').delete().eq('blocker_id', window.ME.id).eq('blocked_id', uid);
+      BLOCKED.delete(uid);
+      window.toast("Unblocked", "", "ok");
+      if (window.renderChat) window.renderChat(false);
+    } catch(e){ window.toast("Failed", e.message || String(e), "err"); }
+  };
+
+  window.isBlocked = function(uid){ return BLOCKED.has(uid); };
+
+  // Filter messages from blocked users at the messageHTML level
+  var _mh = window.messageHTML;
+  if (typeof _mh === 'function'){
+    window.messageHTML = function(m, grouped){
+      if (m && m.sender_id && BLOCKED.has(m.sender_id)){
+        return '';   // hide entirely
+      }
+      return _mh.apply(this, arguments);
+    };
+  }
+
+  // Filter conversation list
+  var _rp = window.renderPanel;
+  if (typeof _rp === 'function'){
+    window.renderPanel = function(){
+      var r = _rp.apply(this, arguments);
+      setTimeout(function(){
+        // Hide DM rows whose other member blocked / is blocked
+        document.querySelectorAll('[data-conv]').forEach(function(row){
+          var cid = row.dataset.conv;
+          var c = (window.CONVERSATIONS || []).filter(function(x){ return x.id === cid; })[0];
+          if (!c || c.is_group) return;
+          var other = c.memberIds.filter(function(id){ return id !== window.ME.id; })[0];
+          if (other && (BLOCKED.has(other) || BLOCKED_ME.has(other))){
+            row.style.display = 'none';
+          }
+        });
+      }, 20);
+      return r;
+    };
+  }
+
+  // ============================================================
+  // REPORT
+  // ============================================================
+  var REPORT_REASONS = [
+    'Spam or advertising',
+    'Harassment or bullying',
+    'Hate speech',
+    'Sexual content',
+    'Violence or threats',
+    'Impersonation',
+    'Scam or fraud',
+    'Other'
+  ];
+
+  window.openReportModal = function(uid){
+    if (!window.ME || uid === window.ME.id) return;
+    var p = window.PROFILES[uid] || { username: 'user', display_name: 'User' };
+    var html =
+      '<div style="display:flex;align-items:center;gap:12px;padding:12px;background:rgba(255,45,111,.06);border:1px solid rgba(255,45,111,.3);border-radius:10px;margin-bottom:16px">' +
+        window.avatarHTML(uid, 40) +
+        '<div><div style="font:600 13.5px system-ui">Reporting <b>' + E(p.display_name || p.username) + '</b></div>' +
+        '<div style="font-size:11.5px;color:#8f8fa8">@' + E(p.username) + '</div></div>' +
+      '</div>' +
+      '<div class="field"><label style="font:700 10.5px system-ui;letter-spacing:.08em;text-transform:uppercase;color:#5f6c85;display:block;margin-bottom:6px">Reason</label>' +
+        '<div class="mod-rating" id="rp-reasons">' +
+          REPORT_REASONS.map(function(r){
+            return '<button data-reason="' + E(r) + '">' + E(r) + '</button>';
+          }).join('') +
+        '</div>' +
+      '</div>' +
+      '<div class="field"><label style="font:700 10.5px system-ui;letter-spacing:.08em;text-transform:uppercase;color:#5f6c85;display:block;margin-bottom:6px">More details (optional)</label>' +
+        '<textarea id="rp-details" maxlength="500" placeholder="Describe what happened..." style="width:100%;min-height:90px;padding:11px 13px;border-radius:8px;background:#0a0a0f;border:1px solid #2a2a3a;color:#eef2f8;resize:vertical"></textarea></div>';
+
+    var selectedReason = null;
+
+    window.openModal("Report user", html, {
+      footer: '<button class="btn" id="rp-cancel">Cancel</button><button class="btn danger" id="rp-submit" disabled>Submit report</button>',
+      onMount: function(){
+        document.querySelectorAll('#rp-reasons [data-reason]').forEach(function(b){
+          b.onclick = function(){
+            selectedReason = b.dataset.reason;
+            document.querySelectorAll('#rp-reasons [data-reason]').forEach(function(x){ x.classList.remove('sel'); });
+            b.classList.add('sel');
+            document.getElementById('rp-submit').disabled = false;
+          };
+        });
+        document.getElementById('rp-cancel').onclick = window.closeModal;
+        document.getElementById('rp-submit').onclick = async function(){
+          if (!selectedReason) return;
+          var btn = document.getElementById('rp-submit');
+          btn.disabled = true; btn.textContent = 'Submitting…';
+          var details = (document.getElementById('rp-details').value || '').trim();
+          try {
+            var ctx = {};
+            if (window.CURRENT && window.CURRENT.type === 'dm' && window.CURRENT.conv){
+              ctx.conversation_id = window.CURRENT.conv.id;
+            } else if (window.CURRENT && window.CURRENT.type === 'server' && window.CURRENT.channel){
+              ctx.channel_id = window.CURRENT.channel.id;
+              ctx.server_id = window.CURRENT.server ? window.CURRENT.server.id : null;
+            }
+            var r = await sb.rpc('submit_report', {
+              p_reported: uid,
+              p_reason: selectedReason,
+              p_details: details || null,
+              p_context: ctx
+            });
+            if (r.error) throw r.error;
+            window.closeModal();
+            window.toast("Report sent", "Thanks — the owner will review it.", "ok");
+          } catch(e){
+            window.toast("Failed to submit", e.message || String(e), "err");
+            btn.disabled = false; btn.textContent = 'Submit report';
+          }
+        };
+      }
+    });
+  };
+
+  // ============================================================
+  // DELETE CALL FROM DM
+  // ============================================================
+  // "Calls" in this app are temporary — this removes voice_participants
+  // rows for the current conversation's channel and stops any active call.
+  window.endCallInConversation = async function(){
+    if (!window.CURRENT || window.CURRENT.type !== 'dm' || !window.CURRENT.conv) return;
+    var conv = window.CURRENT.conv;
+    var other = conv.memberIds.filter(function(id){ return id !== window.ME.id; })[0];
+    if (!other) return;
+
+    // If we're in a call with this person, leave it
+    try {
+      if (window.vs && window.vs.channelId && typeof window.leaveVoice === 'function'){
+        await window.leaveVoice();
+      }
+    } catch(e){}
+
+    // Remove call audio elements that belong to this peer
+    document.querySelectorAll('[data-voice-audio]').forEach(function(el){
+      var id = el.id || '';
+      if (id.indexOf(other) >= 0) el.remove();
+    });
+
+    // Remove any DM call banner/pip if it exists
+    document.querySelectorAll('#dm-call-bar, .dm-call-active').forEach(function(el){ el.remove(); });
+
+    window.toast("Call cleared", "Call session ended.", "ok");
+    if (window.renderChat) window.renderChat(false);
+  };
+
+  // ============================================================
+  // REPORTS CHANNEL (owner only)
+  // ============================================================
+  function injectReportsRailButton(){
+    var rail = document.getElementById('rail');
+    if (!rail) return;
+    if (!IS_OWNER){
+      var existing = rail.querySelector('.reports-btn');
+      if (existing) existing.remove();
+      return;
+    }
+    if (rail.querySelector('.reports-btn')) {
+      updateReportsBadge();
+      return;
+    }
+    var btn = document.createElement('button');
+    btn.className = 'rail-btn reports-btn';
+    btn.title = 'Reports';
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>';
+    btn.onclick = openReportsChannel;
+    var anchor = rail.querySelector('[data-rail="find"]') || rail.querySelector('[data-rail="create-server"]');
+    if (anchor) rail.insertBefore(btn, anchor);
+    else rail.appendChild(btn);
+    updateReportsBadge();
+  }
+
+  function updateReportsBadge(){
+    var btn = document.querySelector('.rail-btn.reports-btn');
+    if (!btn) return;
+    var open = REPORTS.filter(function(r){ return r.status === 'open'; }).length;
+    var b = btn.querySelector('.rb-badge');
+    if (open > 0){
+      if (b) b.textContent = open > 99 ? '99+' : open;
+      else btn.insertAdjacentHTML('beforeend', '<span class="rb-badge">' + open + '</span>');
+    } else if (b){
+      b.remove();
+    }
+  }
+
+  async function openReportsChannel(){
+    window.CURRENT = Object.assign({}, window.CURRENT || {}, { type: 'reports' });
+    if (!REPORTS_LOADED) await loadReports();
+    renderReportsView();
+  }
+  window.openReportsChannel = openReportsChannel;
+
+  function renderReportsView(){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+
+    var tabs = [
+      ['open', 'Open'],
+      ['reviewing', 'Reviewing'],
+      ['resolved', 'Resolved'],
+      ['dismissed', 'Dismissed'],
+      ['all', 'All']
+    ];
+    var cur = LAST_OPEN_REPORT || 'open';
+
+    var openCount = REPORTS.filter(function(r){ return r.status === 'open'; }).length;
+
+    var h = '<div id="reports-view">' +
+      '<div class="rp-header">' +
+        '<h2>🚨 Reports</h2>' +
+        (openCount > 0 ? '<span class="badge">' + openCount + ' open</span>' : '<span class="badge" style="background:rgba(0,230,118,.14);border-color:rgba(0,230,118,.4);color:#4ade80">All caught up</span>') +
+      '</div>' +
+      '<div class="rp-tabs">' +
+        tabs.map(function(t){
+          return '<button data-rtab="' + t[0] + '"' + (cur === t[0] ? ' class="active"' : '') + '>' + t[1] + '</button>';
+        }).join('') +
+      '</div>' +
+      '<div class="rp-list" id="rp-list"></div>' +
+    '</div>';
+
+    body.innerHTML = h;
+
+    body.querySelectorAll('[data-rtab]').forEach(function(b){
+      b.onclick = function(){ LAST_OPEN_REPORT = b.dataset.rtab; renderReportsView(); };
+    });
+
+    var filtered = cur === 'all' ? REPORTS : REPORTS.filter(function(r){ return r.status === cur; });
+    var list = document.getElementById('rp-list');
+    if (!filtered.length){
+      list.innerHTML = '<div class="rp-empty">No ' + (cur === 'all' ? '' : cur + ' ') + 'reports.</div>';
+      return;
+    }
+
+    list.innerHTML = filtered.map(function(r){
+      var reporter = window.PROFILES[r.reporter_id] || { username: 'user', display_name: 'User' };
+      var reported = window.PROFILES[r.reported_id] || { username: 'user', display_name: 'User' };
+      var when = new Date(r.created_at);
+      var actions = '';
+      if (r.status === 'open'){
+        actions = '<button class="primary" data-rp-act="reviewing" data-rp-id="' + r.id + '">Mark reviewing</button>' +
+                  '<button class="primary" data-rp-act="resolved" data-rp-id="' + r.id + '">Resolve</button>' +
+                  '<button class="danger" data-rp-act="dismissed" data-rp-id="' + r.id + '">Dismiss</button>';
+      } else if (r.status === 'reviewing'){
+        actions = '<button class="primary" data-rp-act="resolved" data-rp-id="' + r.id + '">Resolve</button>' +
+                  '<button class="danger" data-rp-act="dismissed" data-rp-id="' + r.id + '">Dismiss</button>';
+      } else {
+        actions = '<button data-rp-act="open" data-rp-id="' + r.id + '">Reopen</button>';
+      }
+      actions += '<button data-rp-view="' + r.reported_id + '">View reported user</button>';
+      if (r.context && r.context.conversation_id){
+        actions += '<button data-rp-goto="' + E(r.context.conversation_id) + '">Go to DM</button>';
+      }
+      if (r.context && r.context.channel_id){
+        actions += '<button data-rp-goto-ch="' + E(r.context.channel_id) + '">Go to channel</button>';
+      }
+      return '<div class="rp-card ' + r.status + '">' +
+        '<div class="top">' +
+          window.avatarHTML(r.reporter_id, 28) +
+          '<span class="who">' + E(reporter.display_name || reporter.username) + '</span>' +
+          '<span class="arrow">→</span>' +
+          window.avatarHTML(r.reported_id, 28) +
+          '<span class="target">' + E(reported.display_name || reported.username) + '</span>' +
+          '<span class="status ' + r.status + '">' + r.status + '</span>' +
+        '</div>' +
+        '<div class="reason">' + E(r.reason) + '</div>' +
+        (r.details ? '<div class="details">' + E(r.details) + '</div>' : '') +
+        '<div class="when">' + when.toLocaleString() + (r.resolved_at ? ' · resolved ' + new Date(r.resolved_at).toLocaleString() : '') + '</div>' +
+        (r.resolution_note ? '<div class="details" style="border-left:2px solid #4ade80">Note: ' + E(r.resolution_note) + '</div>' : '') +
+        '<div class="actions">' + actions + '</div>' +
+      '</div>';
+    }).join('');
+
+    // Wire actions
+    list.querySelectorAll('[data-rp-act]').forEach(function(b){
+      b.onclick = async function(){
+        var act = b.dataset.rpAct;
+        var id = b.dataset.rpId;
+        var note = null;
+        if (act === 'resolved' || act === 'dismissed'){
+          note = window.prompt("Optional resolution note:", "");
+          if (note === null) return; // cancelled
+        }
+        b.disabled = true;
+        try {
+          var r = await sb.rpc('update_report', { p_id: id, p_status: act, p_note: note || null });
+          if (r.error) throw r.error;
+          await loadReports();
+          renderReportsView();
+          updateReportsBadge();
+          window.toast("Updated", "Report marked " + act + ".", "ok");
+        } catch(e){
+          window.toast("Failed", e.message || String(e), "err");
+          b.disabled = false;
+        }
+      };
+    });
+    list.querySelectorAll('[data-rp-view]').forEach(function(b){
+      b.onclick = function(){ window.openProfile(b.dataset.rpView); };
+    });
+    list.querySelectorAll('[data-rp-goto]').forEach(function(b){
+      b.onclick = async function(){
+        var cid = b.dataset.rpGoto;
+        if (window.goConversation) await window.goConversation(cid);
+      };
+    });
+    list.querySelectorAll('[data-rp-goto-ch]').forEach(function(b){
+      b.onclick = async function(){
+        var chid = b.dataset.rpGotoCh;
+        if (window.goChannel) await window.goChannel(chid);
+      };
+    });
+  }
+
+  // Hook renderChat / renderChatHead for reports view
+  var _rc = window.renderChat;
+  if (typeof _rc === 'function'){
+    window.renderChat = function(){
+      if (window.CURRENT && window.CURRENT.type === 'reports'){
+        renderReportsView();
+        return;
+      }
+      return _rc.apply(this, arguments);
+    };
+  }
+
+  var _rch = window.renderChatHead;
+  if (typeof _rch === 'function'){
+    window.renderChatHead = function(){
+      if (window.CURRENT && window.CURRENT.type === 'reports'){
+        var el = document.getElementById('chat-head');
+        if (el) el.innerHTML =
+          '<button class="hbtn mobile-only" data-act="toggle-panel">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:20px;height:20px"><path d="M3 6h18M3 12h18M3 18h18"/></svg>' +
+          '</button>' +
+          '<div class="title"><span style="font-size:16px">🚨</span><span class="txt">Reports</span></div>' +
+          '<div class="spacer"></div>' +
+          '<button class="hbtn" id="rp-refresh" title="Refresh">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:17px;height:17px"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>' +
+          '</button>';
+        var rf = document.getElementById('rp-refresh');
+        if (rf) rf.onclick = async function(){
+          await loadReports();
+          renderReportsView();
+          updateReportsBadge();
+          window.toast("Refreshed", "", "ok");
+        };
+        return;
+      }
+      return _rch.apply(this, arguments);
+    };
+  }
+
+  var _rcomp = window.renderComposer;
+  if (typeof _rcomp === 'function'){
+    window.renderComposer = function(){
+      if (window.CURRENT && window.CURRENT.type === 'reports'){
+        var w = document.getElementById('composer-wrap'); if (w) w.innerHTML = '';
+        var t = document.getElementById('typing-bar'); if (t) t.innerHTML = '';
+        return;
+      }
+      return _rcomp.apply(this, arguments);
+    };
+  }
+
+  // ============================================================
+  // PROFILE MENU — add Block + Report buttons
+  // ============================================================
+  var _op = window.openProfile;
+  if (typeof _op === 'function'){
+    window.openProfile = function(uid){
+      _op.apply(this, arguments);
+      setTimeout(function(){
+        var body = document.getElementById('modal-body');
+        if (!body) return;
+        if (uid === window.ME.id) return;
+
+        var isBlocked = BLOCKED.has(uid);
+        var host = body.querySelector('[data-pd="edit"], [data-pd="dm"], [data-pd="add"]');
+        var row = host ? host.parentElement : body;
+
+        // Build a small action row that fits under the profile buttons
+        var extras = document.createElement('div');
+        extras.style.cssText = 'margin-top:10px;display:flex;gap:8px;flex-wrap:wrap';
+        extras.innerHTML =
+          '<button class="btn sm" id="mod-block" style="' + (isBlocked ? 'color:#ff8aa8;border-color:rgba(255,45,111,.4)' : '') + '">' +
+            (isBlocked ? '🚫 Unblock' : '🚫 Block') +
+          '</button>' +
+          '<button class="btn sm danger" id="mod-report">⚠️ Report</button>';
+        row.appendChild(extras);
+
+        document.getElementById('mod-block').onclick = async function(){
+          if (BLOCKED.has(uid)) await window.unblockUser(uid);
+          else await window.blockUser(uid);
+          window.closeModal();
+        };
+        document.getElementById('mod-report').onclick = function(){
+          window.closeModal();
+          setTimeout(function(){ window.openReportModal(uid); }, 100);
+        };
+      }, 300);
+    };
+  }
+
+  // Add "End call" button when we're in a DM conversation
+  function injectCallControls(){
+    if (!window.CURRENT || window.CURRENT.type !== 'dm' || !window.CURRENT.conv) return;
+    var head = document.getElementById('chat-head');
+    if (!head) return;
+    if (head.querySelector('[data-mod-call-end]')) return;
+
+    var other = window.CURRENT.conv.memberIds.filter(function(id){ return id !== window.ME.id; })[0];
+    if (!other) return;
+
+    var inCall = window.vs && window.vs.channelId;
+    var btn = document.createElement('button');
+    btn.className = 'hbtn';
+    btn.setAttribute('data-mod-call-end', '1');
+    btn.title = inCall ? 'End call' : 'Clear call data';
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:17px;height:17px"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
+    if (inCall) btn.style.color = '#ff8aa8';
+
+    var spacer = head.querySelector('.spacer');
+    if (spacer) spacer.insertAdjacentElement('afterend', btn);
+    else head.appendChild(btn);
+
+    btn.onclick = window.endCallInConversation;
+  }
+
+  var _rch2 = window.renderChatHead;
+  if (typeof _rch2 === 'function'){
+    window.renderChatHead = function(){
+      var r = _rch2.apply(this, arguments);
+      setTimeout(injectCallControls, 20);
+      return r;
+    };
+  }
+
+  // ============================================================
+  // RAIL BUTTON injection (interval, in case rail re-renders)
+  // ============================================================
+  setInterval(injectReportsRailButton, 1500);
+
+  // ============================================================
+  // BOOT
+  // ============================================================
+  setTimeout(async function(){
+    if (!window.ME) return;
+    await loadBlocks();
+    await checkOwner();
+    if (IS_OWNER){
+      await loadReports();
+      updateReportsBadge();
+    }
+    injectReportsRailButton();
+    console.log("[Mod] ready — owner:", IS_OWNER, "reports:", REPORTS.length, "blocked:", BLOCKED.size);
+  }, 4800);
+
+  // Expose
+  window.__modRefreshReports = async function(){
+    await loadReports();
+    updateReportsBadge();
+    if (window.CURRENT && window.CURRENT.type === 'reports') renderReportsView();
+  };
+
+  console.log("[Mod] features armed");
 })();
 </script>
 
