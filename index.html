@@ -22660,5 +22660,638 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
 })();
 </script>
 
+<!-- SLEEPY_MUSIC_PLAYER_V1 -->
+<style id="music-player-v1-css">
+/* ============================================================
+   Music player — cute pastel look
+   ============================================================ */
+.mp-v1 *{box-sizing:border-box}
+.mp-v1 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+
+/* --- First-run popup --- */
+.mp-popup-bg{position:fixed;inset:0;z-index:9990;background:rgba(4,4,8,.75);
+  backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:20px;
+  animation:mpFade .3s ease}
+@keyframes mpFade{from{opacity:0}to{opacity:1}}
+.mp-popup{width:340px;max-width:100%;background:linear-gradient(160deg,#fef6ff,#eef7ff);
+  border-radius:26px;padding:28px 24px 22px;text-align:center;
+  box-shadow:0 30px 80px rgba(0,0,0,.55),inset 0 -4px 0 rgba(180,74,255,.08);
+  animation:mpPop .45s cubic-bezier(.22,.61,.36,1);position:relative;overflow:hidden}
+.mp-popup::before{content:'';position:absolute;top:-40%;left:-20%;width:140%;height:140%;
+  background:radial-gradient(circle,rgba(255,180,220,.35),transparent 60%);pointer-events:none}
+@keyframes mpPop{from{opacity:0;transform:scale(.85) translateY(30px)}to{opacity:1;transform:none}}
+.mp-popup .emoji{font-size:64px;line-height:1;margin-bottom:8px;position:relative;z-index:1;
+  animation:mpBounce 2s ease-in-out infinite}
+@keyframes mpBounce{0%,100%{transform:translateY(0) rotate(-6deg)}50%{transform:translateY(-8px) rotate(6deg)}}
+.mp-popup h3{font:800 22px 'Inter',system-ui;color:#2a1a3e;margin-bottom:8px;position:relative;z-index:1}
+.mp-popup p{font:500 13.5px 'Inter',system-ui;color:#6a5a7a;line-height:1.5;margin-bottom:22px;position:relative;z-index:1}
+.mp-popup .btns{display:flex;gap:10px;position:relative;z-index:1}
+.mp-popup .btns button{flex:1;padding:14px;border-radius:14px;font:700 14px 'Inter',system-ui;
+  transition:all .18s}
+.mp-popup .btns .yes{background:linear-gradient(135deg,#c5a3ff,#8b7cff);color:#fff;
+  box-shadow:0 8px 20px rgba(139,124,255,.4)}
+.mp-popup .btns .yes:hover{transform:translateY(-2px);box-shadow:0 12px 26px rgba(139,124,255,.55)}
+.mp-popup .btns .no{background:#f0ebf5;color:#6a5a7a}
+.mp-popup .btns .no:hover{background:#e8e0f0}
+
+/* --- Panel --- */
+.mp-panel{position:fixed;z-index:9950;background:linear-gradient(160deg,#fef6ff,#eef7ff);
+  border-radius:20px;box-shadow:0 20px 50px rgba(0,0,0,.5),inset 0 -3px 0 rgba(180,74,255,.08);
+  padding:12px;display:flex;align-items:center;gap:10px;
+  min-width:260px;max-width:340px;
+  animation:mpIn .35s cubic-bezier(.22,.61,.36,1);
+  cursor:grab;user-select:none;touch-action:none;
+  font-family:'Inter',system-ui,sans-serif}
+.mp-panel.dragging{cursor:grabbing;transform:scale(1.02);
+  box-shadow:0 28px 60px rgba(0,0,0,.6)}
+@keyframes mpIn{from{opacity:0;transform:scale(.85) translateY(20px)}to{opacity:1;transform:none}}
+
+.mp-panel .icon-btn{width:36px;height:36px;border-radius:11px;flex:none;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(139,124,255,.15);color:#8b7cff;transition:all .15s}
+.mp-panel .icon-btn:hover{background:rgba(139,124,255,.28);transform:translateY(-1px)}
+.mp-panel .icon-btn.close{background:rgba(255,140,180,.18);color:#ff7fa3}
+.mp-panel .icon-btn.close:hover{background:rgba(255,140,180,.32)}
+.mp-panel .icon-btn svg{width:18px;height:18px}
+
+.mp-panel .info{flex:1;min-width:0;padding:0 4px;display:flex;flex-direction:column;gap:2px}
+.mp-panel .info .now{font:700 11px 'Inter',system-ui;letter-spacing:.08em;text-transform:uppercase;
+  color:#a898c0;display:flex;align-items:center;gap:5px}
+.mp-panel .info .now .eq{display:inline-flex;gap:2px;align-items:flex-end;height:11px}
+.mp-panel .info .now .eq i{width:2px;background:#8b7cff;border-radius:1px;
+  animation:mpEq 1s ease-in-out infinite}
+.mp-panel .info .now .eq i:nth-child(1){height:5px;animation-delay:0s}
+.mp-panel .info .now .eq i:nth-child(2){height:9px;animation-delay:.15s}
+.mp-panel .info .now .eq i:nth-child(3){height:6px;animation-delay:.3s}
+.mp-panel .info .now .eq i:nth-child(4){height:10px;animation-delay:.45s}
+@keyframes mpEq{0%,100%{transform:scaleY(.5)}50%{transform:scaleY(1.2)}}
+.mp-panel .info .song{font:700 13.5px 'Inter',system-ui;color:#2a1a3e;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mp-panel .info .song.paused{opacity:.55}
+.mp-panel .play-btn{width:40px;height:40px;border-radius:50%;flex:none;
+  background:linear-gradient(135deg,#c5a3ff,#8b7cff);color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 6px 16px rgba(139,124,255,.4);transition:all .15s}
+.mp-panel .play-btn:hover{transform:scale(1.06);box-shadow:0 8px 20px rgba(139,124,255,.55)}
+.mp-panel .play-btn svg{width:18px;height:18px}
+
+/* --- Song menu --- */
+.mp-menu{position:fixed;z-index:9960;width:300px;max-width:calc(100vw - 24px);
+  background:linear-gradient(160deg,#fef6ff,#eef7ff);
+  border-radius:18px;box-shadow:0 24px 60px rgba(0,0,0,.55);
+  padding:8px;font-family:'Inter',system-ui,sans-serif;
+  animation:mpIn .28s cubic-bezier(.22,.61,.36,1);max-height:400px;overflow-y:auto}
+.mp-menu::-webkit-scrollbar{width:6px}
+.mp-menu::-webkit-scrollbar-thumb{background:rgba(139,124,255,.3);border-radius:99px}
+.mp-menu .cat{padding:10px 12px 5px;font:800 10.5px 'Inter',system-ui;
+  letter-spacing:.12em;text-transform:uppercase;color:#a898c0}
+.mp-menu button.item{display:flex;align-items:center;gap:10px;width:100%;
+  padding:10px 12px;border-radius:11px;text-align:left;
+  font:600 13px 'Inter',system-ui;color:#3a2a4e;transition:all .12s}
+.mp-menu button.item:hover{background:rgba(139,124,255,.14)}
+.mp-menu button.item.active{background:linear-gradient(135deg,rgba(197,163,255,.28),rgba(139,124,255,.18));
+  box-shadow:inset 0 0 0 1px rgba(139,124,255,.45)}
+.mp-menu button.item .em{font-size:18px;width:24px;text-align:center;flex:none}
+.mp-menu button.item .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mp-menu button.item .dur{font:500 11px monospace;color:#a898c0}
+.mp-menu .add-row{display:flex;gap:6px;padding:8px 10px;margin-top:4px;
+  background:rgba(139,124,255,.08);border-radius:11px}
+.mp-menu .add-row input{flex:1;padding:9px 11px;border-radius:8px;
+  background:#fff;border:1px solid #e0d5f0;font:500 12.5px 'Inter',system-ui;
+  color:#3a2a4e;outline:none;min-width:0}
+.mp-menu .add-row input:focus{border-color:#8b7cff;box-shadow:0 0 0 3px rgba(139,124,255,.15)}
+.mp-menu .add-row button{padding:0 14px;border-radius:8px;
+  background:linear-gradient(135deg,#c5a3ff,#8b7cff);color:#fff;
+  font:700 12px 'Inter',system-ui;white-space:nowrap}
+.mp-menu .custom-item{position:relative}
+.mp-menu .custom-item .del{position:absolute;right:8px;top:50%;transform:translateY(-50%);
+  width:24px;height:24px;border-radius:50%;background:rgba(255,120,160,.18);color:#ff7fa3;
+  display:flex;align-items:center;justify-content:center;font-size:14px;line-height:1;
+  opacity:0;transition:opacity .15s;border:none;cursor:pointer}
+.mp-menu .custom-item:hover .del{opacity:1}
+
+/* --- Ball --- */
+.mp-ball{position:fixed;z-index:9950;width:52px;height:52px;border-radius:50%;
+  background:linear-gradient(135deg,#c5a3ff,#8b7cff);
+  color:#fff;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 10px 26px rgba(139,124,255,.5),
+             inset 0 -3px 0 rgba(0,0,0,.1),
+             inset 0 3px 0 rgba(255,255,255,.2);
+  cursor:grab;user-select:none;touch-action:none;font-size:22px;
+  transition:transform .15s;animation:mpBallIn .4s cubic-bezier(.22,.61,.36,1)}
+.mp-ball:hover{transform:scale(1.08)}
+.mp-ball.dragging{cursor:grabbing;transform:scale(1.12);
+  box-shadow:0 14px 32px rgba(139,124,255,.65)}
+@keyframes mpBallIn{from{opacity:0;transform:scale(0) rotate(-180deg)}to{opacity:1;transform:none}}
+.mp-ball .note{animation:mpNote 2.4s ease-in-out infinite;display:inline-block}
+@keyframes mpNote{0%,100%{transform:rotate(0)}25%{transform:rotate(-15deg)}75%{transform:rotate(15deg)}}
+.mp-ball.playing::after{content:'';position:absolute;inset:-4px;border-radius:50%;
+  border:2px solid rgba(197,163,255,.6);animation:mpRing 1.6s ease-out infinite}
+@keyframes mpRing{0%{transform:scale(1);opacity:.9}100%{transform:scale(1.5);opacity:0}}
+
+/* Mobile */
+@media (max-width:600px){
+  .mp-panel{min-width:230px;padding:10px}
+  .mp-panel .icon-btn{width:34px;height:34px}
+  .mp-menu{width:280px}
+}
+</style>
+
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyMusicPlayer) return;
+  window.__sleepyMusicPlayer = true;
+  try { console.log("%c[Music] armed 🎵", "color:#c5a3ff;font-weight:bold"); } catch(e){}
+
+  // ============================================================
+  // CONFIG
+  // ============================================================
+  // NOTE: SoundHelix tracks are explicitly free for any use as demos.
+  //       For Hindi / custom songs, users add their own URLs via the + button.
+  var SONGS = [
+    // ---- Chill / Lo-fi ----
+    { cat:'Chill', em:'🌸', name:'Sunset Drift',   url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' },
+    { cat:'Chill', em:'🌙', name:'Midnight Walk',  url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3' },
+    { cat:'Chill', em:'☕', name:'Coffee & Rain',   url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3' },
+    { cat:'Chill', em:'🌊', name:'Ocean Breeze',    url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-11.mp3' },
+
+    // ---- English vibes ----
+    { cat:'English', em:'🎸', name:'Skyline',       url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3' },
+    { cat:'English', em:'✨', name:'Neon Lights',   url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3' },
+    { cat:'English', em:'🎹', name:'Piano Dreams',  url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-6.mp3' },
+    { cat:'English', em:'🎺', name:'Night Drive',   url:'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-13.mp3' },
+
+    // ---- Hindi placeholder (user adds their own) ----
+    { cat:'Hindi', em:'🪷', name:'Add your Hindi song →', url:'' }
+  ];
+
+  // ============================================================
+  // STATE (persisted)
+  // ============================================================
+  var K = {
+    enabled:  'sleepy.music.enabled',      // 'yes' | 'no' | null
+    panelPos: 'sleepy.music.panelPos',
+    ballPos:  'sleepy.music.ballPos',
+    collapsed:'sleepy.music.collapsed',    // '1' | '0'
+    volume:   'sleepy.music.volume',
+    currentId:'sleepy.music.currentId',
+    custom:   'sleepy.music.custom'        // JSON array of custom songs
+  };
+  function get(k, d){ try { return localStorage.getItem(k) || d; } catch(e){ return d; } }
+  function set(k, v){ try { localStorage.setItem(k, v); } catch(e){} }
+  function getJSON(k, d){ try { var x = localStorage.getItem(k); return x ? JSON.parse(x) : d; } catch(e){ return d; } }
+  function setJSON(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
+
+  var S = {
+    panelEl: null,
+    ballEl: null,
+    menuEl: null,
+    audio: null,
+    currentIdx: -1,
+    enabled: get(K.enabled, null),
+    collapsed: get(K.collapsed, '0') === '1',
+    custom: getJSON(K.custom, []),
+    songs: [],   // computed from SONGS + custom
+    playing: false
+  };
+
+  function rebuildSongs(){
+    S.songs = SONGS.filter(function(x){ return x.url; }).concat(S.custom.map(function(c, i){
+      return { cat: 'My songs', em: c.em || '🎵', name: c.name, url: c.url, custom: true, cidx: i };
+    }));
+  }
+
+  // ============================================================
+  // AUDIO
+  // ============================================================
+  function ensureAudio(){
+    if (!S.audio){
+      S.audio = new Audio();
+      S.audio.loop = true;
+      S.audio.volume = parseFloat(get(K.volume, '0.6'));
+      S.audio.addEventListener('ended', function(){ playNext(); });
+      S.audio.addEventListener('play', function(){ S.playing = true; updatePanel(); updateBall(); });
+      S.audio.addEventListener('pause', function(){ S.playing = false; updatePanel(); updateBall(); });
+    }
+    return S.audio;
+  }
+
+  function playSong(idx){
+    rebuildSongs();
+    if (idx < 0 || idx >= S.songs.length) return;
+    var s = S.songs[idx];
+    if (!s.url) return;
+    S.currentIdx = idx;
+    set(K.currentId, s.name);
+    var a = ensureAudio();
+    a.src = s.url;
+    a.play().catch(function(e){ console.warn("[Music] play blocked:", e.message); });
+    updatePanel();
+    updateBall();
+  }
+
+  function playNext(){
+    if (S.currentIdx + 1 < S.songs.length) playSong(S.currentIdx + 1);
+    else playSong(0);
+  }
+  function playPrev(){
+    if (S.currentIdx - 1 >= 0) playSong(S.currentIdx - 1);
+    else playSong(S.songs.length - 1);
+  }
+
+  function togglePlayPause(){
+    if (!S.audio || !S.audio.src){
+      // Nothing loaded yet, play first
+      playSong(0);
+      return;
+    }
+    if (S.audio.paused) S.audio.play().catch(function(){});
+    else S.audio.pause();
+  }
+
+  // ============================================================
+  // UI — Popup
+  // ============================================================
+  function showFirstRunPopup(){
+    var el = document.createElement('div');
+    el.className = 'mp-v1 mp-popup-bg';
+    el.innerHTML =
+      '<div class="mp-popup">' +
+        '<div class="emoji">🎵</div>' +
+        '<h3>Enable Songs?</h3>' +
+        '<p>Want a cute little music player?<br>You can move it anywhere, pick your own tunes, or hide it anytime.</p>' +
+        '<div class="btns">' +
+          '<button class="no" id="mp-v1-no">No thanks</button>' +
+          '<button class="yes" id="mp-v1-yes">Yes, play 🎶</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(el);
+
+    document.getElementById('mp-v1-yes').onclick = function(){
+      S.enabled = 'yes';
+      set(K.enabled, 'yes');
+      el.remove();
+      // Start playing default so user hears something
+      playSong(0);
+      showPanel();
+    };
+    document.getElementById('mp-v1-no').onclick = function(){
+      S.enabled = 'no';
+      set(K.enabled, 'no');
+      el.remove();
+      showBall();
+    };
+  }
+
+  // ============================================================
+  // UI — Panel
+  // ============================================================
+  function showPanel(){
+    hideBall();
+    if (S.panelEl) return;
+
+    var el = document.createElement('div');
+    el.className = 'mp-v1 mp-panel';
+    el.innerHTML =
+      '<button class="icon-btn" id="mp-v1-menu" title="Songs">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>' +
+      '</button>' +
+      '<button class="play-btn" id="mp-v1-play" title="Play/Pause">' +
+        '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6,4 20,12 6,20"/></svg>' +
+      '</button>' +
+      '<div class="info">' +
+        '<div class="now"><span class="eq"><i></i><i></i><i></i><i></i></span>now playing</div>' +
+        '<div class="song" id="mp-v1-name">Select a song</div>' +
+      '</div>' +
+      '<button class="icon-btn close" id="mp-v1-close" title="Hide">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>' +
+      '</button>';
+    document.body.appendChild(el);
+    S.panelEl = el;
+
+    // Position
+    var pos = getJSON(K.panelPos, null);
+    if (pos && typeof pos.x === 'number'){
+      el.style.left = Math.max(8, Math.min(window.innerWidth - 320, pos.x)) + 'px';
+      el.style.top = Math.max(8, Math.min(window.innerHeight - 60, pos.y)) + 'px';
+    } else {
+      // Default: bottom-center
+      el.style.left = Math.max(8, (window.innerWidth / 2 - 160)) + 'px';
+      el.style.bottom = '24px';
+    }
+
+    document.getElementById('mp-v1-menu').onclick = function(e){
+      e.stopPropagation();
+      openMenu(el);
+    };
+    document.getElementById('mp-v1-play').onclick = function(e){
+      e.stopPropagation();
+      togglePlayPause();
+    };
+    document.getElementById('mp-v1-close').onclick = function(e){
+      e.stopPropagation();
+      collapseToBall();
+    };
+
+    makeDraggable(el, K.panelPos);
+    updatePanel();
+  }
+
+  function updatePanel(){
+    if (!S.panelEl) return;
+    var name = document.getElementById('mp-v1-name');
+    var btn  = document.getElementById('mp-v1-play');
+    if (!name || !btn) return;
+    rebuildSongs();
+    var s = S.songs[S.currentIdx];
+    if (s){
+      name.textContent = s.em + '  ' + s.name;
+      name.classList.toggle('paused', !S.playing);
+    } else {
+      name.textContent = 'Select a song';
+      name.classList.add('paused');
+    }
+    btn.innerHTML = S.playing
+      ? '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="6,4 20,12 6,20"/></svg>';
+  }
+
+  // ============================================================
+  // UI — Menu
+  // ============================================================
+  function openMenu(anchor){
+    closeMenu();
+    var el = document.createElement('div');
+    el.className = 'mp-v1 mp-menu';
+
+    rebuildSongs();
+    var grouped = {};
+    S.songs.forEach(function(s, i){
+      if (!grouped[s.cat]) grouped[s.cat] = [];
+      grouped[s.cat].push({ s: s, idx: i });
+    });
+
+    var h = '';
+    Object.keys(grouped).forEach(function(cat){
+      h += '<div class="cat">' + cat + '</div>';
+      grouped[cat].forEach(function(x){
+        var isActive = x.idx === S.currentIdx;
+        h += '<button class="item' + (isActive ? ' active' : '') + '" data-mp-idx="' + x.idx + '">' +
+          '<span class="em">' + x.s.em + '</span>' +
+          '<span class="nm">' + x.s.name + '</span>' +
+          (x.s.custom ? '<button class="del" data-mp-del="' + x.s.cidx + '" title="Remove">×</button>' : '') +
+        '</button>';
+      });
+    });
+
+    h += '<div class="cat">Add your own</div>' +
+      '<div class="add-row">' +
+        '<input id="mp-v1-url" placeholder="Paste MP3 URL" />' +
+        '<button id="mp-v1-add">+ Add</button>' +
+      '</div>';
+
+    el.innerHTML = h;
+    document.body.appendChild(el);
+    S.menuEl = el;
+
+    // Position above/next to panel
+    var r = anchor.getBoundingClientRect();
+    var w = 300, hgt = el.offsetHeight || 400;
+    var left = Math.min(window.innerWidth - w - 8, Math.max(8, r.left));
+    var top = r.top - hgt - 8;
+    if (top < 8){ top = r.bottom + 8; }
+    el.style.left = left + 'px';
+    el.style.top = top + 'px';
+
+    // Click item
+    el.querySelectorAll('[data-mp-idx]').forEach(function(btn){
+      btn.onclick = function(e){
+        if (e.target.closest('[data-mp-del]')) return;
+        var i = parseInt(btn.dataset.mpIdx, 10);
+        playSong(i);
+        closeMenu();
+      };
+    });
+    // Delete custom
+    el.querySelectorAll('[data-mp-del]').forEach(function(b){
+      b.onclick = function(e){
+        e.stopPropagation();
+        var ci = parseInt(b.dataset.mpDel, 10);
+        var c = S.custom[ci];
+        if (!c) return;
+        if (!confirm('Remove "' + c.name + '"?')) return;
+        S.custom.splice(ci, 1);
+        setJSON(K.custom, S.custom);
+        closeMenu();
+        openMenu(anchor);
+      };
+    });
+    // Add custom
+    var addBtn = el.querySelector('#mp-v1-add');
+    var inp = el.querySelector('#mp-v1-url');
+    function addCustom(){
+      var url = (inp.value || '').trim();
+      if (!url) return;
+      if (!/^https?:\/\//i.test(url)){
+        alert('Please paste a valid URL starting with http');
+        return;
+      }
+      // Try to guess a name from the URL
+      var nm = url.split('/').pop().split('?')[0].replace(/\.[a-z0-9]+$/i,'').replace(/[_-]+/g,' ');
+      if (nm.length > 30) nm = nm.slice(0, 30);
+      if (!nm) nm = 'My song ' + (S.custom.length + 1);
+      var newSong = { name: nm, url: url, em: '🎵' };
+      S.custom.push(newSong);
+      setJSON(K.custom, S.custom);
+      closeMenu();
+      openMenu(anchor);
+      // Auto-play
+      setTimeout(function(){ playSong(S.songs.length - 1); }, 80);
+    }
+    if (addBtn) addBtn.onclick = addCustom;
+    if (inp) inp.addEventListener('keydown', function(e){ if (e.key === 'Enter') addCustom(); });
+
+    // Click outside to close
+    setTimeout(function(){
+      document.addEventListener('mousedown', function onDoc(ev){
+        if (el.contains(ev.target)) return;
+        if (anchor.contains(ev.target)) return;
+        closeMenu();
+        document.removeEventListener('mousedown', onDoc, true);
+      }, true);
+    }, 0);
+  }
+
+  function closeMenu(){
+    if (S.menuEl){ try { S.menuEl.remove(); } catch(e){} S.menuEl = null; }
+  }
+
+  // ============================================================
+  // UI — Ball
+  // ============================================================
+  function showBall(){
+    hidePanel();
+    if (S.ballEl) return;
+    var el = document.createElement('div');
+    el.className = 'mp-v1 mp-ball';
+    el.innerHTML = '<span class="note">🎵</span>';
+    document.body.appendChild(el);
+    S.ballEl = el;
+
+    // Position — default bottom-right
+    var pos = getJSON(K.ballPos, null);
+    var w = window.innerWidth, h = window.innerHeight;
+    if (pos && typeof pos.x === 'number'){
+      el.style.left = Math.max(8, Math.min(w - 60, pos.x)) + 'px';
+      el.style.top = Math.max(8, Math.min(h - 60, pos.y)) + 'px';
+    } else {
+      el.style.left = (w - 72) + 'px';
+      el.style.top = (h - 72) + 'px';
+    }
+
+    makeDraggable(el, K.ballPos, function(){
+      // Drag threshold: if moved <4px, treat as click
+      return function(wasDrag){
+        if (!wasDrag) {
+          // Clicked — open panel
+          collapseFromBall();
+        }
+      };
+    });
+
+    updateBall();
+  }
+
+  function updateBall(){
+    if (!S.ballEl) return;
+    S.ballEl.classList.toggle('playing', S.playing);
+  }
+
+  function collapseToBall(){
+    set(K.collapsed, '1');
+    showBall();
+  }
+  function collapseFromBall(){
+    set(K.collapsed, '0');
+    showPanel();
+  }
+
+  function hidePanel(){
+    closeMenu();
+    if (S.panelEl){ try { S.panelEl.remove(); } catch(e){} S.panelEl = null; }
+  }
+  function hideBall(){
+    if (S.ballEl){ try { S.ballEl.remove(); } catch(e){} S.ballEl = null; }
+  }
+
+  // ============================================================
+  // DRAGGABLE — works for both panel and ball
+  // ============================================================
+  function makeDraggable(el, storageKey, onEndFactory){
+    var startX = 0, startY = 0, origLeft = 0, origTop = 0;
+    var dragging = false, moved = false, threshold = 4;
+
+    function pt(e){
+      var t = e.touches ? e.touches[0] : e;
+      return { x: t.clientX, y: t.clientY };
+    }
+
+    function onDown(e){
+      if (e.target.closest('button:not([data-mp-idx])') && !el.classList.contains('mp-ball')) return;
+      if (e.target.closest('.icon-btn, .play-btn')) return;
+      var p = pt(e);
+      startX = p.x; startY = p.y;
+      var r = el.getBoundingClientRect();
+      origLeft = r.left; origTop = r.top;
+      // Convert to left/top if currently using bottom
+      el.style.left = origLeft + 'px';
+      el.style.top = origTop + 'px';
+      el.style.bottom = 'auto';
+      dragging = true; moved = false;
+      el.classList.add('dragging');
+      e.preventDefault && e.preventDefault();
+    }
+    function onMove(e){
+      if (!dragging) return;
+      var p = pt(e);
+      var dx = p.x - startX, dy = p.y - startY;
+      if (Math.abs(dx) > threshold || Math.abs(dy) > threshold) moved = true;
+      var nx = Math.max(4, Math.min(window.innerWidth - el.offsetWidth - 4, origLeft + dx));
+      var ny = Math.max(4, Math.min(window.innerHeight - el.offsetHeight - 4, origTop + dy));
+      el.style.left = nx + 'px';
+      el.style.top = ny + 'px';
+    }
+    function onUp(e){
+      if (!dragging) return;
+      dragging = false;
+      el.classList.remove('dragging');
+      try { setJSON(storageKey, { x: parseInt(el.style.left, 10), y: parseInt(el.style.top, 10) }); } catch(err){}
+      var cb = onEndFactory && onEndFactory();
+      if (cb) cb(moved);
+    }
+
+    el.addEventListener('mousedown', onDown);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    el.addEventListener('touchstart', onDown, { passive: false });
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onUp);
+  }
+
+  // ============================================================
+  // LIFECYCLE
+  // ============================================================
+  function boot(){
+    // Wait for app + ME
+    if (!window.ME){
+      var tries = 0;
+      var t = setInterval(function(){
+        tries++;
+        if (window.ME || tries > 100){ clearInterval(t); boot(); }
+      }, 200);
+      return;
+    }
+    // Show popup if never asked
+    if (S.enabled === null){
+      // Small delay so app settles
+      setTimeout(showFirstRunPopup, 1500);
+      return;
+    }
+    if (S.enabled === 'no'){
+      showBall();
+      return;
+    }
+    // enabled === 'yes'
+    showPanel();
+    // Resume last song
+    var lastName = get(K.currentId, '');
+    rebuildSongs();
+    if (lastName){
+      for (var i = 0; i < S.songs.length; i++){
+        if (S.songs[i].name === lastName){ S.currentIdx = i; break; }
+      }
+    }
+    // Don't autoplay on load — browsers block it. Just set up.
+    if (S.currentIdx < 0) S.currentIdx = 0;
+    updatePanel();
+  }
+
+  // Also expose to reset the choice (for testing)
+  window.__musicResetChoice = function(){
+    try { localStorage.removeItem(K.enabled); } catch(e){}
+    location.reload();
+  };
+
+  // Start when app is ready
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(boot, 2000); });
+  if (document.readyState === 'complete' || document.readyState === 'interactive'){
+    setTimeout(boot, 2000);
+  }
+
+  console.log("%c[Music] armed 🎵", "color:#c5a3ff;font-weight:bold");
+})();
+</script>
+
 </body>
 </html>
