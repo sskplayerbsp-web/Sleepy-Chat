@@ -22090,5 +22090,575 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
 })();
 </script>
 
+<!-- SLEEPY_DM_CALLS_V2 -->
+<style id="dm-calls-v2-css">
+.bfv2-ring-bg{position:fixed;inset:0;z-index:9998;background:rgba(4,4,8,.85);backdrop-filter:blur(8px);
+  display:flex;align-items:center;justify-content:center;padding:20px;animation:bfv2fade .25s ease}
+@keyframes bfv2fade{from{opacity:0}to{opacity:1}}
+.bfv2-ring{width:340px;max-width:100%;background:linear-gradient(135deg,rgba(74,222,128,.14),rgba(94,231,215,.08)),#12121a;
+  border:1px solid rgba(74,222,128,.5);border-radius:22px;padding:32px 26px;text-align:center;
+  box-shadow:0 30px 90px rgba(0,0,0,.8);animation:bfv2pop .35s cubic-bezier(.22,.61,.36,1)}
+@keyframes bfv2pop{from{opacity:0;transform:scale(.9) translateY(20px)}to{opacity:1;transform:none}}
+.bfv2-ring .avatar-wrap{width:96px;height:96px;margin:0 auto 18px;position:relative;display:flex}
+.bfv2-ring .avatar-wrap::before{content:'';position:absolute;inset:-8px;border-radius:50%;
+  border:3px solid rgba(74,222,128,.65);animation:bfv2ringping 1.6s ease-out infinite}
+.bfv2-ring .avatar-wrap::after{content:'';position:absolute;inset:-8px;border-radius:50%;
+  border:3px solid rgba(94,231,215,.5);animation:bfv2ringping 1.6s ease-out infinite;animation-delay:.8s}
+@keyframes bfv2ringping{0%{transform:scale(1);opacity:.9}100%{transform:scale(1.35);opacity:0}}
+.bfv2-ring h3{font:800 22px system-ui;color:#eef2f8;margin-bottom:6px}
+.bfv2-ring .sub{font:500 13px system-ui;color:#8f8fa8;margin-bottom:26px}
+.bfv2-ring .btns{display:flex;gap:14px;justify-content:center}
+.bfv2-ring .btns button{width:64px;height:64px;border-radius:50%;border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:all .15s}
+.bfv2-ring .btns button:active{transform:scale(.94)}
+.bfv2-ring .btns .accept{background:linear-gradient(135deg,#4ade80,#22c55e);
+  box-shadow:0 10px 30px rgba(74,222,128,.5);animation:bfv2bounce 1.2s ease-in-out infinite}
+@keyframes bfv2bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.bfv2-ring .btns .decline{background:linear-gradient(135deg,#ff2d6f,#c41d54);
+  box-shadow:0 10px 30px rgba(255,45,111,.5)}
+.bfv2-ring .btns svg{width:28px;height:28px;color:#fff}
+.bfv2-ring .hint{font:500 11px system-ui;color:#5f6c85;margin-top:16px;letter-spacing:.04em}
+
+.bfv2-call-panel{position:fixed;left:20px;bottom:90px;z-index:9997;user-select:none;
+  background:linear-gradient(135deg,rgba(74,222,128,.16),rgba(94,231,215,.1)),#12121a;
+  border:1px solid rgba(74,222,128,.55);border-radius:16px;padding:14px 18px;
+  display:flex;align-items:center;gap:14px;box-shadow:0 24px 60px rgba(0,0,0,.75);
+  min-width:280px;cursor:grab;touch-action:none}
+.bfv2-call-panel.dragging{cursor:grabbing;opacity:.9}
+.bfv2-call-panel .avatar-wrap{width:44px;height:44px;flex:none;position:relative;display:flex}
+.bfv2-call-panel .avatar-wrap::after{content:'';position:absolute;inset:-3px;border-radius:50%;
+  border:2px solid rgba(74,222,128,.6);animation:bfv2ringping 2.2s ease-out infinite}
+.bfv2-call-panel .info{flex:1;min-width:0}
+.bfv2-call-panel .info .nm{font:700 14px system-ui;color:#eef2f8;margin-bottom:2px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.bfv2-call-panel .info .st{font:500 11.5px monospace;color:#4ade80;display:flex;align-items:center;gap:6px}
+.bfv2-call-panel .info .st i{width:8px;height:8px;border-radius:50%;background:#4ade80;
+  animation:bfv2pulse 1s infinite}
+@keyframes bfv2pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.bfv2-call-panel .btn{width:40px;height:40px;border-radius:11px;border:1px solid #2a2a3a;background:#1a1a26;
+  color:#9aa8c0;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex:none}
+.bfv2-call-panel .btn:hover{color:#eef2f8;border-color:#3a3a4d}
+.bfv2-call-panel .btn.muted{background:rgba(255,171,0,.14);border-color:rgba(255,171,0,.45);color:#ffc857}
+.bfv2-call-panel .btn.end{background:rgba(255,45,111,.14);border-color:rgba(255,45,111,.45);color:#ff8aa8}
+.bfv2-call-panel .btn.end:hover{background:rgba(255,45,111,.24)}
+.bfv2-call-panel .btn svg{width:18px;height:18px}
+
+.bfv2-call-toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);z-index:9999;
+  background:linear-gradient(90deg,rgba(74,222,128,.16),rgba(94,231,215,.1)),#12121a;
+  border:1px solid rgba(74,222,128,.55);border-radius:12px;padding:12px 18px;
+  box-shadow:0 20px 50px rgba(0,0,0,.7);animation:bfv2slide .3s ease;font:600 13px system-ui;color:#eef2f8;
+  display:flex;align-items:center;gap:10px;max-width:90vw}
+@keyframes bfv2slide{from{opacity:0;transform:translate(-50%,-20px)}to{opacity:1;transform:translate(-50%,0)}}
+.bfv2-call-toast button{background:rgba(255,255,255,.08);color:#eef2f8;border:none;padding:6px 12px;
+  border-radius:7px;font:600 12px system-ui;cursor:pointer}
+</style>
+
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyDMCallsV2) return;
+  window.__sleepyDMCallsV2 = true;
+  try { console.log("%c[DM Calls v2] armed — global inbox + ring modal", "color:#0f0;font-weight:bold"); } catch(e){}
+
+  var E = function(s){ return String(s==null?"":s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;").replace(/'/g,"&#39;"); };
+
+  // ============================================================
+  // STATE
+  // ============================================================
+  var inbox = null;              // my global incoming-call channel
+  var DMC = {
+    active: null,                // { otherId, room, outgoing, muteOn }
+    peer: null,                  // RTCPeerConnection
+    local: null,                 // MediaStream
+    remoteAudio: null,
+    roomChannel: null,           // shared WebRTC signaling room
+    ringModal: null,
+    ringAudio: null,
+    incoming: null,              // { otherId, fromChannel, sdp? }
+    timeoutT: null,
+    roomId: null                 // unique per call session
+  };
+
+  // ============================================================
+  // SOUND — synthesized ringtone (no external asset needed)
+  // ============================================================
+  function playRingtone(){
+    stopRingtone();
+    try {
+      var ctx = new (window.AudioContext || window.webkitAudioContext)();
+      var osc1 = ctx.createOscillator();
+      var osc2 = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc1.type = 'sine'; osc1.frequency.value = 440;
+      osc2.type = 'sine'; osc2.frequency.value = 480;
+      gain.gain.value = 0;
+      osc1.connect(gain); osc2.connect(gain); gain.connect(ctx.destination);
+      osc1.start(); osc2.start();
+      // Ring pattern: 1s on, 1s off
+      var t = 0;
+      for (var i = 0; i < 30; i++){ // 30 patterns = ~60s max
+        gain.gain.setValueAtTime(0.001, ctx.currentTime + t);
+        gain.gain.exponentialRampToValueAtTime(0.15, ctx.currentTime + t + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.9);
+        t += 2;
+      }
+      DMC.ringAudio = { ctx: ctx, stop: function(){ try { osc1.stop(); osc2.stop(); ctx.close(); } catch(e){} } };
+    } catch(e){}
+  }
+  function stopRingtone(){
+    if (DMC.ringAudio && DMC.ringAudio.stop){
+      try { DMC.ringAudio.stop(); } catch(e){}
+      DMC.ringAudio = null;
+    }
+  }
+
+  // ============================================================
+  // GLOBAL INBOX — subscribe to my own personal channel
+  // ============================================================
+  async function initInbox(){
+    if (!window.ME) return;
+    if (inbox){ try { sb.removeChannel(inbox); } catch(e){} }
+    var name = 'user-inbox-' + window.ME.id;
+    inbox = sb.channel(name, { config: { broadcast: { self: false } } });
+
+    inbox
+      .on('broadcast', { event: 'call-invite' }, function(payload){
+        handleIncomingInvite(payload.payload);
+      })
+      .on('broadcast', { event: 'call-cancel' }, function(payload){
+        // Caller cancelled before we answered
+        if (DMC.incoming && DMC.incoming.otherId === payload.payload.from){
+          dismissRingModal();
+          showCallToast('Call cancelled');
+        }
+      })
+      .on('broadcast', { event: 'call-decline' }, function(payload){
+        // They declined our outgoing call
+        if (DMC.active && DMC.active.outgoing && DMC.active.otherId === payload.payload.from){
+          showCallToast('Call declined');
+          endDMCall(false);
+        }
+      })
+      .on('broadcast', { event: 'call-accept' }, function(payload){
+        // They accepted our outgoing call → start WebRTC
+        if (DMC.active && DMC.active.outgoing && DMC.active.otherId === payload.payload.from){
+          showCallToast('Call connected');
+          startWebRTC(payload.payload.from, payload.payload.roomId);
+        }
+      })
+      .on('broadcast', { event: 'call-end' }, function(payload){
+        // Remote hung up mid-call
+        if (DMC.active && DMC.active.otherId === payload.payload.from){
+          showCallToast('Call ended');
+          endDMCall(false);
+        }
+        if (DMC.incoming && DMC.incoming.otherId === payload.payload.from){
+          dismissRingModal();
+        }
+      })
+      .subscribe(function(status){
+        if (status === 'SUBSCRIBED'){
+          console.log("[DM Calls v2] inbox ready:", name);
+        }
+      });
+  }
+
+  // ============================================================
+  // INCOMING CALL HANDLER
+  // ============================================================
+  async function handleIncomingInvite(payload){
+    if (!payload || !payload.from) return;
+    if (payload.from === window.ME.id) return;
+    if (DMC.active){ // already in a call → auto-decline
+      inbox.send({ type:'broadcast', event:'call-decline', payload: { from: window.ME.id } });
+      return;
+    }
+    if (DMC.incoming) return; // already ringing
+
+    DMC.incoming = { otherId: payload.from, roomId: payload.roomId };
+    await window.fetchProfiles([payload.from]);
+    showRingModal(payload.from, payload.roomId);
+
+    // Ring for 30s then auto-decline
+    DMC.timeoutT = setTimeout(function(){
+      if (DMC.incoming){
+        declineIncoming();
+      }
+    }, 30000);
+  }
+
+  function showRingModal(otherId, roomId){
+    dismissRingModal();
+    var p = window.PROFILES[otherId] || { display_name: 'User', username: 'user' };
+    var el = document.createElement('div');
+    el.className = 'bfv2-ring-bg';
+    el.id = 'bfv2-ring-bg';
+    el.innerHTML =
+      '<div class="bfv2-ring">' +
+        '<div class="avatar-wrap">' + window.avatarHTML(otherId, 96) + '</div>' +
+        '<h3>' + E(p.display_name || p.username) + '</h3>' +
+        '<div class="sub">Incoming call…</div>' +
+        '<div class="btns">' +
+          '<button class="decline" id="bfv2-ring-decline" title="Decline">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M1 1l22 22M21.5 10.5c1.3 1.3 2 3 2 5s-.7 3.7-2 5"/></svg>' +
+          '</button>' +
+          '<button class="accept" id="bfv2-ring-accept" title="Accept">' +
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>' +
+          '</button>' +
+        '</div>' +
+        '<div class="hint">Calling you · rings for 30 seconds</div>' +
+      '</div>';
+    document.body.appendChild(el);
+    DMC.ringModal = el;
+
+    document.getElementById('bfv2-ring-accept').onclick = acceptIncoming;
+    document.getElementById('bfv2-ring-decline').onclick = declineIncoming;
+
+    playRingtone();
+    if (navigator.vibrate) try { navigator.vibrate([300, 200, 300, 200, 300]); } catch(e){}
+
+    // Also fire a browser notification if allowed
+    try {
+      if ("Notification" in window && Notification.permission === "granted"){
+        var n = new Notification("Incoming call", { body: (p.display_name || p.username) + " is calling you" });
+        setTimeout(function(){ try { n.close(); } catch(e){} }, 15000);
+      }
+    } catch(e){}
+  }
+
+  function dismissRingModal(){
+    stopRingtone();
+    if (DMC.timeoutT){ clearTimeout(DMC.timeoutT); DMC.timeoutT = null; }
+    if (DMC.ringModal){ try { DMC.ringModal.remove(); } catch(e){} DMC.ringModal = null; }
+    DMC.incoming = null;
+  }
+
+  async function acceptIncoming(){
+    var inc = DMC.incoming;
+    if (!inc) return;
+    var otherId = inc.otherId;
+    var roomId = inc.roomId;
+
+    // Close ring
+    dismissRingModal();
+
+    // Notify caller that we accept
+    inbox.send({ type:'broadcast', event:'call-accept', payload: { from: window.ME.id, roomId: roomId } });
+
+    // Set up our side
+    DMC.active = { otherId: otherId, roomId: roomId, outgoing: false, muteOn: false };
+
+    // Get mic
+    try {
+      DMC.local = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch(e){
+      showCallToast("Mic blocked — allow it and try again");
+      inbox.send({ type:'broadcast', event:'call-end', payload: { from: window.ME.id } });
+      endDMCall(false);
+      return;
+    }
+
+    // Join WebRTC room and wait for caller's offer
+    await joinWebRTCRoom(otherId, roomId, false);
+    showCallPanel(otherId);
+  }
+
+  function declineIncoming(){
+    var inc = DMC.incoming;
+    if (!inc) return;
+    inbox.send({ type:'broadcast', event:'call-decline', payload: { from: window.ME.id } });
+    dismissRingModal();
+  }
+
+  // ============================================================
+  // OUTGOING CALL
+  // ============================================================
+  async function startDMCall(otherId){
+    if (DMC.active){ window.toast("Already in a call", "", "err"); return; }
+    if (!window.ME || otherId === window.ME.id) return;
+
+    var roomId = 'room-' + Date.now() + '-' + Math.random().toString(36).slice(2,7);
+    DMC.active = { otherId: otherId, roomId: roomId, outgoing: true, muteOn: false };
+
+    // Send invite to their personal inbox
+    // Note: sb channels are per-client; we send to the callee's inbox using a fresh
+    // channel that broadcasts on the same topic
+    var calleeInbox = sb.channel('user-inbox-' + otherId, { config: { broadcast: { self: false } } });
+    await new Promise(function(res){ calleeInbox.subscribe(function(s){ if (s === 'SUBSCRIBED') res(); }); });
+    calleeInbox.send({
+      type: 'broadcast', event: 'call-invite',
+      payload: { from: window.ME.id, username: window.ME.username, roomId: roomId }
+    });
+    // keep the channel open for a moment
+    setTimeout(function(){ try { sb.removeChannel(calleeInbox); } catch(e){} }, 3000);
+
+    showCallPanel(otherId, 'Calling…');
+
+    // Get mic in parallel
+    try {
+      DMC.local = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch(e){
+      showCallToast("Mic blocked — allow it and try again");
+      endDMCall(true);
+      return;
+    }
+
+    // If they don't accept within 30s, cancel
+    DMC.timeoutT = setTimeout(function(){
+      if (DMC.active && DMC.active.outgoing){
+        showCallToast('No answer');
+        // notify callee to close their ring
+        var ci = sb.channel('user-inbox-' + otherId, { config: { broadcast: { self: false } } });
+        ci.subscribe(function(s){ if (s === 'SUBSCRIBED'){ ci.send({ type:'broadcast', event:'call-cancel', payload: { from: window.ME.id } }); setTimeout(function(){ try { sb.removeChannel(ci); } catch(e){} }, 1500); } });
+        endDMCall(true);
+      }
+    }, 30000);
+  }
+
+  // ============================================================
+  // WEBRTC ROOM — shared signaling on 'call-room-<roomId>'
+  // ============================================================
+  async function joinWebRTCRoom(otherId, roomId, isCaller){
+    var roomName = 'call-room-' + roomId;
+    if (DMC.roomChannel){ try { sb.removeChannel(DMC.roomChannel); } catch(e){} }
+    DMC.roomChannel = sb.channel(roomName, { config: { broadcast: { self: false } } });
+
+    // Build peer connection now
+    DMC.peer = new RTCPeerConnection({ iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' }
+    ]});
+    if (DMC.local) DMC.local.getTracks().forEach(function(t){ DMC.peer.addTrack(t, DMC.local); });
+
+    DMC.peer.ontrack = function(event){
+      var remote = event.streams[0];
+      if (!DMC.remoteAudio){
+        DMC.remoteAudio = document.createElement('audio');
+        DMC.remoteAudio.autoplay = true;
+        DMC.remoteAudio.setAttribute('data-dm-call-audio','1');
+        document.body.appendChild(DMC.remoteAudio);
+      }
+      DMC.remoteAudio.srcObject = remote;
+      DMC.remoteAudio.play().catch(function(){});
+    };
+
+    DMC.peer.onicecandidate = function(e){
+      if (e.candidate && DMC.roomChannel){
+        DMC.roomChannel.send({ type:'broadcast', event:'ice', payload: { from: window.ME.id, candidate: e.candidate } });
+      }
+    };
+
+    DMC.roomChannel
+      .on('broadcast', { event: 'offer' }, async function(p){
+        if (p.payload.from === window.ME.id) return;
+        await DMC.peer.setRemoteDescription(new RTCSessionDescription(p.payload.sdp));
+        var ans = await DMC.peer.createAnswer();
+        await DMC.peer.setLocalDescription(ans);
+        DMC.roomChannel.send({ type:'broadcast', event:'answer', payload: { from: window.ME.id, sdp: DMC.peer.localDescription } });
+      })
+      .on('broadcast', { event: 'answer' }, async function(p){
+        if (p.payload.from === window.ME.id) return;
+        if (DMC.peer.signalingState === 'have-local-offer'){
+          await DMC.peer.setRemoteDescription(new RTCSessionDescription(p.payload.sdp));
+        }
+      })
+      .on('broadcast', { event: 'ice' }, function(p){
+        if (p.payload.from === window.ME.id) return;
+        if (DMC.peer && p.payload.candidate){
+          DMC.peer.addIceCandidate(new RTCIceCandidate(p.payload.candidate)).catch(function(){});
+        }
+      })
+      .on('broadcast', { event: 'hello' }, async function(p){
+        // Someone joined; the caller creates the offer
+        if (p.payload.from === window.ME.id) return;
+        if (DMC.peer.signalingState === 'stable' && DMC.active && DMC.active.outgoing){
+          var off = await DMC.peer.createOffer();
+          await DMC.peer.setLocalDescription(off);
+          DMC.roomChannel.send({ type:'broadcast', event:'offer', payload: { from: window.ME.id, sdp: DMC.peer.localDescription } });
+        }
+      })
+      .subscribe(function(status){
+        if (status === 'SUBSCRIBED'){
+          DMC.roomChannel.send({ type:'broadcast', event:'hello', payload: { from: window.ME.id } });
+          if (isCaller){
+            // Caller initiates offer slightly after joining
+            setTimeout(async function(){
+              if (DMC.peer.signalingState === 'stable'){
+                var off = await DMC.peer.createOffer();
+                await DMC.peer.setLocalDescription(off);
+                DMC.roomChannel.send({ type:'broadcast', event:'offer', payload: { from: window.ME.id, sdp: DMC.peer.localDescription } });
+              }
+            }, 400);
+          }
+        }
+      });
+  }
+
+  // Called when the callee accepts (from the caller's side)
+  async function startWebRTC(otherId, roomId){
+    if (!DMC.active) return;
+    if (DMC.timeoutT){ clearTimeout(DMC.timeoutT); DMC.timeoutT = null; }
+    await joinWebRTCRoom(otherId, roomId, true);
+    updateCallPanelStatus('Connected');
+  }
+
+  // ============================================================
+  // CALL PANEL UI
+  // ============================================================
+  function showCallPanel(otherId, initialStatus){
+    var old = document.getElementById('bfv2-call-panel');
+    if (old) old.remove();
+    var p = window.PROFILES[otherId] || { display_name: 'User' };
+    var el = document.createElement('div');
+    el.className = 'bfv2-call-panel';
+    el.id = 'bfv2-call-panel';
+    el.innerHTML =
+      '<div class="avatar-wrap">' + window.avatarHTML(otherId, 44) + '</div>' +
+      '<div class="info">' +
+        '<div class="nm">' + E(p.display_name || p.username) + '</div>' +
+        '<div class="st"><i></i><span id="bfv2-call-status">' + E(initialStatus || 'Connected') + '</span></div>' +
+      '</div>' +
+      '<button class="btn" id="bfv2-call-mute" title="Mute">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/></svg>' +
+      '</button>' +
+      '<button class="btn end" id="bfv2-call-end" title="End call">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>' +
+      '</button>';
+    document.body.appendChild(el);
+
+    document.getElementById('bfv2-call-end').onclick = function(){
+      // tell the other side
+      if (DMC.active && inbox){
+        inbox.send({ type:'broadcast', event:'call-end', payload: { from: window.ME.id } });
+      }
+      endDMCall(true);
+    };
+
+    document.getElementById('bfv2-call-mute').onclick = function(){
+      var on = !DMC.active.muteOn;
+      DMC.active.muteOn = on;
+      if (DMC.local) DMC.local.getAudioTracks().forEach(function(t){ t.enabled = !on; });
+      this.classList.toggle('muted', on);
+    };
+
+    // Draggable
+    var drag = false, sx = 0, sy = 0, elx = 0, ely = 0;
+    function pt(e){ var t = e.touches ? e.touches[0] : e; return { x: t.clientX, y: t.clientY }; }
+    el.addEventListener('mousedown', function(e){
+      if (e.target.closest('button')) return;
+      var r = el.getBoundingClientRect();
+      sx = e.clientX - r.left; sy = e.clientY - r.top;
+      el.style.left = r.left + 'px'; el.style.top = r.top + 'px'; el.style.bottom = 'auto';
+      drag = true; el.classList.add('dragging');
+    });
+    el.addEventListener('touchstart', function(e){
+      if (e.target.closest('button')) return;
+      var r = el.getBoundingClientRect();
+      var p0 = pt(e);
+      sx = p0.x - r.left; sy = p0.y - r.top;
+      el.style.left = r.left + 'px'; el.style.top = r.top + 'px'; el.style.bottom = 'auto';
+      drag = true; el.classList.add('dragging');
+    }, { passive: true });
+    function move(e){
+      if (!drag) return;
+      var p1 = pt(e);
+      var nx = Math.max(0, Math.min(window.innerWidth - el.offsetWidth, p1.x - sx));
+      var ny = Math.max(0, Math.min(window.innerHeight - el.offsetHeight, p1.y - sy));
+      el.style.left = nx + 'px'; el.style.top = ny + 'px';
+    }
+    document.addEventListener('mousemove', move);
+    document.addEventListener('touchmove', move, { passive: false });
+    document.addEventListener('mouseup', function(){ drag = false; el.classList.remove('dragging'); });
+    document.addEventListener('touchend', function(){ drag = false; el.classList.remove('dragging'); });
+  }
+
+  function updateCallPanelStatus(txt){
+    var el = document.getElementById('bfv2-call-status');
+    if (el) el.textContent = txt;
+  }
+
+  function endDMCall(notify){
+    if (DMC.timeoutT){ clearTimeout(DMC.timeoutT); DMC.timeoutT = null; }
+    if (DMC.peer){ try { DMC.peer.close(); } catch(e){} DMC.peer = null; }
+    if (DMC.local){ try { DMC.local.getTracks().forEach(function(t){ t.stop(); }); } catch(e){} DMC.local = null; }
+    if (DMC.remoteAudio){ try { DMC.remoteAudio.pause(); DMC.remoteAudio.srcObject = null; DMC.remoteAudio.remove(); } catch(e){} DMC.remoteAudio = null; }
+    if (DMC.roomChannel){ try { sb.removeChannel(DMC.roomChannel); } catch(e){} DMC.roomChannel = null; }
+    var panel = document.getElementById('bfv2-call-panel');
+    if (panel) panel.remove();
+    DMC.active = null;
+    DMC.roomId = null;
+  }
+
+  function showCallToast(txt){
+    var old = document.querySelector('.bfv2-call-toast');
+    if (old) old.remove();
+    var t = document.createElement('div');
+    t.className = 'bfv2-call-toast';
+    t.innerHTML = '<span>' + E(txt) + '</span><button>OK</button>';
+    document.body.appendChild(t);
+    t.querySelector('button').onclick = function(){ t.remove(); };
+    setTimeout(function(){ if (t.parentElement) t.remove(); }, 5000);
+  }
+
+  // ============================================================
+  // HOOKS — add Call button to DM headers
+  // ============================================================
+  function injectCallButton(){
+    if (!window.CURRENT || window.CURRENT.type !== 'dm' || !window.CURRENT.conv) return;
+    if (window.CURRENT.conv.is_group) return;
+    var head = document.getElementById('chat-head');
+    if (!head || head.querySelector('[data-dmv2-call]')) return;
+    var other = window.CURRENT.conv.memberIds.filter(function(id){ return id !== window.ME.id; })[0];
+    if (!other) return;
+    var b = document.createElement('button');
+    b.className = 'hbtn';
+    b.setAttribute('data-dmv2-call','1');
+    b.title = 'Start private call';
+    b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:17px;height:17px"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
+    var spacer = head.querySelector('.spacer');
+    if (spacer) spacer.insertAdjacentElement('afterend', b);
+    else head.appendChild(b);
+    b.onclick = function(){ startDMCall(other); };
+  }
+
+  var _rch = window.renderChatHead;
+  if (typeof _rch === 'function'){
+    window.renderChatHead = function(){
+      var r = _rch.apply(this, arguments);
+      setTimeout(injectCallButton, 30);
+      return r;
+    };
+  }
+  setInterval(injectCallButton, 1500);
+
+  // Request notification permission on first user gesture
+  document.addEventListener('click', function once(){
+    document.removeEventListener('click', once, true);
+    try {
+      if ("Notification" in window && Notification.permission === "default"){
+        Notification.requestPermission();
+      }
+    } catch(e){}
+  }, true);
+
+  // Expose
+  window.__startDMCall = startDMCall;
+  window.__endDMCall = function(){ endDMCall(true); };
+
+  // ============================================================
+  // BOOT
+  // ============================================================
+  setTimeout(function(){
+    if (!window.ME) return;
+    initInbox();
+    console.log("[DM Calls v2] boot — waiting for calls on user-inbox-" + window.ME.id);
+  }, 4500);
+
+  console.log("[DM Calls v2] armed");
+})();
+</script>
+
 </body>
 </html>
