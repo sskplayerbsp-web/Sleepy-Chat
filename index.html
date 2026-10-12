@@ -23796,5 +23796,535 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
 })();
 </script>
 
+<!-- SLEEPY_AI_VOICE_V1 -->
+<style id="ai-voice-v1-css">
+/* Mic button in composer */
+.ai-voice-mic.recording{
+  background:linear-gradient(135deg,#ff2d6f,#c41d54)!important;
+  color:#fff!important;animation:aiVoicePulse 1.2s infinite}
+@keyframes aiVoicePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.08)}}
+
+/* Speaker toggle in AI DM header */
+.ai-voice-spk.on{background:rgba(139,124,255,.2)!important;border-color:rgba(139,124,255,.5)!important;color:#c4b8ff!important}
+
+/* Listening overlay pill */
+.ai-listening{
+  position:fixed;left:50%;bottom:100px;transform:translateX(-50%);
+  z-index:660;background:linear-gradient(135deg,rgba(255,45,111,.2),rgba(139,124,255,.15)),#12121a;
+  border:1px solid rgba(255,45,111,.5);border-radius:20px;
+  padding:14px 22px;display:flex;align-items:center;gap:14px;
+  box-shadow:0 20px 50px rgba(0,0,0,.7);
+  font:600 14px 'Inter',system-ui;color:#eef2f8;
+  animation:aiListIn .3s ease;min-width:240px}
+@keyframes aiListIn{from{opacity:0;transform:translate(-50%,20px)}to{opacity:1;transform:translate(-50%,0)}}
+.ai-listening .wave{display:flex;gap:3px;align-items:center;height:22px}
+.ai-listening .wave i{width:3px;background:#ff2d6f;border-radius:2px;animation:aiWave 1s ease-in-out infinite}
+.ai-listening .wave i:nth-child(1){animation-delay:0s;height:8px}
+.ai-listening .wave i:nth-child(2){animation-delay:.1s;height:14px}
+.ai-listening .wave i:nth-child(3){animation-delay:.2s;height:20px}
+.ai-listening .wave i:nth-child(4){animation-delay:.3s;height:14px}
+.ai-listening .wave i:nth-child(5){animation-delay:.4s;height:8px}
+@keyframes aiWave{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1)}}
+.ai-listening .lbl{flex:1;font-size:12.5px;color:#ff8aa8}
+.ai-listening .txt{font-size:11.5px;color:#8f8fa8;margin-top:2px;max-width:260px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;display:block}
+.ai-listening .stop{width:36px;height:36px;border-radius:50%;background:rgba(255,45,111,.25);
+  border:1px solid rgba(255,45,111,.5);color:#ff8aa8;cursor:pointer;display:flex;align-items:center;
+  justify-content:center;font-size:16px;flex:none}
+
+/* Speaking indicator */
+.ai-speaking-badge{
+  display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:99px;
+  background:rgba(139,124,255,.15);border:1px solid rgba(139,124,255,.4);
+  font:700 9.5px system-ui;letter-spacing:.05em;text-transform:uppercase;color:#c4b8ff;
+  margin-left:6px;vertical-align:middle}
+.ai-speaking-badge i{width:6px;height:6px;border-radius:50%;background:#c4b8ff;animation:aiVoicePulse 1s infinite}
+
+/* Mute all TTS button */
+.ai-voice-stop{position:fixed;right:20px;bottom:80px;z-index:660;
+  width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#ff2d6f,#c41d54);
+  color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 12px 30px rgba(255,45,111,.5);animation:aiListIn .2s ease}
+.ai-voice-stop svg{width:22px;height:22px}
+</style>
+
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyAIVoice) return;
+  window.__sleepyAIVoice = true;
+  try { console.log("%c[AI Voice] armed 🎤🔊", "color:#c4b8ff;font-weight:bold"); } catch(e){}
+
+  var AI_BOT_ID = '9abc016a-c7a7-41ee-9d8c-305f665401eb';
+  var VOICE_PREF_KEY = 'sleepy.ai.voice';
+
+  // ============================================================
+  // PREFERENCES
+  // ============================================================
+  function loadPrefs(){
+    try { return Object.assign({ speakReplies: false, autoSend: true, lang: 'en-US' },
+                                JSON.parse(localStorage.getItem(VOICE_PREF_KEY) || '{}')); }
+    catch(e){ return { speakReplies: false, autoSend: true, lang: 'en-US' }; }
+  }
+  function savePrefs(p){
+    try { localStorage.setItem(VOICE_PREF_KEY, JSON.stringify(p)); } catch(e){}
+  }
+  var prefs = loadPrefs();
+
+  // ============================================================
+  // CHECK SUPPORT
+  // ============================================================
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var hasSR = !!SR;
+  var hasTTS = 'speechSynthesis' in window;
+  try { console.log("[AI Voice] speech-recognition:", hasSR, "| speech-synthesis:", hasTTS); } catch(e){}
+
+  // ============================================================
+  // SPEECH RECOGNITION (voice input)
+  // ============================================================
+  var recog = null;
+  var recogBuffer = '';
+  var recogActive = false;
+  var listeningEl = null;
+
+  function isInAIDM(){
+    if (!window.CURRENT || window.CURRENT.type !== 'dm') return false;
+    var c = window.CURRENT.conv;
+    if (!c || !c.memberIds) return false;
+    return c.memberIds.indexOf(AI_BOT_ID) >= 0;
+  }
+
+  function startListening(){
+    if (!hasSR){
+      window.toast("Voice not supported", "This browser doesn't have speech recognition. Try Chrome, Edge, or Safari.", "err");
+      return;
+    }
+    if (recogActive) return;
+
+    recogBuffer = '';
+    recog = new SR();
+    recog.lang = prefs.lang || 'en-US';
+    recog.continuous = false;
+    recog.interimResults = true;
+    recog.maxAlternatives = 1;
+
+    recog.onstart = function(){
+      recogActive = true;
+      showListeningUI('');
+      var mic = document.getElementById('ai-voice-mic');
+      if (mic) mic.classList.add('recording');
+      if (navigator.vibrate) try { navigator.vibrate(30); } catch(e){}
+    };
+
+    recog.onresult = function(e){
+      var interim = '';
+      var finalText = '';
+      for (var i = e.resultIndex; i < e.results.length; i++){
+        var t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) finalText += t;
+        else interim += t;
+      }
+      var shown = (recogBuffer + ' ' + finalText + ' ' + interim).trim();
+      updateListeningUI(shown);
+      if (finalText){
+        recogBuffer = (recogBuffer + ' ' + finalText).trim();
+      }
+    };
+
+    recog.onerror = function(e){
+      try { console.log("[AI Voice] recognition error:", e.error); } catch(_){}
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed'){
+        window.toast("Mic blocked", "Allow microphone access in your browser settings.", "err");
+      } else if (e.error === 'no-speech'){
+        // no toast for no-speech, just stop
+      } else if (e.error === 'network'){
+        window.toast("Network error", "Speech recognition needs internet.", "err");
+      } else {
+        window.toast("Voice error", e.error || String(e), "err");
+      }
+      stopListening(true);
+    };
+
+    recog.onend = function(){
+      var text = recogBuffer.trim();
+      stopListening(false);
+      if (text){
+        handleTranscript(text);
+      }
+    };
+
+    try {
+      recog.start();
+    } catch(e){
+      window.toast("Could not start", e.message || String(e), "err");
+      stopListening(true);
+    }
+  }
+
+  function stopListening(cancelled){
+    recogActive = false;
+    hideListeningUI();
+    var mic = document.getElementById('ai-voice-mic');
+    if (mic) mic.classList.remove('recording');
+    if (recog){
+      try { recog.abort(); } catch(e){}
+      recog = null;
+    }
+    if (cancelled) recogBuffer = '';
+  }
+
+  function showListeningUI(initial){
+    hideListeningUI();
+    var el = document.createElement('div');
+    el.className = 'ai-listening';
+    el.id = 'ai-listening';
+    el.innerHTML =
+      '<div class="wave"><i></i><i></i><i></i><i></i><i></i></div>' +
+      '<div style="flex:1;min-width:0">' +
+        '<div class="lbl">Listening…</div>' +
+        '<span class="txt" id="ai-listen-txt">' + (initial || 'speak now') + '</span>' +
+      '</div>' +
+      '<button class="stop" id="ai-listen-stop" title="Stop">✕</button>';
+    document.body.appendChild(el);
+    document.getElementById('ai-listen-stop').onclick = function(){ stopListening(true); };
+    listeningEl = el;
+  }
+  function updateListeningUI(text){
+    var t = document.getElementById('ai-listen-txt');
+    if (t) t.textContent = text || 'speak now';
+  }
+  function hideListeningUI(){
+    if (listeningEl){ try { listeningEl.remove(); } catch(e){} listeningEl = null; }
+  }
+
+  function handleTranscript(text){
+    var ta = document.getElementById('composer-input');
+    if (!ta){
+      window.toast("Can't send", "Composer not ready.", "err");
+      return;
+    }
+    ta.value = text;
+    if (window.autosize) window.autosize(ta);
+    if (prefs.autoSend){
+      setTimeout(function(){
+        // Prefer the AI-specific send path so voice goes through correctly
+        var btn = document.getElementById('send-btn');
+        if (btn) btn.click();
+      }, 120);
+    } else {
+      ta.focus();
+    }
+  }
+
+  // ============================================================
+  // SPEECH SYNTHESIS (voice output)
+  // ============================================================
+  var currentUtter = null;
+  var speakingBadge = null;
+
+  function speak(text){
+    if (!hasTTS) return;
+    if (!prefs.speakReplies) return;
+
+    // Strip markdown/code/emoji noise for cleaner speech
+    var clean = String(text || '')
+      .replace(/```[\s\S]*?```/g, ' code block ')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1')
+      .replace(/__([^_]+)__/g, '$1')
+      .replace(/~~([^~]+)~~/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/https?:\/\/\S+/g, ' link ')
+      .replace(/[#>*_\-]{2,}/g, ' ')
+      .replace(/\n{2,}/g, '. ')
+      .replace(/\n/g, ', ')
+      .trim();
+
+    if (!clean) return;
+
+    // Cancel any current speaking
+    window.speechSynthesis.cancel();
+
+    var u = new SpeechSynthesisUtterance(clean);
+    u.lang = prefs.lang || 'en-US';
+    u.rate = 1.0;
+    u.pitch = 1.0;
+    u.volume = 1.0;
+
+    // Try to pick a pleasant voice
+    try {
+      var voices = window.speechSynthesis.getVoices();
+      var preferred = voices.filter(function(v){ return v.lang.indexOf(prefs.lang.split('-')[0]) === 0; });
+      var femaleNames = ['Samantha','Google US English','Microsoft Aria','Microsoft Jenny','Karen','Moira','Tessa'];
+      var chosen = null;
+      for (var i = 0; i < femaleNames.length; i++){
+        for (var j = 0; j < preferred.length; j++){
+          if (preferred[j].name.indexOf(femaleNames[i]) >= 0){ chosen = preferred[j]; break; }
+        }
+        if (chosen) break;
+      }
+      if (!chosen && preferred.length) chosen = preferred[0];
+      if (chosen) u.voice = chosen;
+    } catch(e){}
+
+    u.onstart = function(){ showSpeakingBadge(); };
+    u.onend = function(){ hideSpeakingBadge(); currentUtter = null; };
+    u.onerror = function(){ hideSpeakingBadge(); currentUtter = null; };
+
+    currentUtter = u;
+    window.speechSynthesis.speak(u);
+  }
+
+  function stopSpeaking(){
+    try { window.speechSynthesis.cancel(); } catch(e){}
+    hideSpeakingBadge();
+    currentUtter = null;
+    var stopBtn = document.getElementById('ai-voice-stop-all');
+    if (stopBtn) stopBtn.remove();
+  }
+
+  function showSpeakingBadge(){
+    hideSpeakingBadge();
+    var badge = document.createElement('div');
+    badge.className = 'ai-speaking-badge';
+    badge.id = 'ai-speaking-badge';
+    badge.innerHTML = '<i></i>Speaking';
+    // Attach to the last AI message
+    var msgs = document.querySelectorAll('.msg[data-ai="1"]');
+    if (msgs.length) msgs[msgs.length - 1].querySelector('.head').appendChild(badge);
+
+    // Show the global stop button
+    if (!document.getElementById('ai-voice-stop-all')){
+      var stopBtn = document.createElement('button');
+      stopBtn.id = 'ai-voice-stop-all';
+      stopBtn.className = 'ai-voice-stop';
+      stopBtn.title = 'Stop speaking';
+      stopBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+      stopBtn.onclick = stopSpeaking;
+      document.body.appendChild(stopBtn);
+    }
+  }
+  function hideSpeakingBadge(){
+    var b = document.getElementById('ai-speaking-badge');
+    if (b) b.remove();
+    var s = document.getElementById('ai-voice-stop-all');
+    if (s) s.remove();
+  }
+
+  // Hook new AI messages to speak them
+  var _mh = window.messageHTML;
+  if (typeof _mh === 'function'){
+    window.messageHTML = function(m, grouped){
+      var html = _mh.apply(this, arguments);
+      if (m && m.sender_id === AI_BOT_ID && prefs.speakReplies && !grouped){
+        // Speak after render — use setTimeout to avoid blocking render
+        setTimeout(function(){ speak(m.content || ''); }, 80);
+      }
+      return html;
+    };
+  }
+
+  // ============================================================
+  // INJECT UI — mic in composer + speaker toggle in header
+  // ============================================================
+  function injectMicButton(){
+    if (!isInAIDM()) return;
+    var comp = document.querySelector('#composer-wrap .composer');
+    if (!comp) return;
+    if (comp.querySelector('#ai-voice-mic')) return;
+
+    var mic = document.createElement('button');
+    mic.className = 'cbtn ai-voice-mic';
+    mic.id = 'ai-voice-mic';
+    mic.title = hasSR ? 'Speak to AI' : 'Voice not supported in this browser';
+    mic.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:17px;height:17px"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/></svg>';
+    if (!hasSR){
+      mic.style.opacity = '.4';
+      mic.style.cursor = 'not-allowed';
+    }
+    mic.onclick = function(e){
+      e.preventDefault();
+      if (!hasSR) return;
+      if (recogActive) stopListening(true);
+      else startListening();
+    };
+
+    var send = comp.querySelector('#send-btn');
+    if (send) comp.insertBefore(mic, send);
+    else comp.appendChild(mic);
+  }
+
+  function injectSpeakerToggle(){
+    if (!isInAIDM()) return;
+    var head = document.getElementById('chat-head');
+    if (!head) return;
+    if (head.querySelector('#ai-voice-spk')) return;
+    if (!hasTTS) return;
+
+    var btn = document.createElement('button');
+    btn.className = 'hbtn ai-voice-spk' + (prefs.speakReplies ? ' on' : '');
+    btn.id = 'ai-voice-spk';
+    btn.title = prefs.speakReplies ? 'Voice replies: ON' : 'Voice replies: OFF';
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:17px;height:17px"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
+    btn.onclick = function(){
+      prefs.speakReplies = !prefs.speakReplies;
+      savePrefs(prefs);
+      btn.classList.toggle('on', prefs.speakReplies);
+      btn.title = prefs.speakReplies ? 'Voice replies: ON' : 'Voice replies: OFF';
+      window.toast(prefs.speakReplies ? "Voice replies on" : "Voice replies off",
+                   prefs.speakReplies ? "The AI will speak." : "", "ok");
+      if (!prefs.speakReplies) stopSpeaking();
+    };
+
+    var spacer = head.querySelector('.spacer');
+    if (spacer) spacer.insertAdjacentElement('afterend', btn);
+    else head.appendChild(btn);
+  }
+
+  // Re-inject when AI DM is opened or re-rendered
+  var _rch = window.renderChatHead;
+  if (typeof _rch === 'function'){
+    window.renderChatHead = function(){
+      var r = _rch.apply(this, arguments);
+      setTimeout(injectSpeakerToggle, 30);
+      setTimeout(injectMicButton, 30);
+      return r;
+    };
+  }
+  var _rcomp = window.renderComposer;
+  if (typeof _rcomp === 'function'){
+    window.renderComposer = function(){
+      var r = _rcomp.apply(this, arguments);
+      setTimeout(injectMicButton, 20);
+      return r;
+    };
+  }
+  setInterval(function(){
+    injectMicButton();
+    injectSpeakerToggle();
+  }, 1500);
+
+  // ============================================================
+  // SETTINGS — add voice preferences to AI settings modal
+  // ============================================================
+  var _openAI = window.__openAISettings;
+  if (typeof _openAI === 'function'){
+    window.__openAISettings = function(){
+      _openAI.apply(this, arguments);
+      setTimeout(function(){
+        var body = document.getElementById('modal-body');
+        if (!body || body.querySelector('[data-ai-voice-sec]')) return;
+        var sec = document.createElement('div');
+        sec.setAttribute('data-ai-voice-sec', '1');
+        sec.style.cssText = 'margin-top:14px;padding:14px;border-radius:12px;background:rgba(139,124,255,.06);border:1px solid rgba(139,124,255,.28)';
+        sec.innerHTML =
+          '<div style="font:700 11px system-ui;letter-spacing:.08em;text-transform:uppercase;color:#c4b8ff;margin-bottom:10px">🎤 Voice</div>' +
+          '<label style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;background:rgba(0,0,0,.2);margin-bottom:8px;cursor:pointer">' +
+            '<input type="checkbox" id="ai-speak" ' + (prefs.speakReplies ? 'checked' : '') + ' style="accent-color:#8b7cff;width:16px;height:16px">' +
+            '<span style="font:500 13px system-ui;color:#eef2f8">Speak AI replies out loud</span>' +
+          '</label>' +
+          '<label style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;background:rgba(0,0,0,.2);margin-bottom:8px;cursor:pointer">' +
+            '<input type="checkbox" id="ai-autosend" ' + (prefs.autoSend ? 'checked' : '') + ' style="accent-color:#8b7cff;width:16px;height:16px">' +
+            '<span style="font:500 13px system-ui;color:#eef2f8">Auto-send after speaking</span>' +
+          '</label>' +
+          '<div style="font:700 10.5px system-ui;letter-spacing:.08em;text-transform:uppercase;color:#5f6c85;margin:10px 0 6px">Language</div>' +
+          '<select id="ai-lang" style="width:100%;padding:9px 11px;border-radius:8px;background:#0a0a0f;border:1px solid #2a2a3a;color:#eef2f8;font:500 13px system-ui">' +
+            ['en-US','en-GB','en-IN','hi-IN','es-ES','fr-FR','de-DE','pt-BR','ja-JP','ko-KR','zh-CN','ar-SA','ru-RU','it-IT'].map(function(l){
+              return '<option value="' + l + '"' + (prefs.lang === l ? ' selected' : '') + '>' + l + '</option>';
+            }).join('') +
+          '</select>' +
+          '<div style="font-size:11px;color:#8f8fa8;margin-top:8px;line-height:1.5">Uses your browser\'s built-in speech engine. ' +
+          'Works best in Chrome, Edge, Safari, Android Chrome.</div>';
+        body.appendChild(sec);
+
+        document.getElementById('ai-speak').onchange = function(){
+          prefs.speakReplies = this.checked; savePrefs(prefs);
+        };
+        document.getElementById('ai-autosend').onchange = function(){
+          prefs.autoSend = this.checked; savePrefs(prefs);
+        };
+        document.getElementById('ai-lang').onchange = function(){
+          prefs.lang = this.value; savePrefs(prefs);
+        };
+      }, 150);
+    };
+  }
+
+  // ============================================================
+  // STOP SPEAKING when leaving the AI DM or the page
+  // ============================================================
+  var _gc = window.goConversation;
+  if (typeof _gc === 'function'){
+    window.goConversation = async function(cid){
+      stopSpeaking();
+      return _gc.apply(this, arguments);
+    };
+  }
+  window.addEventListener('beforeunload', stopSpeaking);
+
+  // Also stop TTS if the user clicks anywhere inside the chat body
+  document.addEventListener('click', function(e){
+    if (!window.speechSynthesis) return;
+    if (speakingBadge || document.getElementById('ai-speaking-badge')){
+      if (!e.target.closest('#ai-speaking-badge') && !e.target.closest('.hbtn')){
+        // Don't stop on every click — only on user message rows
+      }
+    }
+  });
+
+  // Voices load async in some browsers — prefetch
+  if (hasTTS){
+    window.speechSynthesis.onvoiceschanged = function(){ /* triggers load */ };
+    window.speechSynthesis.getVoices();
+  }
+
+  console.log("[AI Voice] armed — mic in AI DM, speaker toggle in header. SR:", hasSR, "TTS:", hasTTS);
+})();
+</script>
+
+<!-- SLEEPY_KILL_DUPE_CALL_V1 -->
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyKillDupeCall) return;
+  window.__sleepyKillDupeCall = true;
+  try { console.log("[KillDupeCall] armed — will remove old call button"); } catch(e){}
+
+  // The old button from SLEEPY_BIG_FEATURES_V2 has data-bfv2-call="1".
+  // The new (working) one from SLEEPY_DM_CALLS_V2 has data-dmv2-call="1".
+  // We just remove any element with the OLD attribute, repeatedly.
+  function sweep(){
+    document.querySelectorAll('[data-bfv2-call]').forEach(function(el){
+      try { el.remove(); } catch(e){}
+    });
+  }
+
+  // Run immediately, then keep checking since the old patch re-adds it on
+  // a setInterval and on every renderChatHead.
+  sweep();
+  setInterval(sweep, 400);
+
+  // Belt-and-suspenders: intercept clicks so even if the old button survives
+  // a sweep it routes through the new implementation instead.
+  document.addEventListener('click', function(e){
+    var old = e.target.closest('[data-bfv2-call]');
+    if (!old) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    e.stopPropagation();
+    // Trigger the new one if it exists
+    if (typeof window.__startDMCall === 'function' && window.CURRENT && window.CURRENT.type === 'dm'){
+      var other = window.CURRENT.conv.memberIds.filter(function(id){
+        return id !== window.ME.id;
+      })[0];
+      if (other) window.__startDMCall(other);
+    }
+  }, true);
+
+  try { console.log("[KillDupeCall] ready — only one call button remains"); } catch(e){}
+})();
+</script>
+
 </body>
 </html>
