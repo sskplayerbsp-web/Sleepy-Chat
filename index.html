@@ -25874,5 +25874,145 @@ button[data-lbt="chess"]{
 })();
 </script>
 
+<!-- SLEEPY_KILL_GAME_TOPBAR_V1 -->
+<style id="kill-game-topbar-css">
+/* ============================================================
+   Kill the horizontal game tab strip — every variant
+   ============================================================ */
+
+/* Direct class */
+.gr-tabs{
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  max-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  overflow: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  position: absolute !important;
+  left: -9999px !important;
+  top: -9999px !important;
+}
+
+/* Any parent that ONLY contains a .gr-tabs child */
+div:has(> .gr-tabs:only-child){
+  display: none !important;
+  height: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Any wrapper with 3+ data-gr buttons but nothing else substantial */
+body.in-game-room [data-gr]{
+  /* Only hide if the element is a top-level tab, not a "create"/"join" button */
+}
+
+/* The specific V3 wrapper: a div > .gr-tabs at top of chat-body */
+body.in-game-room .chat-body > div > .gr-tabs,
+body.in-game-room .chat-body > .gr-tabs{
+  display: none !important;
+}
+
+/* Ultra fallback: any horizontal row at the very top of chat body when in game room */
+body.in-game-room .chat-body > div:first-child:has(.gr-tabs),
+body.in-game-room .chat-body > div:first-child:has([data-gr="play"])[style*="display:flex"]{
+  display: none !important;
+  height: 0 !important;
+  overflow: hidden !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Give the game content back its top padding */
+body.in-game-room .chat-body > div[style*="max-width:600px"]{
+  padding-top: 16px !important;
+}
+body.in-game-room .chat-body > div[style*="max-width: 600px"]{
+  padding-top: 16px !important;
+}
+</style>
+
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyKillGameTopbar) return;
+  window.__sleepyKillGameTopbar = true;
+  try { console.log("%c[KillTopbar] armed", "color:#5ee7d7;font-weight:bold"); } catch(e){}
+
+  // ============================================================
+  // Remove .gr-tabs the moment it appears
+  // ============================================================
+  function killStrip(){
+    // 1. Direct removal
+    document.querySelectorAll('.gr-tabs').forEach(function(el){
+      try { el.remove(); } catch(e){
+        try { el.style.display = 'none'; } catch(_){}
+      }
+    });
+
+    // 2. Remove empty wrappers that held only .gr-tabs
+    document.querySelectorAll('body.in-game-room .chat-body > div').forEach(function(w){
+      if (w.children.length === 0 && !w.textContent.trim()){
+        try { w.remove(); } catch(e){}
+      }
+    });
+
+    // 3. Fallback: any div whose only children are 3 buttons matching [data-gr]
+    document.querySelectorAll('body.in-game-room [data-gr="play"], body.in-game-room [data-gr="arcade"], body.in-game-room [data-gr="fishing"], body.in-game-room [data-gr="shop"]').forEach(function(btn){
+      var parent = btn.parentElement;
+      if (!parent) return;
+      // Only remove if parent is a pure tab strip (all children are [data-gr])
+      var allChildren = Array.from(parent.children);
+      var allAreTabs = allChildren.length > 0 && allChildren.every(function(c){
+        return c.hasAttribute && c.hasAttribute('data-gr');
+      });
+      if (allAreTabs){
+        try { parent.remove(); } catch(e){}
+      }
+    });
+  }
+
+  // Run immediately, on interval, and via mutation observer
+  killStrip();
+  setInterval(killStrip, 300);
+
+  // MutationObserver — catches the strip the instant V3 renders it
+  function attachObserver(){
+    var body = document.getElementById('chat-body');
+    if (!body){ setTimeout(attachObserver, 500); return; }
+    var mo = new MutationObserver(function(muts){
+      var needs = false;
+      muts.forEach(function(m){
+        m.addedNodes.forEach(function(n){
+          if (!n || n.nodeType !== 1) return;
+          if (n.classList && n.classList.contains('gr-tabs')){ needs = true; return; }
+          if (n.querySelector && n.querySelector('.gr-tabs')){ needs = true; return; }
+        });
+      });
+      if (needs) killStrip();
+    });
+    mo.observe(body, { childList: true, subtree: true });
+  }
+  attachObserver();
+
+  // ============================================================
+  // Also intercept clicks on the hidden tabs so they can't refire
+  // ============================================================
+  document.addEventListener('click', function(e){
+    var t = e.target.closest('.gr-tabs [data-gr]');
+    if (t){
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      e.stopPropagation();
+    }
+  }, true);
+
+  try { console.log("[KillTopbar] ready — game top strip will never render"); } catch(e){}
+})();
+</script>
+
 </body>
 </html>
