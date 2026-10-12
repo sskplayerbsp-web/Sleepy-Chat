@@ -23293,5 +23293,529 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
 })();
 </script>
 
+<!-- SLEEPY_AI_CHAT_V1 -->
+<style id="ai-chat-v1-css">
+.ai-typing{display:inline-flex;align-items:center;gap:4px;padding:8px 12px;border-radius:99px;
+  background:linear-gradient(135deg,rgba(139,124,255,.14),rgba(94,231,215,.1));
+  border:1px solid rgba(139,124,255,.35);font:600 12px system-ui;color:#c4b8ff;margin:6px 0}
+.ai-typing .dots{display:inline-flex;gap:3px}
+.ai-typing .dots i{width:5px;height:5px;border-radius:50%;background:#c4b8ff;animation:aiDot 1.2s infinite}
+.ai-typing .dots i:nth-child(2){animation-delay:.2s}
+.ai-typing .dots i:nth-child(3){animation-delay:.4s}
+@keyframes aiDot{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-3px);opacity:1}}
+
+/* Bot badge on AI messages */
+.msg[data-ai="1"]{background:linear-gradient(90deg,rgba(139,124,255,.06),transparent 70%);
+  border-left:2px solid rgba(139,124,255,.5);border-radius:10px}
+.msg[data-ai="1"] .author{color:#c4b8ff!important}
+.msg[data-ai="1"] .uid{background:rgba(139,124,255,.15)!important;color:#c4b8ff!important}
+
+/* Settings modal */
+.ai-settings-row{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.ai-settings-row label{font:700 10.5px system-ui;letter-spacing:.08em;text-transform:uppercase;color:#5f6c85}
+.ai-settings-row input,.ai-settings-row select,.ai-settings-row textarea{
+  width:100%;padding:11px 13px;border-radius:9px;background:#0a0a0f;border:1px solid #2a2a3a;
+  color:#eef2f8;font:500 13px system-ui;outline:none;transition:border-color .15s,box-shadow .15s}
+.ai-settings-row input:focus,.ai-settings-row textarea:focus{border-color:#8b7cff;box-shadow:0 0 0 3px rgba(139,124,255,.15)}
+.ai-settings-row .hint{font:500 11px system-ui;color:#5f6c85}
+.ai-preset-btns{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.ai-preset-btns button{padding:7px 12px;border-radius:8px;font:600 11.5px system-ui;cursor:pointer;
+  background:rgba(255,255,255,.03);border:1px solid #2a2a3a;color:#9aa8c0;transition:all .15s}
+.ai-preset-btns button:hover{color:#eef2f8;border-color:#3a3a4d}
+.ai-preset-btns button.sel{background:rgba(139,124,255,.15);border-color:rgba(139,124,255,.5);color:#c4b8ff}
+</style>
+
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyAIChat) return;
+  window.__sleepyAIChat = true;
+  try { console.log("%c[AI] armed 🤖", "color:#c4b8ff;font-weight:bold"); } catch(e){}
+
+  var AI_BOT_ID = '9abc016a-c7a7-41ee-9d8c-305f665401eb';
+  var AI_CONFIG_KEY = 'sleepy.ai.cfg';
+
+  // ============================================================
+  // CONFIG
+  // ============================================================
+  var DEFAULTS = {
+    apiKey: '',
+    baseUrl: 'https://api.groq.com/openai/v1',
+    model: 'llama-3.1-70b-versatile',
+    systemPrompt: 'You are Sleepy AI, a helpful assistant inside a chat app called Sleepy-Chat. Be friendly, concise, and use plain language. Use emojis sparingly. Keep replies under ~200 words unless the user asks for detail.',
+    maxContext: 10,
+    temperature: 0.7,
+    provider: 'groq'
+  };
+  var PRESETS = {
+    groq:      { label: 'Groq (free)',   baseUrl: 'https://api.groq.com/openai/v1',       model: 'llama-3.1-70b-versatile' },
+    openai:    { label: 'OpenAI',        baseUrl: 'https://api.openai.com/v1',            model: 'gpt-4o-mini' },
+    openrouter:{ label: 'OpenRouter',    baseUrl: 'https://openrouter.ai/api/v1',         model: 'meta-llama/llama-3.1-70b-instruct' },
+    together:  { label: 'Together AI',   baseUrl: 'https://api.together.xyz/v1',          model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo' },
+    custom:    { label: 'Custom',        baseUrl: '',                                     model: '' }
+  };
+
+  function loadCfg(){
+    try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(AI_CONFIG_KEY) || '{}')); }
+    catch(e){ return Object.assign({}, DEFAULTS); }
+  }
+  function saveCfg(c){
+    try { localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(c)); } catch(e){}
+  }
+
+  // ============================================================
+  // HELPERS
+  // ============================================================
+  function isInAIDM(){
+    if (!window.CURRENT || window.CURRENT.type !== 'dm') return false;
+    var c = window.CURRENT.conv;
+    if (!c || !c.memberIds) return false;
+    return c.memberIds.indexOf(AI_BOT_ID) >= 0;
+  }
+
+  function getCurrentTarget(){
+    if (!window.CURRENT) return null;
+    if (window.CURRENT.type === 'dm' && window.CURRENT.conv) return { type: 'dm', id: window.CURRENT.conv.id };
+    if (window.CURRENT.type === 'server' && window.CURRENT.channel) return { type: 'channel', id: window.CURRENT.channel.id };
+    return null;
+  }
+
+  // Strip /ai or @ai prefix
+  function stripAIPrefix(text){
+    var t = String(text || '').trim();
+    var m = t.match(/^\/(ai|ask|gpt|bot)\s+([\s\S]+)$/i);
+    if (m) return m[2].trim();
+    m = t.match(/^@ai\s+([\s\S]+)$/i);
+    if (m) return m[1].trim();
+    return null; // no prefix
+  }
+
+  // ============================================================
+  // FETCH CONTEXT (last N messages)
+  // ============================================================
+  async function fetchHistory(target, limit){
+    limit = limit || 10;
+    try {
+      var q;
+      if (target.type === 'dm'){
+        q = sb.from('messages').select('*').eq('conversation_id', target.id).order('id', { ascending: false }).limit(limit);
+      } else {
+        q = sb.from('messages').select('*').eq('channel_id', target.id).order('id', { ascending: false }).limit(limit);
+      }
+      var r = await q;
+      if (r.error) return [];
+      return (r.data || []).reverse(); // oldest first
+    } catch(e){ return []; }
+  }
+
+  // ============================================================
+  // AI CALL
+  // ============================================================
+  async function callAI(userQuestion, target, cfg){
+    var history = await fetchHistory(target, cfg.maxContext || 10);
+
+    var messages = [];
+    if (cfg.systemPrompt) messages.push({ role: 'system', content: cfg.systemPrompt });
+
+    history.forEach(function(m){
+      var isBot = m.sender_id === AI_BOT_ID;
+      var isMe = m.sender_id === window.ME.id;
+      var label = isBot ? '' : (isMe ? '' : '');
+      // Prefix to help the model understand speaker
+      var content = m.content || '';
+      if (!isBot && !isMe){
+        var p = window.PROFILES[m.sender_id];
+        if (p) content = '[' + (p.display_name || p.username) + ']: ' + content;
+      }
+      messages.push({
+        role: isBot ? 'assistant' : 'user',
+        content: content
+      });
+    });
+
+    // Ensure the current question is the last user message
+    if (messages.length === 0 || messages[messages.length - 1].content !== userQuestion){
+      messages.push({ role: 'user', content: userQuestion });
+    }
+
+    var base = (cfg.baseUrl || '').replace(/\/+$/, '');
+    var url = base + '/chat/completions';
+
+    var res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + cfg.apiKey
+      },
+      body: JSON.stringify({
+        model: cfg.model,
+        messages: messages,
+        temperature: typeof cfg.temperature === 'number' ? cfg.temperature : 0.7,
+        max_tokens: 800
+      })
+    });
+
+    if (!res.ok){
+      var txt = '';
+      try { txt = await res.text(); } catch(e){}
+      throw new Error('AI ' + res.status + ': ' + txt.slice(0, 200));
+    }
+    var data = await res.json();
+    var reply = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if (!reply) throw new Error('Empty AI reply');
+    return String(reply).trim();
+  }
+
+  // ============================================================
+  // INSERT REPLY
+  // ============================================================
+  async function insertReply(target, text){
+    try {
+      if (target.type === 'dm'){
+        var r = await sb.rpc('ai_say', { p_conv: target.id, p_msg: text });
+        if (r.error) throw r.error;
+      } else {
+        var r2 = await sb.rpc('ai_say_channel', { p_channel: target.id, p_msg: text });
+        if (r2.error) throw r2.error;
+      }
+    } catch(e){
+      window.toast("AI reply failed", e.message || String(e), "err");
+      throw e;
+    }
+  }
+
+  // ============================================================
+  // TYPING INDICATOR
+  // ============================================================
+  var typingEl = null;
+  function showAITyping(){
+    hideAITyping();
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+    typingEl = document.createElement('div');
+    typingEl.className = 'ai-typing';
+    typingEl.style.marginLeft = '20px';
+    typingEl.innerHTML = '<span class="dots"><i></i><i></i><i></i></span><span>Sleepy AI is thinking…</span>';
+    body.appendChild(typingEl);
+    body.scrollTop = body.scrollHeight;
+  }
+  function hideAITyping(){
+    if (typingEl){ try { typingEl.remove(); } catch(e){} typingEl = null; }
+  }
+
+  // ============================================================
+  // MAIN TRIGGER
+  // ============================================================
+  var busy = false;
+
+  async function triggerAI(question, target){
+    if (busy){ window.toast("AI is thinking…", "Wait for the current reply.", "err"); return; }
+    var cfg = loadCfg();
+    if (!cfg.apiKey){
+      window.toast("AI not configured", "Opening settings…", "err");
+      openAISettings();
+      return;
+    }
+    busy = true;
+    showAITyping();
+    try {
+      var reply = await callAI(question, target, cfg);
+      hideAITyping();
+      await insertReply(target, reply);
+    } catch(e){
+      hideAITyping();
+      window.toast("AI error", e.message || String(e), "err");
+    } finally {
+      busy = false;
+    }
+  }
+  window.__triggerAI = triggerAI;
+
+  // ============================================================
+  // HOOK 1 — DM with the AI bot: every message triggers
+  // ============================================================
+  var _send = window.sendMessage;
+  if (typeof _send === 'function'){
+    window.sendMessage = async function(text){
+      var inAIDM = isInAIDM();
+      var target = getCurrentTarget();
+      await _send.call(this, text);
+      if (inAIDM && target){
+        // slight delay so the message lands in the DB first
+        setTimeout(function(){ triggerAI(text, target); }, 150);
+      }
+    };
+  }
+
+  // ============================================================
+  // HOOK 2 — /ai or @ai in any other chat
+  // ============================================================
+  // window capture fires before document capture (slash-command handler)
+  window.addEventListener('keydown', function(e){
+    if (e.key !== 'Enter' || e.shiftKey) return;
+    var ta = e.target;
+    if (!ta || ta.id !== 'composer-input') return;
+    var text = ta.value.trim();
+    var clean = stripAIPrefix(text);
+    if (clean === null) return; // not an /ai or @ai command
+    if (isInAIDM()) return; // the DM already handles it
+
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    var target = getCurrentTarget();
+    if (!target){
+      window.toast("AI can't reply here", "Open a DM or channel first.", "err");
+      return;
+    }
+
+    // clear the composer
+    ta.value = '';
+    if (window.autosize) window.autosize(ta);
+
+    // send the clean user question as their own message
+    (async function(){
+      try {
+        if (typeof _send === 'function') await _send.call(window, clean);
+        else {
+          // fallback direct insert
+          var payload = { sender_id: window.ME.id, content: clean };
+          if (target.type === 'dm') payload.conversation_id = target.id;
+          else payload.channel_id = target.id;
+          await sb.from('messages').insert(payload);
+        }
+        setTimeout(function(){ triggerAI(clean, target); }, 150);
+      } catch(err){
+        window.toast("Send failed", err.message || String(err), "err");
+      }
+    })();
+  }, true); // <-- capture on window
+
+  // Send button for /ai
+  document.addEventListener('click', function(e){
+    var b = e.target.closest('#send-btn');
+    if (!b) return;
+    if (isInAIDM()) return;
+    var ta = document.getElementById('composer-input');
+    if (!ta) return;
+    var text = ta.value.trim();
+    var clean = stripAIPrefix(text);
+    if (clean === null) return;
+
+    e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+
+    var target = getCurrentTarget();
+    if (!target) return;
+
+    ta.value = '';
+    if (window.autosize) window.autosize(ta);
+
+    (async function(){
+      try {
+        if (typeof _send === 'function') await _send.call(window, clean);
+        else {
+          var payload = { sender_id: window.ME.id, content: clean };
+          if (target.type === 'dm') payload.conversation_id = target.id;
+          else payload.channel_id = target.id;
+          await sb.from('messages').insert(payload);
+        }
+        setTimeout(function(){ triggerAI(clean, target); }, 150);
+      } catch(err){ window.toast("Send failed", err.message || String(err), "err"); }
+    })();
+  }, true);
+
+  // ============================================================
+  // STYLING — mark AI messages
+  // ============================================================
+  var _mh = window.messageHTML;
+  if (typeof _mh === 'function'){
+    window.messageHTML = function(m, grouped){
+      var html = _mh.apply(this, arguments);
+      if (m && m.sender_id === AI_BOT_ID){
+        html = html.replace('class="msg', 'data-ai="1" class="msg');
+      }
+      return html;
+    };
+  }
+
+  // ============================================================
+  // RAIL BUTTON — open AI DM quickly
+  // ============================================================
+  async function openAIDM(){
+    try {
+      var r = await sb.rpc('ensure_ai_dm');
+      if (r.error) throw r.error;
+      if (window.loadConversations) await window.loadConversations();
+      if (window.goConversation && r.data) await window.goConversation(r.data);
+    } catch(e){
+      window.toast("Could not open AI", e.message || String(e), "err");
+    }
+  }
+  window.__openAIDM = openAIDM;
+
+  function injectRailButton(){
+    var rail = document.getElementById('rail');
+    if (!rail) return;
+    if (rail.querySelector('.ai-rail-btn')) return;
+    var btn = document.createElement('button');
+    btn.className = 'rail-btn ai-rail-btn';
+    btn.title = 'Sleepy AI';
+    btn.style.cssText = 'background:linear-gradient(135deg,rgba(139,124,255,.2),rgba(94,231,215,.14));border:1px solid rgba(139,124,255,.5)';
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#c4b8ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><path d="M12 2a2 2 0 0 1 2 2v1h1a5 5 0 0 1 5 5v6a5 5 0 0 1-5 5h-1l-2 3-2-3H9a5 5 0 0 1-5-5v-6a5 5 0 0 1 5-5h1V4a2 2 0 0 1 2-2z"/><circle cx="9" cy="12" r="1.2"/><circle cx="15" cy="12" r="1.2"/></svg>';
+    btn.onclick = openAIDM;
+    var anchor = rail.querySelector('[data-rail="find"]') || rail.querySelector('[data-rail="create-server"]');
+    if (anchor) rail.insertBefore(btn, anchor);
+    else rail.appendChild(btn);
+  }
+  setInterval(injectRailButton, 2000);
+
+  // ============================================================
+  // SETTINGS MODAL
+  // ============================================================
+  function openAISettings(){
+    var cfg = loadCfg();
+    var html =
+      '<div class="ai-preset-btns" id="ai-presets">' +
+        Object.keys(PRESETS).map(function(k){
+          return '<button data-preset="' + k + '"' + (cfg.provider === k ? ' class="sel"' : '') + '>' + PRESETS[k].label + '</button>';
+        }).join('') +
+      '</div>' +
+      '<div class="ai-settings-row"><label>API key</label>' +
+        '<input id="ai-key" type="password" placeholder="sk-…" value="' + String(cfg.apiKey||'').replace(/"/g,'&quot;') + '">' +
+        '<div class="hint">Stored locally in your browser only.</div>' +
+      '</div>' +
+      '<div class="ai-settings-row"><label>Base URL</label>' +
+        '<input id="ai-base" value="' + String(cfg.baseUrl||'').replace(/"/g,'&quot;') + '"></div>' +
+      '<div class="ai-settings-row"><label>Model</label>' +
+        '<input id="ai-model" value="' + String(cfg.model||'').replace(/"/g,'&quot;') + '"></div>' +
+      '<div class="ai-settings-row"><label>System prompt</label>' +
+        '<textarea id="ai-sys" rows="4">' + String(cfg.systemPrompt||'').replace(/</g,'&lt;') + '</textarea></div>' +
+      '<div class="ai-settings-row"><label>Context messages</label>' +
+        '<input id="ai-ctx" type="number" min="0" max="30" value="' + (cfg.maxContext||10) + '">' +
+        '<div class="hint">How many previous messages to feed the AI (0 = only current message).</div></div>' +
+      '<div class="ai-settings-row"><label>Temperature</label>' +
+        '<input id="ai-temp" type="number" step="0.1" min="0" max="2" value="' + (cfg.temperature!=null?cfg.temperature:0.7) + '"></div>' +
+      '<div class="hint" style="padding:10px 12px;background:rgba(255,200,87,.08);border-left:3px solid #ffc857;border-radius:6px;font-size:11.5px;color:#ffd166;line-height:1.5">' +
+        '⚠️ Your API key is stored in this browser and used directly to call the AI provider. Anyone with DevTools access on this device could read it. For a public app, proxy through a Supabase Edge Function.' +
+      '</div>';
+
+    window.openModal("AI Settings", html, {
+      footer: '<button class="btn" id="ai-save">Save</button>',
+      onMount: function(){
+        document.getElementById('ai-presets').onclick = function(e){
+          var b = e.target.closest('[data-preset]');
+          if (!b) return;
+          var k = b.dataset.preset;
+          var preset = PRESETS[k];
+          cfg.provider = k;
+          document.getElementById('ai-base').value = preset.baseUrl;
+          document.getElementById('ai-model').value = preset.model;
+          document.querySelectorAll('#ai-presets button').forEach(function(x){ x.classList.remove('sel'); });
+          b.classList.add('sel');
+        };
+        document.getElementById('ai-save').onclick = function(){
+          var c = {
+            apiKey: document.getElementById('ai-key').value.trim(),
+            baseUrl: document.getElementById('ai-base').value.trim(),
+            model: document.getElementById('ai-model').value.trim(),
+            systemPrompt: document.getElementById('ai-sys').value,
+            maxContext: parseInt(document.getElementById('ai-ctx').value, 10) || 0,
+            temperature: parseFloat(document.getElementById('ai-temp').value) || 0.7,
+            provider: cfg.provider
+          };
+          if (!c.baseUrl || !c.model){
+            window.toast("Missing fields", "Base URL and model are required.", "err");
+            return;
+          }
+          saveCfg(c);
+          window.closeModal();
+          window.toast("Saved", "AI is ready. Say hi!", "ok");
+        };
+      }
+    });
+  }
+  window.__openAISettings = openAISettings;
+
+  // Inject gear into the chat header when in the AI DM
+  var _rch = window.renderChatHead;
+  if (typeof _rch === 'function'){
+    window.renderChatHead = function(){
+      var r = _rch.apply(this, arguments);
+      setTimeout(function(){
+        if (!isInAIDM()) return;
+        var head = document.getElementById('chat-head');
+        if (!head || head.querySelector('[data-ai-settings]')) return;
+        var btn = document.createElement('button');
+        btn.className = 'hbtn';
+        btn.setAttribute('data-ai-settings', '1');
+        btn.title = 'AI settings';
+        btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:17px;height:17px"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1A1.6 1.6 0 0 0 7 19.4a1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7H1a2 2 0 1 1 0-4h.1A1.6 1.6 0 0 0 2.6 7a1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H7a1.6 1.6 0 0 0 1-1.5V1a2 2 0 1 1 4 0v.1A1.6 1.6 0 0 0 15 2.6a1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V7a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg>';
+        btn.onclick = openAISettings;
+        var spacer = head.querySelector('.spacer');
+        if (spacer) spacer.insertAdjacentElement('afterend', btn);
+        else head.appendChild(btn);
+      }, 30);
+      return r;
+    };
+  }
+
+  // ============================================================
+  // WELCOME — first time the AI DM is opened
+  // ============================================================
+  var WELCOME_SENT_KEY = 'sleepy.ai.welcomeSent';
+  async function ensureWelcome(){
+    if (!isInAIDM()) return;
+    if (localStorage.getItem(WELCOME_SENT_KEY + ':' + window.ME.id) === '1') return;
+    // Small delay to let messages load
+    await new Promise(function(r){ setTimeout(r, 600); });
+    if (!isInAIDM()) return;
+    try {
+      var target = getCurrentTarget();
+      if (!target) return;
+      var r = await sb.from('messages').select('id').eq('conversation_id', target.id).limit(2);
+      if (r.data && r.data.length === 0){
+        var welcome = "Hi! 👋 I'm **Sleepy AI**.\n\n" +
+          "You can chat with me here like a normal DM.\n" +
+          "Or in any other chat, use `/ai your question` and I'll reply there too.\n\n" +
+          "Before we start, tap the ⚙️ in the header to paste your API key. Once saved, ask me anything!";
+        await insertReply(target, welcome);
+      }
+      localStorage.setItem(WELCOME_SENT_KEY + ':' + window.ME.id, '1');
+    } catch(e){}
+  }
+
+  // Hook goConversation to trigger welcome
+  var _gc = window.goConversation;
+  if (typeof _gc === 'function'){
+    window.goConversation = async function(cid){
+      var r = await _gc.apply(this, arguments);
+      setTimeout(ensureWelcome, 400);
+      return r;
+    };
+  }
+
+  // ============================================================
+  // BOOT — create AI DM once per user
+  // ============================================================
+  setTimeout(async function(){
+    if (!window.ME) return;
+    try {
+      var r = await sb.rpc('ensure_ai_dm');
+      if (!r.error && window.loadConversations){
+        await window.loadConversations();
+        if (window.renderPanel) window.renderPanel();
+      }
+    } catch(e){
+      console.warn("[AI] ensure_ai_dm failed:", e.message);
+    }
+  }, 4500);
+
+  // Silently ensure the AI DM exists on first load, but don't force-open it
+
+  console.log("[AI] armed 🤖  Commands: /ai <q>, @ai <q>, or DM the bot");
+})();
+</script>
+
 </body>
 </html>
