@@ -23413,55 +23413,38 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
   // ============================================================
   async function callAI(userQuestion, target, cfg){
     var history = await fetchHistory(target, cfg.maxContext || 10);
-
     var messages = [];
     if (cfg.systemPrompt) messages.push({ role: 'system', content: cfg.systemPrompt });
-
     history.forEach(function(m){
       var isBot = m.sender_id === AI_BOT_ID;
       var isMe = m.sender_id === window.ME.id;
-      var label = isBot ? '' : (isMe ? '' : '');
-      // Prefix to help the model understand speaker
       var content = m.content || '';
       if (!isBot && !isMe){
         var p = window.PROFILES[m.sender_id];
         if (p) content = '[' + (p.display_name || p.username) + ']: ' + content;
       }
-      messages.push({
-        role: isBot ? 'assistant' : 'user',
-        content: content
-      });
+      messages.push({ role: isBot ? 'assistant' : 'user', content: content });
     });
-
-    // Ensure the current question is the last user message
-    if (messages.length === 0 || messages[messages.length - 1].content !== userQuestion){
+    if (!messages.length || messages[messages.length-1].content !== userQuestion){
       messages.push({ role: 'user', content: userQuestion });
     }
-
-    var base = (cfg.baseUrl || '').replace(/\/+$/, '');
-    var url = base + '/chat/completions';
-
-    var res = await fetch(url, {
+    var res = await fetch(SUPABASE_URL + '/functions/v1/ai-chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + cfg.apiKey
+        'Authorization': 'Bearer ' + (window.SESSION && window.SESSION.access_token ? window.SESSION.access_token : SUPABASE_ANON_KEY),
+        'apikey': SUPABASE_ANON_KEY
       },
-      body: JSON.stringify({
-        model: cfg.model,
-        messages: messages,
-        temperature: typeof cfg.temperature === 'number' ? cfg.temperature : 0.7,
-        max_tokens: 800
-      })
+      body: JSON.stringify({ messages: messages, temperature: cfg.temperature })
     });
-
     if (!res.ok){
       var txt = '';
       try { txt = await res.text(); } catch(e){}
       throw new Error('AI ' + res.status + ': ' + txt.slice(0, 200));
     }
     var data = await res.json();
-    var reply = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+    if (data.error) throw new Error(data.error);
+    var reply = data.reply;
     if (!reply) throw new Error('Empty AI reply');
     return String(reply).trim();
   }
@@ -23511,11 +23494,7 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
   async function triggerAI(question, target){
     if (busy){ window.toast("AI is thinking…", "Wait for the current reply.", "err"); return; }
     var cfg = loadCfg();
-    if (!cfg.apiKey){
-      window.toast("AI not configured", "Opening settings…", "err");
-      openAISettings();
-      return;
-    }
+    // Edge function handles auth — no local key needed
     busy = true;
     showAITyping();
     try {
