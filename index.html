@@ -24326,5 +24326,246 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
 })();
 </script>
 
+<!-- SLEEPY_AI_DEFAULT_V1 -->
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyAIDefault) return;
+  window.__sleepyAIDefault = true;
+  try { console.log("%c[AI Default] armed — AI DM will always appear", "color:#c4b8ff;font-weight:bold"); } catch(e){}
+
+  var AI_BOT_ID = "9abc016a-c7a7-41ee-9d8c-305f665401eb";
+  var AI_DISPLAY = "Sleepy AI";
+  var AI_USERNAME = "sleepy_ai";
+
+  // ============================================================
+  // 1. CREATE THE AI DM IMMEDIATELY ON BOOT
+  // ============================================================
+  // Runs as soon as we have a logged-in user, retries until success.
+  async function ensureAIDM(){
+    if (!window.ME) return null;
+    try {
+      var r = await sb.rpc('ensure_ai_dm');
+      if (r.error){
+        try { console.warn("[AI Default] ensure_ai_dm:", r.error.message); } catch(e){}
+        return null;
+      }
+      return r.data;
+    } catch(e){
+      try { console.warn("[AI Default] exception:", e.message); } catch(_){}
+      return null;
+    }
+  }
+  window.__ensureAIDM = ensureAIDM;
+
+  function scheduleAIReady(){
+    // Wait for ME then ensure
+    var tries = 0;
+    function attempt(){
+      tries++;
+      if (!window.ME){
+        if (tries < 60) setTimeout(attempt, 500);
+        return;
+      }
+      ensureAIDM().then(function(convId){
+        if (convId){
+          try { console.log("[AI Default] AI DM exists:", convId); } catch(e){}
+          // Reload conversations so the row appears in the real list too
+          if (typeof window.loadConversations === "function"){
+            window.loadConversations().then(function(){
+              if (typeof window.renderPanel === "function") window.renderPanel();
+            });
+          }
+        } else if (tries < 20){
+          setTimeout(attempt, 2000);
+        }
+      });
+    }
+    attempt();
+  }
+  scheduleAIReady();
+
+  // ============================================================
+  // 2. SYNTHETIC ROW — always visible in the DM panel
+  // ============================================================
+  // This row doesn't depend on the DB. It renders in the DOM
+  // every time the DM panel renders. Clicking it ensures the
+  // real conversation exists then opens it.
+  function injectAIRow(){
+    if (!window.ME) return;
+    if (!window.CURRENT) return;
+    // Only in DM view (not server/ticket/game)
+    if (window.CURRENT.type !== "home" && window.CURRENT.type !== "dm") return;
+
+    var body = document.getElementById('panel-body');
+    if (!body) return;
+    if (body.querySelector('#ai-default-row')) return;
+
+    // Find the conversations section
+    var sections = body.querySelectorAll('.panel-section');
+    var convSection = null;
+    sections.forEach(function(s){
+      var label = s.querySelector('.panel-label');
+      if (label && /conversations/i.test(label.textContent)) convSection = s;
+    });
+    if (!convSection){
+      // No conversations section found — create one at the top
+      convSection = document.createElement('div');
+      convSection.className = 'panel-section';
+      convSection.innerHTML = '<div class="panel-label">Conversations</div>';
+      body.insertBefore(convSection, body.firstChild);
+    }
+
+    // Remove "no conversations" placeholder if present
+    var emptyEl = convSection.querySelector('.empty');
+    if (emptyEl) emptyEl.style.display = 'none';
+
+    // Build the row
+    var row = document.createElement('button');
+    row.className = 'row';
+    row.id = 'ai-default-row';
+    row.setAttribute('data-ai-default', '1');
+
+    // Active state if we're currently viewing the AI DM
+    var currentConvId = window.CURRENT && window.CURRENT.conv ? window.CURRENT.conv.id : null;
+    var realAIConv = (window.CONVERSATIONS || []).filter(function(c){
+      return c.memberIds && c.memberIds.indexOf(AI_BOT_ID) >= 0;
+    })[0];
+    if (realAIConv && currentConvId === realAIConv.id){
+      row.classList.add('active');
+    }
+
+    // Unread count (fake from UNREAD state)
+    var unread = 0;
+    if (realAIConv && window.UNREAD && window.UNREAD[realAIConv.id]){
+      unread = window.UNREAD[realAIConv.id];
+    }
+
+    // Avatar — the AI's profile
+    var p = window.PROFILES[AI_BOT_ID] || { username: AI_USERNAME, display_name: AI_DISPLAY };
+    var avHtml;
+    if (p.avatar_url){
+      avHtml = '<div class="avatar" style="width:32px;height:32px;font-size:12px;background:linear-gradient(135deg,#b44aff,#5ee7d7);color:#06120f"><img src="' + p.avatar_url + '" alt=""></div>';
+    } else {
+      avHtml = '<div class="avatar" style="width:32px;height:32px;font-size:12px;background:linear-gradient(135deg,#b44aff,#5ee7d7);color:#06120f">AI</div>';
+    }
+
+    var sub = "Ask me anything ✨";
+    row.innerHTML =
+      avHtml +
+      '<span style="flex:1;min-width:0">' +
+        '<span class="txt" style="display:block">' + AI_DISPLAY + '</span>' +
+        '<span class="sub">' + sub + '</span>' +
+      '</span>' +
+      (unread > 0 ? '<span class="badge">' + (unread > 99 ? '99+' : unread) + '</span>' : '');
+
+    row.onclick = async function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      try {
+        var convId = await ensureAIDM();
+        if (!convId){
+          window.toast("Could not open AI", "Check your connection and try again.", "err");
+          return;
+        }
+        // Reload conversations if needed
+        if (typeof window.loadConversations === "function"){
+          var found = (window.CONVERSATIONS || []).some(function(c){ return c.id === convId; });
+          if (!found) await window.loadConversations();
+        }
+        if (typeof window.goConversation === "function"){
+          await window.goConversation(convId);
+        }
+      } catch(err){
+        window.toast("Could not open AI", err.message || String(err), "err");
+      }
+    };
+
+    // Insert at the top of the conversation section
+    var label = convSection.querySelector('.panel-label');
+    if (label) label.insertAdjacentElement('afterend', row);
+    else convSection.insertBefore(row, convSection.firstChild);
+  }
+  window.__injectAIRow = injectAIRow;
+
+  // Run after every panel render
+  var _rp = window.renderPanel;
+  if (typeof _rp === "function"){
+    window.renderPanel = function(){
+      var r = _rp.apply(this, arguments);
+      setTimeout(injectAIRow, 40);
+      setTimeout(injectAIRow, 250);
+      return r;
+    };
+  }
+
+  // Periodic safety net — catches renders from any patch
+  setInterval(injectAIRow, 1200);
+
+  // ============================================================
+  // 3. RAIL BUTTON — always there
+  // ============================================================
+  function injectRailBtn(){
+    var rail = document.getElementById('rail');
+    if (!rail) return;
+    if (rail.querySelector('.ai-rail-btn')) return;
+    var btn = document.createElement('button');
+    btn.className = 'rail-btn ai-rail-btn';
+    btn.title = 'Sleepy AI';
+    btn.style.cssText = 'background:linear-gradient(135deg,rgba(139,124,255,.24),rgba(94,231,215,.16));border:1px solid rgba(139,124,255,.55)';
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#c4b8ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><path d="M12 2a2 2 0 0 1 2 2v1h1a5 5 0 0 1 5 5v6a5 5 0 0 1-5 5h-1l-2 3-2-3H9a5 5 0 0 1-5-5v-6a5 5 0 0 1 5-5h1V4a2 2 0 0 1 2-2z"/><circle cx="9" cy="12" r="1.2" fill="#c4b8ff"/><circle cx="15" cy="12" r="1.2" fill="#c4b8ff"/></svg>';
+    btn.onclick = async function(){
+      try {
+        var convId = await ensureAIDM();
+        if (!convId) return;
+        if (typeof window.loadConversations === "function"){
+          var found = (window.CONVERSATIONS || []).some(function(c){ return c.id === convId; });
+          if (!found) await window.loadConversations();
+        }
+        if (typeof window.goConversation === "function") await window.goConversation(convId);
+      } catch(e){
+        window.toast("Could not open AI", e.message || String(e), "err");
+      }
+    };
+    var home = rail.querySelector('[data-rail="home"]');
+    if (home && home.nextSibling) rail.insertBefore(btn, home.nextSibling);
+    else rail.appendChild(btn);
+  }
+  setInterval(injectRailBtn, 800);
+
+  // ============================================================
+  // 4. FORCE STALE PWA TABS TO UPDATE
+  // ============================================================
+  // Service workers hold onto the old index.html. This makes them
+  // check for updates on every load and reload once when one is found.
+  if ("serviceWorker" in navigator){
+    try {
+      navigator.serviceWorker.getRegistrations().then(function(regs){
+        regs.forEach(function(reg){
+          try { reg.update(); } catch(e){}
+          // If a new SW takes over (activated), reload once
+          try {
+            reg.addEventListener('updatefound', function(){
+              var nw = reg.installing;
+              if (!nw) return;
+              nw.addEventListener('statechange', function(){
+                if (nw.state === 'activated' && navigator.serviceWorker.controller){
+                  if (!sessionStorage.getItem('ai-default-reloaded')){
+                    sessionStorage.setItem('ai-default-reloaded', '1');
+                    setTimeout(function(){ location.reload(); }, 100);
+                  }
+                }
+              });
+            });
+          } catch(e){}
+        });
+      });
+    } catch(e){}
+  }
+
+  try { console.log("%c[AI Default] ready — row, rail, SW updater installed", "color:#c4b8ff"); } catch(e){}
+})();
+</script>
+
 </body>
 </html>
