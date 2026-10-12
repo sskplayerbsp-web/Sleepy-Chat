@@ -24326,244 +24326,1262 @@ body.guest-mode .app{height:calc(100vh - 28px);height:calc(100dvh - 28px)}
 })();
 </script>
 
-<!-- SLEEPY_AI_DEFAULT_V1 -->
+<!-- SLEEPY_AI_DUPE_ANDROID_V1 -->
+<style id="ai-dupe-android-css">
+/* ============================================================
+   ANDROID / TOUCH OPTIMIZATIONS
+   ============================================================ */
+
+/* Kill 300ms tap delay + block double-tap zoom on interactive elements */
+button, .row, .btn, .hbtn, .cbtn, .rail-btn, .member, .tab,
+[data-conv], [data-channel], [data-server], [data-rail],
+[data-ai-default], [data-user], [data-member]{
+  touch-action: manipulation;
+}
+
+/* Prevent iOS/Android text selection during double-tap */
+* {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+}
+/* But re-enable for actual text */
+input, textarea, [contenteditable], .msg .content, .toast .tb, .toast .tt,
+.modal-body, .member .nm, .member .uid, .msg .author, .msg .uid,
+p, h1, h2, h3, h4, h5, h6, span.txt, .panel-label, .field label,
+.ai-msg, code, pre{
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  user-select: text;
+}
+
+/* Prevent pull-to-refresh fighting scroll */
+html, body{
+  overscroll-behavior: none;
+}
+.chat-body, .panel-body, .members, .modal-body{
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Kill the tap highlight on everything */
+*{
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+/* Bigger tap targets on touch devices */
+@media (hover: none) and (pointer: coarse){
+  .row{ min-height: 52px; padding: 12px 12px !important; }
+  .member{ min-height: 48px; padding: 10px 10px !important; }
+  .btn{ min-height: 46px; padding: 12px 18px !important; font-size: 14px !important; }
+  .btn.sm{ min-height: 42px; padding: 10px 14px !important; font-size: 13px !important; }
+  .hbtn{ width: 44px !important; height: 44px !important; }
+  .cbtn{ width: 44px !important; height: 44px !important; }
+  .rail-btn{ width: 48px !important; height: 48px !important; }
+  .msg .author{ padding: 6px 6px; margin: -6px -6px; min-height: 34px; }
+  .panel-head{ height: 56px !important; }
+  .chat-head{ height: 56px !important; }
+  .user-bar{ min-height: 64px !important; }
+  .tabs .tab{ min-height: 44px; }
+  .field input, .field textarea, .field select{ font-size: 16px !important; }
+  .menu button{ min-height: 46px; padding: 12px 14px; font-size: 14px; }
+}
+
+/* Composer — bigger, easier to type */
+@media (max-width: 760px), (hover: none) and (pointer: coarse){
+  .composer{ padding: 12px 14px !important; border-radius: 16px !important; }
+  .composer textarea{
+    font-size: 16px !important; /* prevents iOS auto-zoom */
+    line-height: 1.5 !important;
+    max-height: 140px !important;
+  }
+  .composer .send{ width: 44px !important; height: 44px !important; }
+  .composer-wrap{ padding: 0 10px max(10px, env(safe-area-inset-bottom, 10px)) !important; }
+}
+
+/* Rail at bottom for Android — bigger + safe area aware */
+@media (max-width: 760px){
+  .rail{
+    height: calc(64px + env(safe-area-inset-bottom, 0px)) !important;
+    padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    padding-top: 6px !important;
+    gap: 6px !important;
+  }
+  .app{
+    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .panel{
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .chat-head{ padding: 0 12px !important; }
+  .chat-body{ padding-top: 8px !important; }
+  .msg{ padding: 6px 12px !important; }
+  .modal{ max-height: 92vh !important; }
+  .modal-foot{
+    flex-direction: column-reverse;
+    gap: 8px;
+    padding-bottom: max(14px, env(safe-area-inset-bottom, 14px)) !important;
+  }
+  .modal-foot .btn{ width: 100%; min-height: 50px !important; font-size: 15px !important; }
+}
+
+/* Media overlay / video — pinch to zoom safe */
+.video-grid .tile video, img{
+  touch-action: pan-x pan-y;
+  -webkit-user-drag: none;
+}
+
+/* Snappier animations on Android */
+@media (prefers-reduced-motion: reduce){
+  *, *::before, *::after{
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+/* ============================================================
+   DUPLICATE AI ROW — hide when real one exists
+   ============================================================ */
+/* If a real AI conversation row is in the DOM, hide the synthetic one */
+body.ai-real-exists #ai-default-row{
+  display: none !important;
+}
+
+/* ============================================================
+   Composer "Message #Sleepy-AI" text is too long on mobile — trim
+   ============================================================ */
+@media (max-width: 760px){
+  .composer textarea::placeholder{
+    font-size: 14px;
+  }
+}
+
+/* ============================================================
+   Trackpad / mouse users: keep default cursor feedback
+   ============================================================ */
+@media (hover: hover) and (pointer: fine){
+  button, .row, .member, .btn{ cursor: pointer; }
+}
+</style>
+
 <script>
 (function(){
   "use strict";
-  if (window.__sleepyAIDefault) return;
-  window.__sleepyAIDefault = true;
-  try { console.log("%c[AI Default] armed — AI DM will always appear", "color:#c4b8ff;font-weight:bold"); } catch(e){}
+  if (window.__sleepyAIDupeAndroid) return;
+  window.__sleepyAIDupeAndroid = true;
+  try { console.log("%c[AI Dupe + Android] armed", "color:#c4b8ff;font-weight:bold"); } catch(e){}
 
   var AI_BOT_ID = "9abc016a-c7a7-41ee-9d8c-305f665401eb";
-  var AI_DISPLAY = "Sleepy AI";
-  var AI_USERNAME = "sleepy_ai";
 
   // ============================================================
-  // 1. CREATE THE AI DM IMMEDIATELY ON BOOT
+  // 1. DEDUPE AI ROW
   // ============================================================
-  // Runs as soon as we have a logged-in user, retries until success.
-  async function ensureAIDM(){
-    if (!window.ME) return null;
-    try {
-      var r = await sb.rpc('ensure_ai_dm');
-      if (r.error){
-        try { console.warn("[AI Default] ensure_ai_dm:", r.error.message); } catch(e){}
-        return null;
-      }
-      return r.data;
-    } catch(e){
-      try { console.warn("[AI Default] exception:", e.message); } catch(_){}
-      return null;
-    }
-  }
-  window.__ensureAIDM = ensureAIDM;
-
-  function scheduleAIReady(){
-    // Wait for ME then ensure
-    var tries = 0;
-    function attempt(){
-      tries++;
-      if (!window.ME){
-        if (tries < 60) setTimeout(attempt, 500);
-        return;
-      }
-      ensureAIDM().then(function(convId){
-        if (convId){
-          try { console.log("[AI Default] AI DM exists:", convId); } catch(e){}
-          // Reload conversations so the row appears in the real list too
-          if (typeof window.loadConversations === "function"){
-            window.loadConversations().then(function(){
-              if (typeof window.renderPanel === "function") window.renderPanel();
-            });
-          }
-        } else if (tries < 20){
-          setTimeout(attempt, 2000);
-        }
-      });
-    }
-    attempt();
-  }
-  scheduleAIReady();
-
-  // ============================================================
-  // 2. SYNTHETIC ROW — always visible in the DM panel
-  // ============================================================
-  // This row doesn't depend on the DB. It renders in the DOM
-  // every time the DM panel renders. Clicking it ensures the
-  // real conversation exists then opens it.
-  function injectAIRow(){
+  // Strategy: if the real AI conversation appears in the DOM, hide
+  // the synthetic row. If not, keep the synthetic row visible.
+  function dedupeAIRow(){
     if (!window.ME) return;
-    if (!window.CURRENT) return;
-    // Only in DM view (not server/ticket/game)
-    if (window.CURRENT.type !== "home" && window.CURRENT.type !== "dm") return;
-
     var body = document.getElementById('panel-body');
     if (!body) return;
-    if (body.querySelector('#ai-default-row')) return;
 
-    // Find the conversations section
-    var sections = body.querySelectorAll('.panel-section');
-    var convSection = null;
-    sections.forEach(function(s){
-      var label = s.querySelector('.panel-label');
-      if (label && /conversations/i.test(label.textContent)) convSection = s;
-    });
-    if (!convSection){
-      // No conversations section found — create one at the top
-      convSection = document.createElement('div');
-      convSection.className = 'panel-section';
-      convSection.innerHTML = '<div class="panel-label">Conversations</div>';
-      body.insertBefore(convSection, body.firstChild);
-    }
-
-    // Remove "no conversations" placeholder if present
-    var emptyEl = convSection.querySelector('.empty');
-    if (emptyEl) emptyEl.style.display = 'none';
-
-    // Build the row
-    var row = document.createElement('button');
-    row.className = 'row';
-    row.id = 'ai-default-row';
-    row.setAttribute('data-ai-default', '1');
-
-    // Active state if we're currently viewing the AI DM
-    var currentConvId = window.CURRENT && window.CURRENT.conv ? window.CURRENT.conv.id : null;
-    var realAIConv = (window.CONVERSATIONS || []).filter(function(c){
-      return c.memberIds && c.memberIds.indexOf(AI_BOT_ID) >= 0;
+    // Find the real AI row (the DB-rendered one) — it has data-conv="..."
+    // matching the AI conversation id in window.CONVERSATIONS.
+    var aiConv = (window.CONVERSATIONS || []).filter(function(c){
+      return !c.is_group && c.memberIds && c.memberIds.indexOf(AI_BOT_ID) >= 0;
     })[0];
-    if (realAIConv && currentConvId === realAIConv.id){
-      row.classList.add('active');
-    }
 
-    // Unread count (fake from UNREAD state)
-    var unread = 0;
-    if (realAIConv && window.UNREAD && window.UNREAD[realAIConv.id]){
-      unread = window.UNREAD[realAIConv.id];
-    }
-
-    // Avatar — the AI's profile
-    var p = window.PROFILES[AI_BOT_ID] || { username: AI_USERNAME, display_name: AI_DISPLAY };
-    var avHtml;
-    if (p.avatar_url){
-      avHtml = '<div class="avatar" style="width:32px;height:32px;font-size:12px;background:linear-gradient(135deg,#b44aff,#5ee7d7);color:#06120f"><img src="' + p.avatar_url + '" alt=""></div>';
-    } else {
-      avHtml = '<div class="avatar" style="width:32px;height:32px;font-size:12px;background:linear-gradient(135deg,#b44aff,#5ee7d7);color:#06120f">AI</div>';
-    }
-
-    var sub = "Ask me anything ✨";
-    row.innerHTML =
-      avHtml +
-      '<span style="flex:1;min-width:0">' +
-        '<span class="txt" style="display:block">' + AI_DISPLAY + '</span>' +
-        '<span class="sub">' + sub + '</span>' +
-      '</span>' +
-      (unread > 0 ? '<span class="badge">' + (unread > 99 ? '99+' : unread) + '</span>' : '');
-
-    row.onclick = async function(e){
-      e.preventDefault();
-      e.stopPropagation();
-      try {
-        var convId = await ensureAIDM();
-        if (!convId){
-          window.toast("Could not open AI", "Check your connection and try again.", "err");
-          return;
-        }
-        // Reload conversations if needed
-        if (typeof window.loadConversations === "function"){
-          var found = (window.CONVERSATIONS || []).some(function(c){ return c.id === convId; });
-          if (!found) await window.loadConversations();
-        }
-        if (typeof window.goConversation === "function"){
-          await window.goConversation(convId);
-        }
-      } catch(err){
-        window.toast("Could not open AI", err.message || String(err), "err");
+    var realExists = false;
+    if (aiConv){
+      var realRow = body.querySelector('[data-conv="' + aiConv.id + '"]');
+      if (realRow && realRow.id !== 'ai-default-row'){
+        realExists = true;
       }
-    };
+    }
 
-    // Insert at the top of the conversation section
-    var label = convSection.querySelector('.panel-label');
-    if (label) label.insertAdjacentElement('afterend', row);
-    else convSection.insertBefore(row, convSection.firstChild);
+    var synthetic = document.getElementById('ai-default-row');
+    if (!synthetic) return;
+
+    if (realExists){
+      // Real row is present — hide the synthetic one
+      synthetic.style.display = 'none';
+      document.body.classList.add('ai-real-exists');
+    } else {
+      // No real row yet — show the synthetic one
+      synthetic.style.display = '';
+      document.body.classList.remove('ai-real-exists');
+    }
   }
-  window.__injectAIRow = injectAIRow;
 
-  // Run after every panel render
+  // Hook renderPanel so dedupe runs right after each render
   var _rp = window.renderPanel;
   if (typeof _rp === "function"){
     window.renderPanel = function(){
       var r = _rp.apply(this, arguments);
-      setTimeout(injectAIRow, 40);
-      setTimeout(injectAIRow, 250);
+      setTimeout(dedupeAIRow, 50);
+      setTimeout(dedupeAIRow, 200);
+      setTimeout(dedupeAIRow, 600);
+      return r;
+    };
+  }
+  setInterval(dedupeAIRow, 1000);
+
+  // ============================================================
+  // 2. ANDROID KEYBOARD HANDLING
+  // ============================================================
+  // When the composer is focused on Android, the keyboard pops up
+  // and covers the input. Scroll it into view and shrink the
+  // viewport accordingly.
+  var vpMeta = document.querySelector('meta[name="viewport"]');
+  if (vpMeta){
+    // interactive-widget=resizes-content makes Android Chrome shrink
+    // the layout viewport when the keyboard appears so our input stays visible.
+    var content = vpMeta.getAttribute('content') || '';
+    if (content.indexOf('interactive-widget') < 0){
+      vpMeta.setAttribute('content', content + ', interactive-widget=resizes-content');
+    }
+  }
+
+  // Track visualViewport changes (keyboard open/close)
+  if (window.visualViewport){
+    var lastHH = 0;
+    window.visualViewport.addEventListener('resize', function(){
+      var vh = window.visualViewport.height;
+      var wh = window.innerHeight;
+      var diff = wh - vh;
+      // If diff > 100px, keyboard is likely open
+      var kbOpen = diff > 100;
+      if (kbOpen){
+        document.body.classList.add('kb-open');
+        // Scroll composer into view
+        var comp = document.getElementById('composer-wrap');
+        if (comp){
+          var activeEl = document.activeElement;
+          if (activeEl && activeEl.id === 'composer-input'){
+            setTimeout(function(){
+              try { comp.scrollIntoView({ block: 'end', behavior: 'smooth' }); } catch(e){}
+            }, 100);
+          }
+        }
+      } else {
+        document.body.classList.remove('kb-open');
+      }
+      lastHH = vh;
+    });
+  }
+
+  // Focus handling for composer
+  document.addEventListener('focusin', function(e){
+    if (e.target && e.target.id === 'composer-input'){
+      // Small delay lets the keyboard fully appear before we scroll
+      setTimeout(function(){
+        var wrap = document.getElementById('composer-wrap');
+        if (wrap){
+          try { wrap.scrollIntoView({ block: 'end', behavior: 'smooth' }); } catch(err){}
+        }
+      }, 300);
+    }
+  });
+
+  // ============================================================
+  // 3. PREVENT DOUBLE-TAP ZOOM ON BUTTONS
+  // ============================================================
+  // Even with touch-action: manipulation on CSS, some Androids
+  // still trigger zoom on rapid taps. Catch rapid same-target
+  // touches and prevent the second.
+  var lastTap = 0;
+  var lastTarget = null;
+  document.addEventListener('touchend', function(e){
+    var now = Date.now();
+    if (now - lastTap < 300 && e.target === lastTarget){
+      e.preventDefault();
+    }
+    lastTap = now;
+    lastTarget = e.target;
+  }, { passive: false });
+
+  // ============================================================
+  // 4. BACK BUTTON HANDLING
+  // ============================================================
+  // Push a state on nav so Android hardware back button closes
+  // overlays before exiting the app.
+  var overlaysOpen = 0;
+  var origOpenModal = window.openModal;
+  if (typeof origOpenModal === "function"){
+    window.openModal = function(){
+      overlaysOpen++;
+      try { history.pushState({ sleepyOverlay: overlaysOpen }, ''); } catch(e){}
+      return origOpenModal.apply(this, arguments);
+    };
+  }
+  var origCloseModal = window.closeModal;
+  if (typeof origCloseModal === "function"){
+    window.closeModal = function(){
+      if (overlaysOpen > 0) overlaysOpen--;
+      return origCloseModal.apply(this, arguments);
+    };
+  }
+  window.addEventListener('popstate', function(e){
+    if (document.getElementById('modal-root') && document.getElementById('modal-root').innerHTML){
+      if (typeof window.closeModal === "function") window.closeModal();
+      try { history.pushState({ sleepyOverlay: 1 }, ''); } catch(err){}
+      return;
+    }
+    // Panel/menu close
+    var menu = document.querySelector('.menu');
+    if (menu){ if (typeof window.closeMenu === "function") window.closeMenu(); return; }
+    // Panel drawer
+    if (window.UI && window.UI.panelOpen){
+      window.UI.panelOpen = false;
+      if (typeof window.syncMobile === "function") window.syncMobile();
+      try { history.pushState({ sleepyOverlay: 1 }, ''); } catch(err){}
+      return;
+    }
+  });
+
+  // ============================================================
+  // 5. STICKY SCROLL FIX
+  // ============================================================
+  // On Android, when a message arrives, if the user is at the
+  // bottom we keep them at the bottom; if scrolled up, we don't
+  // jerk them around.
+  var _rc = window.renderChat;
+  if (typeof _rc === "function"){
+    window.renderChat = function(scroll){
+      var body = document.getElementById('chat-body');
+      var atBottom = false;
+      var scrollTop = 0;
+      if (body){
+        atBottom = (body.scrollHeight - body.scrollTop - body.clientHeight) < 80;
+        scrollTop = body.scrollTop;
+      }
+      var r = _rc.apply(this, arguments);
+      if (body && !atBottom && scroll !== true){
+        // User was reading older messages — keep them there
+        requestAnimationFrame(function(){
+          body.scrollTop = scrollTop;
+        });
+      }
       return r;
     };
   }
 
-  // Periodic safety net — catches renders from any patch
-  setInterval(injectAIRow, 1200);
-
   // ============================================================
-  // 3. RAIL BUTTON — always there
+  // 6. SERVICE WORKER UPDATE — keep everyone fresh
   // ============================================================
-  function injectRailBtn(){
-    var rail = document.getElementById('rail');
-    if (!rail) return;
-    if (rail.querySelector('.ai-rail-btn')) return;
-    var btn = document.createElement('button');
-    btn.className = 'rail-btn ai-rail-btn';
-    btn.title = 'Sleepy AI';
-    btn.style.cssText = 'background:linear-gradient(135deg,rgba(139,124,255,.24),rgba(94,231,215,.16));border:1px solid rgba(139,124,255,.55)';
-    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#c4b8ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:22px;height:22px"><path d="M12 2a2 2 0 0 1 2 2v1h1a5 5 0 0 1 5 5v6a5 5 0 0 1-5 5h-1l-2 3-2-3H9a5 5 0 0 1-5-5v-6a5 5 0 0 1 5-5h1V4a2 2 0 0 1 2-2z"/><circle cx="9" cy="12" r="1.2" fill="#c4b8ff"/><circle cx="15" cy="12" r="1.2" fill="#c4b8ff"/></svg>';
-    btn.onclick = async function(){
-      try {
-        var convId = await ensureAIDM();
-        if (!convId) return;
-        if (typeof window.loadConversations === "function"){
-          var found = (window.CONVERSATIONS || []).some(function(c){ return c.id === convId; });
-          if (!found) await window.loadConversations();
-        }
-        if (typeof window.goConversation === "function") await window.goConversation(convId);
-      } catch(e){
-        window.toast("Could not open AI", e.message || String(e), "err");
-      }
-    };
-    var home = rail.querySelector('[data-rail="home"]');
-    if (home && home.nextSibling) rail.insertBefore(btn, home.nextSibling);
-    else rail.appendChild(btn);
-  }
-  setInterval(injectRailBtn, 800);
-
-  // ============================================================
-  // 4. FORCE STALE PWA TABS TO UPDATE
-  // ============================================================
-  // Service workers hold onto the old index.html. This makes them
-  // check for updates on every load and reload once when one is found.
   if ("serviceWorker" in navigator){
     try {
       navigator.serviceWorker.getRegistrations().then(function(regs){
-        regs.forEach(function(reg){
-          try { reg.update(); } catch(e){}
-          // If a new SW takes over (activated), reload once
-          try {
-            reg.addEventListener('updatefound', function(){
-              var nw = reg.installing;
-              if (!nw) return;
-              nw.addEventListener('statechange', function(){
-                if (nw.state === 'activated' && navigator.serviceWorker.controller){
-                  if (!sessionStorage.getItem('ai-default-reloaded')){
-                    sessionStorage.setItem('ai-default-reloaded', '1');
-                    setTimeout(function(){ location.reload(); }, 100);
-                  }
-                }
-              });
-            });
-          } catch(e){}
-        });
+        regs.forEach(function(reg){ try { reg.update(); } catch(e){} });
       });
     } catch(e){}
   }
 
-  try { console.log("%c[AI Default] ready — row, rail, SW updater installed", "color:#c4b8ff"); } catch(e){}
+  try { console.log("%c[AI Dupe + Android] ready", "color:#c4b8ff"); } catch(e){}
+})();
+</script>
+
+<!-- SLEEPY_CLEAR_CHAT_V1 -->
+<style id="clear-chat-v1-css">
+.clear-chat-menu-btn{
+  display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border-radius:8px;
+  font:600 13px system-ui;color:#ff8aa8;text-align:left;cursor:pointer;
+  border:none;background:none;transition:all .12s;
+}
+.clear-chat-menu-btn:hover{background:rgba(255,45,111,.14)}
+.clear-chat-menu-btn svg{width:16px;height:16px;flex:none}
+
+.clear-chat-modal{text-align:left}
+.clear-chat-modal .warn{padding:12px 14px;border-radius:10px;background:rgba(255,45,111,.08);
+  border:1px solid rgba(255,45,111,.35);color:#ff8aa8;font:500 13px system-ui;line-height:1.55;margin-bottom:14px}
+.clear-chat-modal .warn b{color:#ffb3c7}
+.clear-chat-modal .field{display:flex;flex-direction:column;gap:6px}
+.clear-chat-modal label{font:700 10.5px system-ui;letter-spacing:.08em;text-transform:uppercase;color:#5f6c85}
+.clear-chat-modal input{padding:11px 13px;border-radius:8px;background:#0a0a0f;border:1px solid #2a2a3a;
+  color:#eef2f8;font:500 13px monospace;text-align:center;letter-spacing:.2em}
+.clear-chat-modal input:focus{outline:none;border-color:#ff2d6f;box-shadow:0 0 0 3px rgba(255,45,111,.15)}
+</style>
+
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyClearChat) return;
+  window.__sleepyClearChat = true;
+  try { console.log("[ClearChat] armed"); } catch(e){}
+
+  // ============================================================
+  // 1. CHAT HEADER MENU (⋮ button in DM headers)
+  // ============================================================
+  function injectHeaderMenu(){
+    if (!window.CURRENT) return;
+    if (window.CURRENT.type !== 'dm') return;
+    var head = document.getElementById('chat-head');
+    if (!head) return;
+    if (head.querySelector('[data-clear-chat-menu]')) return;
+
+    var btn = document.createElement('button');
+    btn.className = 'hbtn';
+    btn.setAttribute('data-clear-chat-menu', '1');
+    btn.title = 'Chat options';
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" style="width:17px;height:17px"><circle cx="12" cy="5" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="12" cy="19" r="1.2" fill="currentColor"/></svg>';
+
+    btn.onclick = function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      var r = btn.getBoundingClientRect();
+      openChatMenu(r.left - 180, r.bottom + 4);
+    };
+
+    var spacer = head.querySelector('.spacer');
+    if (spacer) spacer.insertAdjacentElement('afterend', btn);
+    else head.appendChild(btn);
+  }
+
+  function openChatMenu(x, y){
+    // Clean up any open menu first
+    if (typeof window.closeMenu === "function") window.closeMenu();
+
+    var menu = document.createElement('div');
+    menu.className = 'menu';
+    menu.style.zIndex = '650';
+
+    var isGroup = window.CURRENT && window.CURRENT.conv && window.CURRENT.conv.is_group;
+    var items = [];
+
+    items.push('<div class="mhead">' + (isGroup ? 'Group chat' : 'Direct message') + '</div>');
+
+    items.push(
+      '<button data-cc-action="clear">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>' +
+        '<span>Clear chat history</span>' +
+      '</button>'
+    );
+
+    if (isGroup){
+      items.push('<div class="msep"></div>');
+      items.push(
+        '<button class="danger" data-cc-action="leave">' +
+          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg>' +
+          '<span>Leave group</span>' +
+        '</button>'
+      );
+    }
+
+    menu.innerHTML = items.join('');
+    document.body.appendChild(menu);
+    menu.style.left = Math.min(x, window.innerWidth - menu.offsetWidth - 10) + 'px';
+    menu.style.top = Math.min(y, window.innerHeight - menu.offsetHeight - 10) + 'px';
+
+    menu.addEventListener('click', function(e){
+      var b = e.target.closest('[data-cc-action]');
+      if (!b) return;
+      var act = b.dataset.ccAction;
+      if (typeof window.closeMenu === "function") window.closeMenu();
+      else menu.remove();
+
+      if (act === 'clear') confirmClear();
+      if (act === 'leave') confirmLeave();
+    });
+
+    // Click-outside-to-close
+    setTimeout(function(){
+      document.addEventListener('mousedown', function h(ev){
+        if (!menu.contains(ev.target)){ menu.remove(); document.removeEventListener('mousedown', h, true); }
+      }, true);
+    }, 0);
+  }
+
+  // ============================================================
+  // 2. CLEAR CHAT FLOW
+  // ============================================================
+  function confirmClear(){
+    if (!window.CURRENT || !window.CURRENT.conv) return;
+    var conv = window.CURRENT.conv;
+    var title = conv.is_group ? (conv.name || 'this group') : 'this chat';
+    var confirmed = false;
+
+    window.openModal("Clear chat history?",
+      '<div class="clear-chat-modal">' +
+        '<div class="warn">' +
+          'This will <b>permanently delete every message</b> in ' + title + '.<br>' +
+          'It cannot be undone. The conversation itself stays, just empty.' +
+        '</div>' +
+        '<div class="field">' +
+          '<label>Type CLEAR to confirm</label>' +
+          '<input id="cc-confirm" placeholder="CLEAR" autocomplete="off" spellcheck="false" maxlength="10">' +
+        '</div>' +
+      '</div>',
+      {
+        footer: '<button class="btn" id="cc-no">Cancel</button>' +
+                '<button class="btn danger" id="cc-yes" disabled>Clear History</button>',
+        onMount: function(){
+          var inp = document.getElementById('cc-confirm');
+          var yes = document.getElementById('cc-yes');
+          inp.focus();
+          inp.addEventListener('input', function(){
+            yes.disabled = inp.value.trim().toUpperCase() !== 'CLEAR';
+          });
+          inp.addEventListener('keydown', function(e){
+            if (e.key === 'Enter' && !yes.disabled) yes.click();
+          });
+          document.getElementById('cc-no').onclick = window.closeModal;
+          yes.onclick = function(){ doClear(conv.id); };
+        }
+      });
+  }
+
+  async function doClear(convId){
+    var btn = document.getElementById('cc-yes');
+    if (btn){ btn.disabled = true; btn.textContent = 'Clearing…'; }
+    try {
+      // Delete every message in this conversation
+      var r = await sb.from('messages').delete().eq('conversation_id', convId);
+      if (r.error) throw r.error;
+
+      // Clear local cache
+      window.MESSAGES = window.MESSAGES.filter(function(m){
+        return m.conversation_id !== convId;
+      });
+
+      window.closeModal();
+      window.toast("Cleared", "Chat history has been deleted.", "ok");
+
+      // Refresh views
+      if (typeof window.renderChat === "function") window.renderChat(false);
+      if (typeof window.loadConversations === "function"){
+        await window.loadConversations();
+        if (typeof window.renderPanel === "function") window.renderPanel();
+      }
+    } catch(e){
+      window.toast("Could not clear", e.message || String(e), "err");
+      if (btn){ btn.disabled = false; btn.textContent = 'Clear History'; }
+    }
+  }
+
+  // ============================================================
+  // 3. LEAVE GROUP FLOW
+  // ============================================================
+  function confirmLeave(){
+    if (!window.CURRENT || !window.CURRENT.conv) return;
+    var conv = window.CURRENT.conv;
+    var title = conv.name || 'this group';
+
+    window.confirmModal(
+      "Leave " + title + "?",
+      "You won't see this group anymore. The history stays for other members. " +
+      "If you're the last member, the group is deleted.",
+      async function(){
+        try {
+          // Remove myself from members
+          var r = await sb.from('conversation_members').delete()
+            .eq('conversation_id', conv.id)
+            .eq('user_id', window.ME.id);
+          if (r.error) throw r.error;
+
+          // Check if the group is now empty; if so, delete it
+          var rem = await sb.from('conversation_members')
+            .select('user_id').eq('conversation_id', conv.id);
+          if (!rem.error && (!rem.data || rem.data.length === 0)){
+            await sb.from('conversations').delete().eq('id', conv.id);
+          }
+
+          window.toast("Left", "You left " + title + ".", "ok");
+          if (typeof window.loadConversations === "function"){
+            await window.loadConversations();
+          }
+          if (typeof window.goHome === "function") await window.goHome();
+        } catch(e){
+          window.toast("Could not leave", e.message || String(e), "err");
+        }
+      },
+      true
+    );
+  }
+
+  // ============================================================
+  // 4. HOOKS
+  // ============================================================
+  var _rch = window.renderChatHead;
+  if (typeof _rch === "function"){
+    window.renderChatHead = function(){
+      var r = _rch.apply(this, arguments);
+      setTimeout(injectHeaderMenu, 30);
+      return r;
+    };
+  }
+  setInterval(injectHeaderMenu, 1500);
+
+  window.__openChatMenu = openChatMenu;
+  window.__confirmClearChat = confirmClear;
+
+  try { console.log("[ClearChat] ready — menu appears in DM headers"); } catch(e){}
+})();
+</script>
+
+<!-- SLEEPY_UX_MEGA_FIX_V1 -->
+<style id="ux-mega-css">
+/* ============================================================
+   1. LONG MESSAGE BLUE GLOW — remove the stretching background
+   ============================================================ */
+.msg[style*="rgba(255,45,111"],
+.msg[style*="rgba(94,231,215"],
+.msg[style*="rgba(139,124,255"],
+.msg.mention-hit{
+  background: none !important;
+  border-left: 3px solid rgba(255,45,111,.5) !important;
+  border-radius: 0 10px 10px 0 !important;
+  padding: 6px 12px !important;
+  margin: 2px 8px !important;
+}
+/* Soften composer focus ring so it doesn't feel like a glow tunnel */
+.composer:focus-within{
+  border-color: rgba(94,231,215,.35) !important;
+  box-shadow: 0 0 0 3px rgba(94,231,215,.05) !important;
+}
+
+/* ============================================================
+   2. IN-GAME CHAT — remove the floating panel
+   ============================================================ */
+.bfv2-match-chat,
+#bfv2-mc-input, #bfv2-mc-send{
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* ============================================================
+   3. GAME ROOM — remove horizontal tabs (left panel handles nav)
+   ============================================================ */
+.gr-tabs{
+  display: none !important;
+}
+
+/* ============================================================
+   4. LEADERBOARD — hide chess, make it dazzling
+   ============================================================ */
+.lb-tabs button[data-lbt="chess"]{
+  display: none !important;
+}
+#reports-view .rp-tabs button,
+.lb-tabs button{
+  min-height: 46px !important;
+  padding: 12px 10px !important;
+  font-size: 13.5px !important;
+}
+
+/* Dazzling rows */
+.lb-row{
+  padding: 14px 16px !important;
+  min-height: 58px !important;
+  transition: transform .15s ease, box-shadow .15s ease !important;
+  position: relative;
+  overflow: hidden;
+}
+.lb-row::before{
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(139,124,255,.08), transparent);
+  transform: translateX(-100%);
+  transition: transform .7s ease;
+}
+.lb-row:hover::before{ transform: translateX(100%); }
+.lb-row:hover{ transform: translateX(2px); }
+.lb-row .rank{ font-size: 17px !important; }
+.lb-row .info .nm{ font-size: 15px !important; }
+.lb-row .val{ font-size: 18px !important; font-weight: 800 !important; }
+
+/* Top 3 podium colors */
+.lb-row:nth-child(1){
+  background: linear-gradient(90deg, rgba(255,200,87,.16), rgba(255,159,28,.05)) !important;
+  border: 1px solid rgba(255,200,87,.55) !important;
+  box-shadow: 0 0 22px rgba(255,200,87,.18), inset 0 0 0 1px rgba(255,200,87,.1) !important;
+}
+.lb-row:nth-child(2){
+  background: linear-gradient(90deg, rgba(200,200,220,.13), rgba(180,180,200,.04)) !important;
+  border: 1px solid rgba(200,200,220,.45) !important;
+  box-shadow: 0 0 18px rgba(200,200,220,.1) !important;
+}
+.lb-row:nth-child(3){
+  background: linear-gradient(90deg, rgba(205,127,50,.13), rgba(160,100,40,.04)) !important;
+  border: 1px solid rgba(205,127,50,.45) !important;
+}
+
+/* ============================================================
+   5. SNAKE JOYSTICK — bigger for Android
+   ============================================================ */
+.snake-touchpad{
+  width: 240px !important;
+  height: 240px !important;
+  margin: 24px auto 0 !important;
+}
+.snake-touchpad .knob{
+  width: 76px !important;
+  height: 76px !important;
+}
+@media (max-width: 420px){
+  .snake-touchpad{
+    width: 200px !important;
+    height: 200px !important;
+  }
+  .snake-touchpad .knob{
+    width: 64px !important;
+    height: 64px !important;
+  }
+}
+
+/* ============================================================
+   6. MUSIC PICKER — bigger, faster, one-tap
+   ============================================================ */
+.mp-panel{
+  min-height: 56px !important;
+  padding: 14px !important;
+  min-width: 280px !important;
+}
+.mp-panel .icon-btn{ width: 42px !important; height: 42px !important; }
+.mp-panel .play-btn{ width: 46px !important; height: 46px !important; }
+.mp-panel .info .song{ font-size: 14.5px !important; }
+.mp-ball{ width: 60px !important; height: 60px !important; font-size: 26px !important; }
+
+.mp-menu{ width: 340px !important; max-width: calc(100vw - 20px) !important; }
+.mp-menu button.item{
+  padding: 14px 12px !important;
+  min-height: 52px !important;
+  font-size: 14px !important;
+}
+.mp-menu button.item .nm{ font-size: 14px !important; }
+.mp-menu .add-row{
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+}
+.mp-menu .add-row input{
+  min-height: 46px !important;
+  font-size: 14px !important;
+  padding: 12px 14px !important;
+}
+.mp-menu .add-row button{
+  min-height: 46px !important;
+  font-size: 14px !important;
+  padding: 0 20px !important;
+  flex: 1 !important;
+}
+.mp-menu .quick-add{
+  display: flex !important;
+  gap: 6px !important;
+  padding: 10px !important;
+  margin-bottom: 6px !important;
+  background: rgba(139,124,255,.09) !important;
+  border-radius: 11px !important;
+  order: -1;
+}
+.mp-menu .quick-add input{
+  flex: 1 !important;
+  padding: 12px 13px !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  border: 1px solid #e0d5f0 !important;
+  font: 500 14px 'Inter',system-ui !important;
+  color: #3a2a4e !important;
+  outline: none !important;
+  min-height: 46px !important;
+}
+.mp-menu .quick-add button{
+  padding: 0 20px !important;
+  border-radius: 9px !important;
+  background: linear-gradient(135deg,#c5a3ff,#8b7cff) !important;
+  color: #fff !important;
+  font: 700 14px 'Inter',system-ui !important;
+  min-height: 46px !important;
+  white-space: nowrap !important;
+}
+
+/* ============================================================
+   7. ANDROID — bigger everything + no tap delay
+   ============================================================ */
+@media (hover: none) and (pointer: coarse){
+  button, .row, .member, a, [role="button"], .rail-btn, .hbtn, .cbtn, .btn, .tab, .row, [data-conv], [data-channel]{
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+  .row{ min-height: 54px !important; padding: 13px 12px !important; }
+  .member{ min-height: 50px !important; }
+  .btn{ min-height: 48px !important; font-size: 14.5px !important; }
+  .btn.sm{ min-height: 42px !important; }
+  .hbtn{ width: 44px !important; height: 44px !important; }
+  .cbtn{ width: 44px !important; height: 44px !important; }
+  .msg .toolbar{ display: none !important; } /* hover toolbars don't work on touch */
+}
+
+/* ============================================================
+   8. PERFORMANCE — kill transitions that cause lag on switch
+   ============================================================ */
+.chat-body, .panel-body, .members{
+  will-change: scroll-position;
+}
+.chat-body *{
+  transition-duration: .1s !important;
+}
+/* Disable expensive blurs on mobile */
+@media (max-width: 760px){
+  .modal, .auth-card, .menu, .chat-head{
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+/* Reduced motion respect */
+@media (prefers-reduced-motion: reduce){
+  *, *::before, *::after{
+    animation-duration: .001ms !important;
+    transition-duration: .001ms !important;
+  }
+}
+</style>
+
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyUxMegaFix) return;
+  window.__sleepyUxMegaFix = true;
+  try { console.log("%c[UX Mega Fix] armed", "color:#5ee7d7;font-weight:bold"); } catch(e){}
+
+  var E = function(s){ return String(s==null?"":s)
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;").replace(/'/g,"&#39;"); };
+
+  // ============================================================
+  // 1. LEADERBOARD — rebuild from scratch (only X-O + Snake)
+  // ============================================================
+  window.openLeaderboards = function(){
+    window.CURRENT = Object.assign({}, window.CURRENT || {}, { type: 'leaderboards' });
+    renderLB('snake');
+  };
+  window.openLeaderboardsPage = window.openLeaderboards;
+
+  function renderLB(which){
+    window.__lastLBTab = which;
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+
+    var tabs = [
+      { id: 'snake', label: '🐍 Snake' },
+      { id: 'ttt',   label: '⭕ X-O' }
+    ].map(function(t){
+      var active = which === t.id;
+      return '<button data-lbt="' + t.id + '" style="flex:1;padding:12px 10px;border-radius:10px;' +
+        'font:700 13px system-ui;cursor:pointer;border:none;min-height:46px;' +
+        (active ? 'background:linear-gradient(135deg,rgba(94,231,215,.18),rgba(139,124,255,.12));color:#fff;box-shadow:0 0 16px rgba(94,231,215,.25),inset 0 0 0 1px rgba(94,231,215,.4)' : 'background:transparent;color:#5f6c85') +
+        '">' + t.label + '</button>';
+    }).join('');
+
+    body.innerHTML =
+      '<div style="max-width:560px;margin:0 auto;padding:24px 16px 60px;font-family:Inter,system-ui,sans-serif">' +
+        '<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">' +
+          '<button id="lb-back" style="width:46px;height:46px;border-radius:12px;background:linear-gradient(135deg,rgba(139,124,255,.14),rgba(94,231,215,.08));border:1px solid rgba(139,124,255,.4);color:#eef2f8;font-size:20px;cursor:pointer">←</button>' +
+          '<div style="flex:1">' +
+            '<div style="font:800 22px system-ui;color:#eef2f8;letter-spacing:-.01em">🏆 Leaderboards</div>' +
+            '<div style="font:500 12px system-ui;color:#8f8fa8;margin-top:2px">Top players this season</div>' +
+          '</div>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px;background:#0a0a0f;padding:6px;border-radius:12px;border:1px solid #2a2a3a;margin-bottom:18px">' +
+          tabs +
+        '</div>' +
+        '<div id="lb-content" style="display:flex;flex-direction:column;gap:8px">' +
+          '<div style="padding:40px;text-align:center;color:#5f6c85">Loading…</div>' +
+        '</div>' +
+      '</div>';
+
+    document.getElementById('lb-back').onclick = function(){
+      window.CURRENT = Object.assign({}, window.CURRENT || {}, { type: 'games' });
+      if (typeof window.openGameRoom === 'function') window.openGameRoom('arcade');
+    };
+    body.querySelectorAll('[data-lbt]').forEach(function(b){
+      b.onclick = function(){ renderLB(b.dataset.lbt); };
+    });
+
+    loadLBData(which);
+  }
+
+  async function loadLBData(which){
+    var el = document.getElementById('lb-content');
+    if (!el) return;
+
+    try {
+      if (which === 'snake'){
+        var r = await sb.from('snake_scores').select('user_id, score').order('score', { ascending: false }).limit(500);
+        if (r.error) throw r.error;
+
+        if (!r.data || !r.data.length){
+          el.innerHTML = emptyState('🐍', 'No snake games yet', 'Play a game in the Arcade to appear here');
+          return;
+        }
+
+        var best = {};
+        r.data.forEach(function(row){
+          if (!best[row.user_id] || row.score > best[row.user_id]){
+            best[row.user_id] = row.score;
+          }
+        });
+        var ids = Object.keys(best);
+        if (ids.length) await window.fetchProfiles(ids);
+        var list = ids.map(function(uid){ return { uid: uid, v: best[uid] }; })
+          .sort(function(a,b){ return b.v - a.v; })
+          .slice(0, 20);
+
+        renderList(el, list, '#4ade80');
+      } else {
+        var r2 = await sb.from('game_challenges').select('winner_id')
+          .eq('game_type', 'ttt').eq('status', 'finished')
+          .not('winner_id', 'is', null).limit(500);
+        if (r2.error) throw r2.error;
+
+        var wins = {};
+        (r2.data || []).forEach(function(g){ wins[g.winner_id] = (wins[g.winner_id] || 0) + 1; });
+        var ids2 = Object.keys(wins);
+        if (!ids2.length){
+          el.innerHTML = emptyState('⭕', 'No X-O games yet', 'Challenge someone to appear here');
+          return;
+        }
+        if (ids2.length) await window.fetchProfiles(ids2);
+        var list2 = ids2.map(function(uid){ return { uid: uid, v: wins[uid] }; })
+          .sort(function(a,b){ return b.v - a.v; })
+          .slice(0, 20);
+        renderList(el, list2, '#5ee7d7');
+      }
+    } catch(e){
+      console.warn("[UX Mega] LB error:", e.message);
+      el.innerHTML = '<div style="padding:40px 20px;text-align:center;color:#ff8aa8;font:500 13px system-ui">' +
+        'Could not load: ' + E(e.message) + '</div>';
+    }
+  }
+
+  function emptyState(em, title, sub){
+    return '<div style="padding:60px 20px;text-align:center">' +
+      '<div style="font-size:56px;margin-bottom:14px">' + em + '</div>' +
+      '<div style="font:700 16px system-ui;color:#eef2f8;margin-bottom:6px">' + E(title) + '</div>' +
+      '<div style="font:500 12.5px system-ui;color:#8f8fa8">' + E(sub) + '</div>' +
+    '</div>';
+  }
+
+  function renderList(el, list, color){
+    el.innerHTML = list.map(function(r, i){
+      var p = window.PROFILES[r.uid] || { username: 'user', display_name: 'User' };
+      var me = r.uid === window.ME.id;
+      var medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
+      var rowClass = 'lb-row' + (me ? ' me' : '');
+
+      return '<div class="' + rowClass + '" style="' +
+          'display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:12px;' +
+          'background:' + (me ? 'rgba(94,231,215,.08)' : 'rgba(255,255,255,.03)') + ';' +
+          (me ? 'border:1px solid rgba(94,231,215,.35);' : 'border:1px solid transparent;') +
+          '">' +
+          '<div style="width:38px;text-align:center;font:800 16px system-ui;color:' +
+            (i === 0 ? '#ffd166' : i === 1 ? '#c0c0c0' : i === 2 ? '#cd7f32' : '#5f6c85') + '">' + medal + '</div>' +
+          '<div style="position:relative">' + window.avatarHTML(r.uid, 42) + '</div>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font:700 14.5px system-ui;color:#eef2f8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+              E(p.display_name || p.username) + (me ? ' <span style="color:#5ee7d7;font-size:11px;font-weight:600">(you)</span>' : '') +
+            '</div>' +
+            '<div style="font:500 11.5px system-ui;color:#8f8fa8;margin-top:2px">@' + E(p.username) + '</div>' +
+          '</div>' +
+          '<div style="font:800 18px JetBrains Mono,monospace;color:' + color + '">' + r.v.toLocaleString() + '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  // Hook renderChat for leaderboards
+  var _rc = window.renderChat;
+  if (typeof _rc === 'function'){
+    window.renderChat = function(){
+      if (window.CURRENT && window.CURRENT.type === 'leaderboards'){
+        renderLB(window.__lastLBTab || 'snake');
+        return;
+      }
+      return _rc.apply(this, arguments);
+    };
+  }
+
+  var _rch = window.renderChatHead;
+  if (typeof _rch === 'function'){
+    window.renderChatHead = function(){
+      if (window.CURRENT && window.CURRENT.type === 'leaderboards'){
+        var el = document.getElementById('chat-head');
+        if (el) el.innerHTML =
+          '<div class="title"><span style="font-size:16px">🏆</span><span class="txt">Leaderboards</span></div>' +
+          '<div class="spacer"></div>';
+        return;
+      }
+      return _rch.apply(this, arguments);
+    };
+  }
+
+  // ============================================================
+  // 2. RPS CHALLENGE — route to correct renderer
+  // ============================================================
+  // Intercept [data-enter] / [data-accept] clicks before any other
+  // handler can render them as X-O.
+  document.addEventListener('click', async function(e){
+    var acc = e.target.closest('[data-accept]');
+    var enter = e.target.closest('[data-enter]');
+    var target = acc || enter;
+    if (!target) return;
+
+    var gid = acc ? acc.dataset.accept : enter.dataset.enter;
+    if (!gid) return;
+
+    // Find the game object
+    var g = (window.__lobby || []).filter(function(x){ return x.id === gid; })[0]
+         || (window.__myGames || []).filter(function(x){ return x.id === gid; })[0]
+         || (window.LOBBY_CACHE || []).filter(function(x){ return x.id === gid; })[0]
+         || (window.MY_GAMES_CACHE || []).filter(function(x){ return x.id === gid; })[0];
+
+    if (!g || g.game_type !== 'rps') return;
+
+    // This is an RPS game — stop all other handlers
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    e.stopPropagation();
+
+    if (acc){
+      try {
+        var ar = await sb.rpc('accept_game_challenge', { cid: gid });
+        if (ar.error) throw ar.error;
+        var fresh = await sb.from('game_challenges').select('*').eq('id', gid).single();
+        g = fresh.data || g;
+      } catch(err){
+        window.toast("Could not accept", err.message || String(err), "err");
+        return;
+      }
+    }
+
+    // Force-open the RPS renderer
+    openRPSGame(g);
+  }, true);
+
+  function openRPSGame(g){
+    window.CURRENT = Object.assign({}, window.CURRENT || {}, { type: 'games' });
+    window.__rpsFocus = { game: g };
+
+    // Try the RPS patch's renderer (already hooks renderChat)
+    if (typeof window.renderChat === 'function'){
+      window.renderChat(false);
+    }
+
+    // Fallback — if RPS renderer isn't installed, render manually
+    setTimeout(function(){
+      var body = document.getElementById('chat-body');
+      if (body && !body.querySelector('.rps-wrap')){
+        renderRPSFallback(g);
+      }
+    }, 250);
+  }
+
+  function renderRPSFallback(g){
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+    var isCreator = g.creator_id === window.ME.id;
+    var myKey = isCreator ? 'creator' : 'opponent';
+    var oppKey = isCreator ? 'opponent' : 'creator';
+    var opId = isCreator ? g.opponent_id : g.creator_id;
+    var me = window.PROFILES[window.ME.id] || { username: 'me' };
+    var op = opId ? window.PROFILES[opId] : null;
+
+    var score = (g.state && g.state.score) || { creator: 0, opponent: 0 };
+    var picks = (g.state && g.state.picks) || {};
+    var myPick = picks[myKey] || null;
+    var myScore = score[myKey] || 0;
+    var oppScore = score[oppKey] || 0;
+    var isOver = g.status === 'finished';
+    var iWon = g.winner_id === window.ME.id;
+
+    var emoMap = { rock: '✊', paper: '✋', scissors: '✌️' };
+    var lblMap = { rock: 'Rock', paper: 'Paper', scissors: 'Scissors' };
+
+    var html = '<div style="max-width:520px;margin:0 auto;padding:26px 20px;text-align:center;font-family:Inter,system-ui">';
+    html += '<div style="display:flex;justify-content:center;gap:20px;align-items:center;margin-bottom:22px;font-size:13.5px">' +
+      '<div>' + window.avatarHTML(window.ME.id, 34) + ' <b>' + E(me.display_name || me.username) + '</b></div>' +
+      '<div style="color:#5f6c85;font-size:11px;letter-spacing:.1em">VS</div>' +
+      '<div>' + (opId ? window.avatarHTML(opId, 34) : '') + ' <b>' + (op ? E(op.display_name || op.username) : 'Waiting…') + '</b></div>' +
+    '</div>';
+
+    html += '<div style="display:flex;justify-content:center;gap:24px;margin-bottom:22px;font-family:Space Grotesk,sans-serif">' +
+      '<div style="font-size:56px;font-weight:800;color:#5ee7d7;line-height:1">' + myScore + '</div>' +
+      '<div style="font-size:26px;color:#5f6c85;line-height:1;padding-top:14px">–</div>' +
+      '<div style="font-size:56px;font-weight:800;color:#ff7f9f;line-height:1">' + oppScore + '</div>' +
+    '</div>';
+
+    html += '<div style="font:700 11px monospace;letter-spacing:.14em;text-transform:uppercase;color:#8f8fa8;margin-bottom:22px">' +
+      (isOver ? 'Match complete' : 'Best of 3 — first to 2 wins') + '</div>';
+
+    if (isOver){
+      var amt = g.bet_amount > 0 ? Math.abs(g.bet_amount * (iWon ? 2 : 1)) : 0;
+      html += '<div style="padding:26px;border-radius:14px;margin-bottom:22px;' +
+        'background:' + (iWon ? 'rgba(74,222,128,.1)' : 'rgba(255,127,159,.1)') + ';' +
+        'border:1px solid ' + (iWon ? 'rgba(74,222,128,.4)' : 'rgba(255,127,159,.4)') + '">' +
+        '<div style="font:800 24px Space Grotesk,sans-serif;color:' + (iWon ? '#4ade80' : '#ff7f9f') + ';margin-bottom:8px">' +
+          (iWon ? '🏆 You won!' : '😔 You lost') + '</div>' +
+        '<div style="font:500 13px Inter,system-ui;color:#eef2f8">Score ' + myScore + ' — ' + oppScore +
+          (amt > 0 ? ' · ' + (iWon ? '+' : '−') + amt + ' coins' : '') + '</div>' +
+      '</div>';
+    } else if (myPick){
+      html += '<div style="padding:30px 20px;border-radius:14px;background:rgba(94,231,215,.06);border:1px solid rgba(94,231,215,.3);margin-bottom:22px">' +
+        '<div style="font-size:68px;line-height:1;margin-bottom:10px">' + emoMap[myPick] + '</div>' +
+        '<div style="font:700 17px Space Grotesk,sans-serif;color:#5ee7d7;margin-bottom:6px">You picked ' + lblMap[myPick] + '</div>' +
+        '<div style="font:500 12.5px Inter,system-ui;color:#8f8fa8">Waiting for ' + (op ? E(op.display_name || op.username) : 'opponent') + '…</div>' +
+      '</div>';
+    } else {
+      html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:22px">';
+      ['rock', 'paper', 'scissors'].forEach(function(c){
+        html += '<button data-mfrps="' + c + '" style="padding:26px 10px;border-radius:16px;background:rgba(255,255,255,.03);border:2px solid #2a2a3a;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:8px;font-family:inherit;transition:all .18s">' +
+          '<div style="font-size:52px;line-height:1">' + emoMap[c] + '</div>' +
+          '<div style="font:700 11.5px Inter,system-ui;letter-spacing:.08em;text-transform:uppercase;color:#8f8fa8">' + lblMap[c] + '</div>' +
+        '</button>';
+      });
+      html += '</div>';
+    }
+
+    html += '<button id="mfrps-back" class="btn" style="margin-top:8px">← Back to lobby</button>';
+    html += '</div>';
+
+    body.innerHTML = html;
+
+    body.querySelectorAll('[data-mfrps]').forEach(function(b){
+      b.onclick = async function(){
+        try {
+          var r = await sb.rpc('rps_pick', { cid: g.id, p_choice: b.dataset.mfrps });
+          if (r.error) throw r.error;
+          var fresh = await sb.from('game_challenges').select('*').eq('id', g.id).single();
+          if (fresh.data){
+            window.__rpsFocus = { game: fresh.data };
+            renderRPSFallback(fresh.data);
+          }
+        } catch(err){
+          window.toast("Pick failed", err.message || String(err), "err");
+        }
+      };
+    });
+
+    var back = document.getElementById('mfrps-back');
+    if (back) back.onclick = function(){
+      window.__rpsFocus = null;
+      if (typeof window.openGameRoomFixed === 'function') window.openGameRoomFixed();
+      else if (typeof window.openGameRoom === 'function') window.openGameRoom('play');
+    };
+  }
+
+  // Watch for RPS games opened via V3's default TTT renderer
+  // and replace with RPS if needed
+  var lastRpsCheck = '';
+  setInterval(function(){
+    if (!window.CURRENT || window.CURRENT.type !== 'games') return;
+    var body = document.getElementById('chat-body');
+    if (!body) return;
+    // Is the current body rendering TTT?
+    var isTTT = !!body.querySelector('.ttt-cell');
+    if (!isTTT) return;
+    // Which game are we supposed to show?
+    var g = window.__rpsFocus && window.__rpsFocus.game;
+    if (!g) return;
+    if (g.game_type !== 'rps') return;
+    var key = g.id + ':' + (g.status || '');
+    if (key === lastRpsCheck) return;
+    lastRpsCheck = key;
+    // Replace TTT with RPS
+    renderRPSFallback(g);
+  }, 300);
+
+  // ============================================================
+  // 3. REMOVE floating match chat + horizontal tabs
+  // ============================================================
+  function sweep(){
+    document.querySelectorAll('.bfv2-match-chat').forEach(function(el){ try { el.remove(); } catch(e){} });
+    document.querySelectorAll('.gr-tabs').forEach(function(el){ try { el.remove(); } catch(e){} });
+  }
+  setInterval(sweep, 400);
+  sweep();
+
+  // ============================================================
+  // 4. MUSIC PICKER — quick add row at top of the menu
+  // ============================================================
+  setInterval(function(){
+    var menu = document.querySelector('.mp-menu');
+    if (!menu) return;
+    if (menu.querySelector('.quick-add')) return;
+    var row = document.createElement('div');
+    row.className = 'quick-add';
+    row.innerHTML =
+      '<input id="mega-mp-url" placeholder="Paste MP3 URL…" autocomplete="off">' +
+      '<button id="mega-mp-add">+ Add Song</button>';
+    menu.insertBefore(row, menu.firstChild);
+    var inp = row.querySelector('#mega-mp-url');
+    var btn = row.querySelector('#mega-mp-add');
+    inp.focus();
+    function add(){
+      var url = inp.value.trim();
+      if (!url || !/^https?:\/\//i.test(url)){ inp.focus(); return; }
+      var nm = url.split('/').pop().split('?')[0].replace(/\.[a-z0-9]+$/i,'').replace(/[_-]+/g,' ');
+      if (nm.length > 30) nm = nm.slice(0, 30);
+      if (!nm) nm = 'My song';
+      try {
+        var custom = JSON.parse(localStorage.getItem('sleepy.music.custom') || '[]');
+        custom.push({ name: nm, url: url, em: '🎵' });
+        localStorage.setItem('sleepy.music.custom', JSON.stringify(custom));
+        window.toast("Song added", nm, "ok");
+        menu.remove();
+      } catch(e){ window.toast("Could not add", e.message || String(e), "err"); }
+    }
+    btn.onclick = add;
+    inp.addEventListener('keydown', function(e){ if (e.key === 'Enter') add(); });
+  }, 600);
+
+  // ============================================================
+  // 5. SNAKE JOYSTICK — beef up for Android
+  // ============================================================
+  function beefJoystick(){
+    var pad = document.querySelector('.snake-touchpad');
+    if (!pad || pad.dataset.beefed === '1') return;
+    pad.dataset.beefed = '1';
+    var size = Math.min(260, Math.max(200, window.innerWidth - 60));
+    pad.style.setProperty('width', size + 'px', 'important');
+    pad.style.setProperty('height', size + 'px', 'important');
+    var knob = pad.querySelector('.knob');
+    if (knob){
+      var ksize = Math.round(size * 0.32);
+      knob.style.setProperty('width', ksize + 'px', 'important');
+      knob.style.setProperty('height', ksize + 'px', 'important');
+    }
+  }
+  setInterval(beefJoystick, 600);
+
+  // ============================================================
+  // 6. BLUE GLOW on long messages — strip inline styles
+  // ============================================================
+  function cleanMsgGlow(){
+    document.querySelectorAll('.msg[style*="rgba(255,45,111"], .msg[style*="rgba(94,231,215"], .msg[style*="rgba(139,124,255"]').forEach(function(el){
+      el.style.background = 'none';
+      el.style.borderLeft = '3px solid rgba(255,45,111,.5)';
+      el.style.borderRadius = '0 10px 10px 0';
+    });
+  }
+  setInterval(cleanMsgGlow, 400);
+
+  // ============================================================
+  // 7. PERFORMANCE — reduce churn
+  // ============================================================
+  // Batch all our periodic tasks into one rAF
+  var rafId = null;
+  function tick(){
+    rafId = null;
+    sweep();
+    cleanMsgGlow();
+    beefJoystick();
+  }
+  setInterval(function(){
+    if (rafId) return;
+    rafId = requestAnimationFrame(tick);
+  }, 500);
+
+  try { console.log("[UX Mega Fix] ready"); } catch(e){}
 })();
 </script>
 
