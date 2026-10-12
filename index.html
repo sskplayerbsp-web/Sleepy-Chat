@@ -25585,5 +25585,294 @@ body.ai-real-exists #ai-default-row{
 })();
 </script>
 
+<!-- SLEEPY_BATCH_V3 -->
+<style id="batch-v3-css">
+/* Kill horizontal game tab strip — every known variant */
+.gr-tabs,
+body.in-game-room .chat-body .gr-tabs,
+body.in-game-room > .app .chat .chat-body .gr-tabs{
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  border: none !important;
+}
+/* Kill any leftover wrapper that only has the 3 tab buttons */
+body.in-game-room div:has(> .gr-tabs){ border: none !important; }
+
+/* Force-hide chess leaderboard tab */
+[data-lbt="chess"],
+button[data-lbt="chess"]{
+  display: none !important;
+}
+
+/* YouTube badge inside the music panel */
+.mp-panel .yt-badge{
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #ff0000;
+  color: #fff;
+  font: 800 9px system-ui;
+  letter-spacing: .05em;
+  margin-left: 5px;
+  vertical-align: middle;
+}
+#yt-mp-host{
+  position: fixed;
+  left: -9999px;
+  top: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+</style>
+
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyBatchV3) return;
+  window.__sleepyBatchV3 = true;
+  try { console.log("%c[BatchV3] armed", "color:#5ee7d7;font-weight:bold"); } catch(e){}
+
+  var AI_BOT_ID = "9abc016a-c7a7-41ee-9d8c-305f665401eb";
+  var SNAKE_FACTOR = 2.5;  // snake speed multiplier (2.5x slower)
+
+  // ============================================================
+  // 1. SLOW DOWN SNAKE
+  // ============================================================
+  // V4's snake uses setInterval with a tick in the 40-120ms range.
+  // We wrap setInterval so any such interval created while the arcade
+  // is showing gets stretched.
+  if (!window.__snakeSlowWrapped){
+    var origSetInterval = window.setInterval;
+    window.setInterval = function(fn, ms, ...rest){
+      try {
+        if (typeof ms === 'number' && ms >= 40 && ms <= 130){
+          var body = document.getElementById('chat-body');
+          if (body && body.querySelector('#snake-canvas')){
+            ms = Math.round(ms * SNAKE_FACTOR);
+          }
+        }
+      } catch(e){}
+      return origSetInterval.call(this, fn, ms, ...rest);
+    };
+    window.__snakeSlowWrapped = true;
+    try { console.log("[BatchV3] snake setInterval wrapper installed (x" + SNAKE_FACTOR + ")"); } catch(e){}
+  }
+
+  // Also intercept the START click to catch intervals that were created
+  // before the arcade was on-screen (edge case).
+  document.addEventListener('click', function(e){
+    var start = e.target.closest('#snake-start');
+    if (!start) return;
+    // The snake patch will now create intervals that flow through the
+    // wrapper above — no further action needed.
+  }, true);
+
+  // ============================================================
+  // 2. YOUTUBE MUSIC
+  // ============================================================
+  var ytPlayer = null;
+  var ytPending = null;
+
+  function getYTId(url){
+    if (!url) return null;
+    var m = String(url).match(
+      /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/
+    );
+    return m ? m[1] : null;
+  }
+
+  function ensureYTHost(){
+    var host = document.getElementById('yt-mp-host');
+    if (host) return host;
+    host = document.createElement('div');
+    host.id = 'yt-mp-host';
+    host.innerHTML = '<div id="yt-mp-player"></div>';
+    document.body.appendChild(host);
+    return host;
+  }
+
+  function loadYTAPI(cb){
+    if (window.YT && window.YT.Player){ cb(); return; }
+    if (window.__ytApiLoading){
+      window.__ytCallbacks = window.__ytCallbacks || [];
+      window.__ytCallbacks.push(cb);
+      return;
+    }
+    window.__ytApiLoading = true;
+    window.__ytCallbacks = [cb];
+    var tag = document.createElement('script');
+    tag.src = 'https://www.youtube.com/iframe_api';
+    document.head.appendChild(tag);
+    window.onYouTubeIframeAPIReady = function(){
+      var cbs = window.__ytCallbacks || [];
+      window.__ytCallbacks = [];
+      cbs.forEach(function(fn){ try { fn(); } catch(e){} });
+    };
+  }
+
+  function playYT(videoId, onEnd){
+    ensureYTHost();
+    loadYTAPI(function(){
+      if (ytPlayer && ytPlayer.loadVideoById){
+        try {
+          ytPlayer.loadVideoById(videoId);
+          ytPlayer.playVideo();
+          if (onEnd) window.__ytOnEnd = onEnd;
+          return;
+        } catch(e){}
+      }
+      ytPlayer = new window.YT.Player('yt-mp-player', {
+        height: '1', width: '1',
+        videoId: videoId,
+        playerVars: {
+          autoplay: 1, controls: 0, disablekb: 1, fs: 0,
+          modestbranding: 1, playsinline: 1
+        },
+        events: {
+          'onReady': function(ev){
+            ev.target.playVideo();
+            if (onEnd) window.__ytOnEnd = onEnd;
+          },
+          'onStateChange': function(ev){
+            if (ev.data === 0 && typeof window.__ytOnEnd === 'function'){
+              try { window.__ytOnEnd(); } catch(e){}
+            }
+          },
+          'onError': function(){
+            window.toast("YouTube error", "This video can't be embedded. Try another.", "err");
+          }
+        }
+      });
+    });
+  }
+
+  function pauseYT(){ if (ytPlayer && ytPlayer.pauseVideo) try { ytPlayer.pauseVideo(); } catch(e){} }
+  function resumeYT(){ if (ytPlayer && ytPlayer.playVideo) try { ytPlayer.playVideo(); } catch(e){} }
+  function stopYT(){ if (ytPlayer && ytPlayer.stopVideo) try { ytPlayer.stopVideo(); } catch(e){} }
+
+  window.__yt = { play: playYT, pause: pauseYT, resume: resumeYT, stop: stopYT, idFromUrl: getYTId };
+
+  // Watch <audio> src — if it becomes a YouTube URL, route to iframe
+  var lastUrl = '';
+  function watchAudio(){
+    document.querySelectorAll('audio').forEach(function(el){
+      if (!el.src || el.src === lastUrl) return;
+      lastUrl = el.src;
+      var vid = getYTId(el.src);
+      if (vid){
+        try { el.pause(); el.src = ''; } catch(e){}
+        playYT(vid, function(){
+          if (typeof window.__musicNext === 'function') try { window.__musicNext(); } catch(e){}
+        });
+      }
+    });
+  }
+  setInterval(watchAudio, 800);
+
+  // Add YT badge to the panel when current song is YouTube
+  setInterval(function(){
+    var panel = document.querySelector('.mp-panel');
+    if (!panel) return;
+    var songEl = panel.querySelector('.info .song');
+    if (!songEl) return;
+    var txt = songEl.textContent || '';
+    var custom = [];
+    try { custom = JSON.parse(localStorage.getItem('sleepy.music.custom') || '[]'); } catch(e){}
+    var match = custom.filter(function(c){
+      return txt.indexOf(c.name) >= 0 && getYTId(c.url);
+    })[0];
+    var has = !!songEl.querySelector('.yt-badge');
+    if (match && !has) songEl.insertAdjacentHTML('beforeend', ' <span class="yt-badge">YT</span>');
+    else if (!match && has) songEl.querySelector('.yt-badge').remove();
+  }, 1200);
+
+  // ============================================================
+  // 3. DEDUPE AI DMs
+  // ============================================================
+  async function dedupeAIDMs(){
+    if (!window.ME) return 0;
+    try {
+      var mine = await sb.from('conversation_members').select('conversation_id').eq('user_id', window.ME.id);
+      var myIds = (mine.data || []).map(function(r){ return r.conversation_id; });
+      if (!myIds.length) return 0;
+
+      var theirs = await sb.from('conversation_members').select('conversation_id')
+        .eq('user_id', AI_BOT_ID).in('conversation_id', myIds);
+      var convIds = (theirs.data || []).map(function(r){ return r.conversation_id; });
+      if (convIds.length <= 1) return 0;
+
+      var withMeta = [];
+      for (var i = 0; i < convIds.length; i++){
+        var cid = convIds[i];
+        var r = await sb.from('messages').select('id', { count: 'exact', head: true }).eq('conversation_id', cid);
+        var c = await sb.from('conversations').select('created_at').eq('id', cid).maybeSingle();
+        withMeta.push({
+          id: cid,
+          count: (r && typeof r.count === 'number') ? r.count : 0,
+          t: c.data ? new Date(c.data.created_at).getTime() : 0
+        });
+      }
+      withMeta.sort(function(a,b){
+        if (b.count !== a.count) return b.count - a.count;
+        return b.t - a.t;
+      });
+      var drop = withMeta.slice(1);
+      for (var j = 0; j < drop.length; j++){
+        await sb.from('conversations').delete().eq('id', drop[j].id);
+      }
+      if (drop.length && window.loadConversations){
+        await window.loadConversations();
+        if (window.renderPanel) window.renderPanel();
+      }
+      try { console.log("[BatchV3] AI dedupe — kept 1, removed " + drop.length); } catch(e){}
+      return drop.length;
+    } catch(e){
+      try { console.warn("[BatchV3] dedupe failed:", e.message); } catch(_){}
+      return 0;
+    }
+  }
+  window.__dedupeAIDMs = dedupeAIDMs;
+  setTimeout(dedupeAIDMs, 6000);
+
+  // ============================================================
+  // 4. FORCE-REMOVE CHESS TAB + HORIZONTAL GAME TABS
+  // ============================================================
+  function sweep(){
+    // Chess tab
+    document.querySelectorAll('[data-lbt="chess"]').forEach(function(el){
+      try { el.remove(); } catch(e){}
+    });
+    // Any tab whose text mentions chess
+    document.querySelectorAll('.lb-tabs button').forEach(function(el){
+      if (/chess/i.test(el.textContent || '')) el.remove();
+    });
+    // Horizontal game tab strips
+    document.querySelectorAll('.gr-tabs').forEach(function(el){
+      try { el.remove(); } catch(e){}
+    });
+    // Some patches wrap the tabs in a div — hide that wrapper too
+    document.querySelectorAll('[data-gr]').forEach(function(b){
+      var p = b.parentElement;
+      if (p && p.querySelectorAll('[data-gr]').length >= 2 &&
+          p.children.length === p.querySelectorAll('[data-gr]').length){
+        p.style.display = 'none';
+      }
+    });
+  }
+  sweep();
+  setInterval(sweep, 400);
+
+  try { console.log("[BatchV3] ready — snake slower, YouTube music, AI dedupe, tabs stripped"); } catch(e){}
+})();
+</script>
+
 </body>
 </html>
