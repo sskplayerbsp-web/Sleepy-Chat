@@ -26014,5 +26014,331 @@ body.in-game-room .chat-body > div[style*="max-width: 600px"]{
 })();
 </script>
 
+<!-- SLEEPY_STABILITY_ANDROID_V1 -->
+<style id="stability-android-css">
+/* ============================================================
+   Bottom navigation for mobile — bigger, labeled, discoverable
+   ============================================================ */
+@media (max-width: 760px){
+  .rail{
+    height: calc(68px + env(safe-area-inset-bottom, 0px)) !important;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px)) 8px !important;
+    gap: 4px !important;
+    justify-content: flex-start !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    scroll-snap-type: x proximity !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
+  .rail::-webkit-scrollbar{ display: none !important; }
+
+  .rail-btn{
+    width: 52px !important;
+    height: 52px !important;
+    border-radius: 14px !important;
+    flex: none !important;
+    scroll-snap-align: start !important;
+    transition: transform .15s ease, box-shadow .15s ease !important;
+  }
+  .rail-btn:active{ transform: scale(.94) !important; }
+  .rail-btn.active{
+    background: linear-gradient(135deg, rgba(94,231,215,.22), rgba(139,124,255,.14)) !important;
+    border-color: rgba(94,231,215,.55) !important;
+    box-shadow: 0 0 18px rgba(94,231,215,.35) !important;
+  }
+
+  /* Give the app room above the taller rail */
+  .app{ padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px)) !important; }
+  .panel{ bottom: calc(68px + env(safe-area-inset-bottom, 0px)) !important; }
+
+  /* Floating Menu button on mobile — always visible, opens the panel drawer */
+  #mob-drawer-btn{
+    position: fixed;
+    left: 12px;
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+    z-index: 90;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: 1px solid rgba(94,231,215,.45);
+    background: linear-gradient(135deg, rgba(94,231,215,.2), rgba(139,124,255,.14)), #12121a;
+    color: #5ee7d7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,.55), 0 0 18px rgba(94,231,215,.25);
+    cursor: pointer;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #mob-drawer-btn:active{ transform: scale(.94); }
+  #mob-drawer-btn svg{ width: 24px; height: 24px; }
+
+  /* Floating section label that shows where you are */
+  #mob-section-label{
+    position: fixed;
+    top: 62px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 60;
+    padding: 6px 14px;
+    border-radius: 99px;
+    font: 700 11px 'Inter', system-ui, sans-serif;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    background: rgba(10,10,15,.85);
+    border: 1px solid rgba(94,231,215,.3);
+    color: #5ee7d7;
+    backdrop-filter: blur(6px);
+    opacity: 0;
+    transition: opacity .25s ease;
+    pointer-events: none;
+  }
+  #mob-section-label.show{ opacity: 1; }
+}
+@media (min-width: 761px){
+  #mob-drawer-btn{ display: none !important; }
+  #mob-section-label{ display: none !important; }
+}
+
+/* Slightly tighter chat-head so the composer isn't pushed off */
+@media (max-width: 760px){
+  .chat-head{ padding: 0 12px !important; height: 52px !important; }
+  .chat-head .title .txt{ font-size: 15px !important; }
+}
+
+/* Composer — quieter focus, bigger on mobile */
+@media (max-width: 760px){
+  .composer{ padding: 12px 14px !important; }
+  .composer textarea{ font-size: 15px !important; }
+  .composer-wrap{ padding: 0 10px calc(10px + env(safe-area-inset-bottom, 0px)) !important; }
+}
+</style>
+
+<script>
+(function(){
+  "use strict";
+  if (window.__sleepyStabilityAndroid) return;
+  window.__sleepyStabilityAndroid = true;
+  try { console.log("%c[Stability+Android] armed", "color:#5ee7d7;font-weight:bold"); } catch(e){}
+
+  // ============================================================
+  // PART A: Render throttling — the #1 fix for "looks like a reload"
+  // ============================================================
+  // Every patch in this file wraps renderChat/renderPanel/etc.
+  // A single navigation click cascades through 5–10 wrappers, each
+  // doing its own work and calling the next one. Adding ONE outermost
+  // throttle means the cascade can only run once per 120 ms.
+  function installThrottle(name, windowMs){
+    var orig = window[name];
+    if (typeof orig !== 'function') return;
+    if (orig.__throttled) return;
+
+    var lastAt = 0;
+    var lastKey = '';
+    var pending = null;
+    var pendingArgs = null;
+
+    var wrapped = function(){
+      var args = Array.prototype.slice.call(arguments);
+      var key = JSON.stringify(args);
+      var now = Date.now();
+
+      // Same call within window — skip entirely
+      if (key === lastKey && (now - lastAt) < windowMs){
+        return;
+      }
+
+      // Burst? Coalesce into one trailing call
+      if ((now - lastAt) < 30 && pending === null){
+        pendingArgs = args;
+        pending = setTimeout(function(){
+          var a = pendingArgs;
+          pending = null;
+          pendingArgs = null;
+          if (a){
+            lastKey = JSON.stringify(a);
+            lastAt = Date.now();
+            try { orig.apply(window, a); } catch(e){}
+          }
+        }, windowMs);
+        return;
+      }
+
+      if (pending){
+        pendingArgs = args;
+        return;
+      }
+
+      lastKey = key;
+      lastAt = now;
+      try { return orig.apply(this, arguments); } catch(e){}
+    };
+    wrapped.__throttled = true;
+    window[name] = wrapped;
+  }
+
+  installThrottle('renderChat',     120);
+  installThrottle('renderChatHead', 120);
+  installThrottle('renderPanel',    120);
+  installThrottle('renderMembers',  250);
+  installThrottle('renderRail',     200);
+
+  // ============================================================
+  // PART B: Preserve scroll position on chat body re-renders
+  // ============================================================
+  var _rc = window.renderChat;
+  if (typeof _rc === 'function' && !_rc.__scrollPreserved){
+    var wrappedChat = function(scroll){
+      var body = document.getElementById('chat-body');
+      var wasAtBottom = true;
+      var prevTop = 0;
+      if (body){
+        wasAtBottom = (body.scrollHeight - body.scrollTop - body.clientHeight) < 100;
+        prevTop = body.scrollTop;
+      }
+      var r = _rc.apply(this, arguments);
+      if (body && !wasAtBottom && scroll !== true){
+        requestAnimationFrame(function(){
+          try { body.scrollTop = prevTop; } catch(e){}
+        });
+      }
+      return r;
+    };
+    wrappedChat.__scrollPreserved = true;
+    wrappedChat.__throttled = _rc.__throttled;
+    window.renderChat = wrappedChat;
+  }
+
+  // ============================================================
+  // PART C: Android drawer + section label
+  // ============================================================
+  function ensureMobileDrawerBtn(){
+    if (!window.matchMedia('(max-width: 760px)').matches){
+      var el = document.getElementById('mob-drawer-btn');
+      if (el) el.remove();
+      return;
+    }
+    if (!window.ME) return;
+    if (!document.getElementById('app') || document.getElementById('app').classList.contains('hidden')) return;
+
+    if (document.getElementById('mob-drawer-btn')) return;
+
+    var btn = document.createElement('button');
+    btn.id = 'mob-drawer-btn';
+    btn.setAttribute('aria-label', 'Open conversation list');
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>';
+    btn.onclick = function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      if (window.UI){
+        window.UI.panelOpen = !window.UI.panelOpen;
+        if (typeof window.syncMobile === 'function') window.syncMobile();
+      }
+    };
+    document.body.appendChild(btn);
+  }
+
+  function showSectionLabel(text){
+    if (!text) return;
+    if (!window.matchMedia('(max-width: 760px)').matches) return;
+    var el = document.getElementById('mob-section-label');
+    if (!el){
+      el = document.createElement('div');
+      el.id = 'mob-section-label';
+      document.body.appendChild(el);
+    }
+    el.textContent = text;
+    el.classList.add('show');
+    clearTimeout(el.__hideTimer);
+    el.__hideTimer = setTimeout(function(){ el.classList.remove('show'); }, 1400);
+  }
+
+  function currentSectionName(){
+    var c = window.CURRENT;
+    if (!c) return '';
+    if (c.type === 'home' || c.type === 'dms') return 'Direct Messages';
+    if (c.type === 'dm' && c.conv) return c.conv.is_group ? 'Group' : 'Direct Message';
+    if (c.type === 'server' && c.server) return c.server.name + (c.channel ? ' · #' + c.channel.name : '');
+    if (c.type === 'games') return 'Game Room';
+    if (c.type === 'fishing') return 'Fishing';
+    if (c.type === 'tickets_hub') return 'Tickets';
+    if (c.type === 'reports') return 'Reports';
+    if (c.type === 'leaderboards') return 'Leaderboards';
+    return '';
+  }
+
+  // Show section label on navigation
+  var prevType = '';
+  setInterval(function(){
+    var t = window.CURRENT ? window.CURRENT.type : '';
+    if (t !== prevType){
+      prevType = t;
+      showSectionLabel(currentSectionName());
+    }
+  }, 400);
+
+  // ============================================================
+  // PART D: Composer stays visible when keyboard opens
+  // ============================================================
+  if (window.visualViewport){
+    var lastH = window.visualViewport.height;
+    window.visualViewport.addEventListener('resize', function(){
+      var h = window.visualViewport.height;
+      var kbOpen = (lastH - h) > 120;
+      lastH = h;
+      document.body.classList.toggle('kb-open', kbOpen);
+      if (kbOpen){
+        var comp = document.getElementById('composer-wrap');
+        if (comp){
+          setTimeout(function(){
+            try { comp.scrollIntoView({ block: 'end', behavior: 'smooth' }); } catch(e){}
+          }, 100);
+        }
+      }
+    });
+  }
+
+  // ============================================================
+  // PART E: Mobile game section nav
+  // ============================================================
+  // The panel drawer already has .game-nav with Play/Arcade/Fishing/Shop.
+  // We auto-open the drawer once when entering the game room on mobile
+  // so users immediately discover it, then keep it closable.
+  var autoOpenedFor = '';
+  setInterval(function(){
+    if (!window.matchMedia('(max-width: 760px)').matches) return;
+    if (!window.CURRENT) return;
+    if (window.CURRENT.type !== 'games') return;
+    var key = window.__lastLBTab || 'play';
+    if (autoOpenedFor === key) return;
+    autoOpenedFor = key;
+    // Do NOT auto-open — just show a hint
+    showSectionLabel('Game Room · tap ☰ for sections');
+  }, 1200);
+
+  // ============================================================
+  // PART F: Prevent double-click cascades on nav buttons
+  // ============================================================
+  var navBusy = false;
+  document.addEventListener('click', function(e){
+    var nav = e.target.closest('[data-rail], [data-conv], [data-channel], [data-server]');
+    if (!nav) return;
+    if (navBusy) return;
+    navBusy = true;
+    setTimeout(function(){ navBusy = false; }, 220);
+  }, true);
+
+  // ============================================================
+  // Boot + maintenance
+  // ============================================================
+  ensureMobileDrawerBtn();
+  setInterval(ensureMobileDrawerBtn, 700);
+
+  try { console.log("[Stability+Android] ready — throttle + mobile drawer"); } catch(e){}
+})();
+</script>
+
 </body>
 </html>
