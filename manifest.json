@@ -1,7 +1,7 @@
 {
-  "name": "Sleepy-Chat",
-  "short_name": "Sleepy-Chat",
-  "description": "Communities, friends, real-time messaging.",
+  "name": "Quazi Chat",
+  "short_name": "Quazi",
+  "description": "Communities, friends, real-time messaging. Built for Gen-Z by Gen-Z.",
   "start_url": "./index.html",
   "scope": "./",
   "id": "/",
